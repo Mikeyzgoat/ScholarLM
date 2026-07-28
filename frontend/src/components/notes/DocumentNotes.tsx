@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
+import type { NotePage } from "../../lib/types";
 import {
   createNote,
   deleteNote,
@@ -32,25 +33,26 @@ export function DocumentNotes({ documentId }: { documentId: string }) {
   const remove = useMutation({
     mutationFn: deleteNote,
     onMutate: async (deletedId) => {
-      await client.cancelQueries({ queryKey: ["notes", documentId] });
-      const previous = client.getQueryData<
-        Awaited<ReturnType<typeof listDocumentNotes>>
-      >(["notes", documentId]);
-      client.setQueryData(
-        ["notes", documentId],
-        previous?.filter((note) => note.id !== deletedId) ?? [],
+      await client.cancelQueries({ queryKey: ["notes"] });
+      const previous = client.getQueriesData<NotePage[]>({
+        queryKey: ["notes"],
+      });
+      client.setQueriesData<NotePage[]>(
+        { queryKey: ["notes"] },
+        (notes) => notes?.filter((note) => note.id !== deletedId) ?? [],
       );
       return { previous };
     },
     onSuccess: (_, deletedId) => {
+      client.removeQueries({ queryKey: ["note", deletedId], exact: true });
       setNoteToDelete(null);
     },
     onError: (_error, _deletedId, context) => {
-      if (context?.previous)
-        client.setQueryData(["notes", documentId], context.previous);
+      context?.previous.forEach(([queryKey, notes]) => {
+        client.setQueryData(queryKey, notes);
+      });
     },
-    onSettled: () =>
-      client.invalidateQueries({ queryKey: ["notes", documentId] }),
+    onSettled: () => client.invalidateQueries({ queryKey: ["notes"] }),
   });
   if (q.isLoading) return <p className="text-sm">Loading notes…</p>;
   if (q.isError)
