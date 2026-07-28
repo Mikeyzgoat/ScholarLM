@@ -1,2 +1,2 @@
 # ScholarLM
-Advanced notemaking and tutoring app made in react-native and hono
+Advanced notemaking and tutoring app made in react and hono
