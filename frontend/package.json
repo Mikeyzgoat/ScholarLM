@@ -15,7 +15,7 @@
     "graphology": "latest",
     "graphology-layout-forceatlas2": "latest",
     "lucide-react": "latest",
-    "pdfjs-dist": "latest",
+    "pdfjs-dist": "5.4.296",
     "react": "latest",
     "react-dom": "latest",
     "react-pdf": "latest",
