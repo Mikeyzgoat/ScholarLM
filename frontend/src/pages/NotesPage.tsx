@@ -115,7 +115,7 @@ export default function NotesPage() {
           setExistingExplanation(selection.existingExplanation);
         }}
       />
-      <aside className="absolute bottom-4 right-4 top-28 z-20 w-80 overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
+      <aside className="absolute bottom-4 right-4 top-28 z-20 w-[min(24rem,calc(100vw-2rem))] overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
         <ExplainPanel
           selectedText={selectedText}
           selectedTexts={selectedTexts}

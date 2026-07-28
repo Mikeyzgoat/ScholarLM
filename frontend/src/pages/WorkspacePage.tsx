@@ -82,7 +82,7 @@ export default function WorkspacePage() {
     return <main className="p-6 text-red-700">Unable to load workspace.</main>;
   return (
     <motion.main
-      className="grid gap-4 p-4 xl:grid-cols-[300px_minmax(720px,1fr)_320px]"
+      className="grid gap-4 p-4 xl:grid-cols-[minmax(240px,280px)_minmax(560px,1fr)_minmax(360px,400px)]"
       initial={reduceMotion ? false : "hidden"}
       animate="visible"
       variants={{

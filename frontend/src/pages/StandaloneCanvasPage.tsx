@@ -162,7 +162,7 @@ export default function StandaloneCanvasPage() {
           Upload PDF
         </Link>
       </header>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(360px,24rem)]">
         <NotesCanvas
           note={note}
           embedded
