@@ -32,6 +32,7 @@ export default function WorkspacePage() {
   const [selectedText, setSelectedText] = useState("");
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();
+  const [explanationRequest, setExplanationRequest] = useState(0);
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
   const doc = useQuery({
@@ -118,6 +119,7 @@ export default function WorkspacePage() {
                 setSelectedText(s.text);
                 setSelectionImage(undefined);
                 setSelectedTextPage(s.pageNumber);
+                setExplanationRequest((request) => request + 1);
               }}
             />
           )}
@@ -153,6 +155,7 @@ export default function WorkspacePage() {
           selectionImage={selectionImage}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
+          requestKey={explanationRequest}
           onPlotGenerated={(plot, equation) => {
             if (canvasEditor) drawMathPlot(canvasEditor, plot, equation);
           }}

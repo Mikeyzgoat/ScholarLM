@@ -12,6 +12,7 @@ export function ExplainPanel({
   pageNumber,
   documentTitle,
   liveSelections = true,
+  requestKey = 0,
   onPlotGenerated,
 }: {
   selectedText: string;
@@ -19,6 +20,7 @@ export function ExplainPanel({
   pageNumber: number | null;
   documentTitle: string;
   liveSelections?: boolean;
+  requestKey?: number;
   onPlotGenerated?: (plot: MathPlot, equation?: string) => void;
 }) {
   const state = useExplanation(),
@@ -42,11 +44,12 @@ export function ExplainPanel({
     if (
       !liveSelections ||
       (selectedText.trim().length < 3 && !selectionImage) ||
-      `${selectedText}:${selectionImage?.length ?? 0}` === lastExplained.current
+      `${requestKey}:${selectedText}:${selectionImage?.length ?? 0}` ===
+        lastExplained.current
     )
       return;
     const timer = setTimeout(() => {
-      lastExplained.current = `${selectedText}:${selectionImage?.length ?? 0}`;
+      lastExplained.current = `${requestKey}:${selectedText}:${selectionImage?.length ?? 0}`;
       void explain();
     }, 350);
     return () => clearTimeout(timer);
@@ -56,6 +59,7 @@ export function ExplainPanel({
     pageNumber,
     documentTitle,
     liveSelections,
+    requestKey,
   ]);
   return (
     <motion.section
