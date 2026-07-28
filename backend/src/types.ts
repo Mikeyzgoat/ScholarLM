@@ -73,12 +73,20 @@ export interface SearchResult {
   score: number;
 }
 export interface ExplainRequest {
-  selectedText: string;
+  selectedText?: string;
+  imageDataUrl?: string;
   documentTitle?: string;
   pageNumber?: number;
 }
 export interface ExplainResponse {
   explanation: string;
+  recognizedEquation?: string;
+  plot?: {
+    title: string;
+    xLabel: string;
+    yLabel: string;
+    points: Array<{ x: number; y: number }>;
+  };
 }
 export interface GraphResponse {
   nodes: Array<{

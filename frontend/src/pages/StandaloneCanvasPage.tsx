@@ -5,6 +5,7 @@ import { getSnapshot, type Editor } from "tldraw";
 import type { NotePage } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
+import { drawMathPlot } from "../lib/drawMathPlot";
 
 const storageKey = "scholarlm-standalone-canvas";
 
@@ -18,6 +19,8 @@ function loadLocalSnapshot(): unknown {
 
 export default function StandaloneCanvasPage() {
   const [selectedText, setSelectedText] = useState("");
+  const [selectionImage, setSelectionImage] = useState<string>();
+  const [editor, setEditor] = useState<Editor | null>(null);
   const unsubscribe = useRef<(() => void) | null>(null);
   const [note] = useState<NotePage>(() => ({
     id: "standalone",
@@ -32,6 +35,7 @@ export default function StandaloneCanvasPage() {
   useEffect(() => () => unsubscribe.current?.(), []);
 
   function connectEditor(editor: Editor) {
+    setEditor(editor);
     unsubscribe.current?.();
     unsubscribe.current = editor.store.listen(
       () => {
@@ -71,15 +75,24 @@ export default function StandaloneCanvasPage() {
           embedded
           onEditorReady={connectEditor}
           onTextSelected={setSelectedText}
+          onCanvasSelection={(selection) => {
+            setSelectedText(selection.text);
+            setSelectionImage(selection.imageDataUrl);
+          }}
         />
         <aside className="overflow-auto border-l p-3">
           <ExplainPanel
             selectedText={selectedText}
+            selectionImage={selectionImage}
             pageNumber={null}
             documentTitle="Independent canvas"
+            onPlotGenerated={(plot, equation) => {
+              if (editor) drawMathPlot(editor, plot, equation);
+            }}
           />
           <p className="mt-3 text-xs leading-5 text-stone-500">
-            Select a text shape on the canvas to explain it live.
+            Select text or hand-drawn mathematics to solve and explain it
+            live. Graphable equations are plotted back onto the canvas.
           </p>
         </aside>
       </div>

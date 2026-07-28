@@ -48,6 +48,18 @@ export interface GraphResponse {
 }
 export interface ExplanationResponse {
   explanation: string;
+  recognizedEquation?: string;
+  plot?: MathPlot;
+}
+export interface MathPlot {
+  title: string;
+  xLabel: string;
+  yLabel: string;
+  points: Array<{ x: number; y: number }>;
+}
+export interface CanvasSelection {
+  text: string;
+  imageDataUrl?: string;
 }
 export interface NotePage {
   id: string;

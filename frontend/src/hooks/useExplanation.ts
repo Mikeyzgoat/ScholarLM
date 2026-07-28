@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { explainText } from "../services/explanation";
+import type { ExplanationResponse } from "../lib/types";
 export function useExplanation() {
   const [explanation, setExplanation] = useState(""),
     [isExplaining, setLoading] = useState(false),
@@ -15,7 +16,8 @@ export function useExplanation() {
   return {
     explanation,
     explain: async (input: {
-      selectedText: string;
+      selectedText?: string;
+      imageDataUrl?: string;
       documentTitle?: string;
       pageNumber?: number;
     }) => {
@@ -26,8 +28,11 @@ export function useExplanation() {
       setError(null);
       setLoading(true);
       try {
-        const value = await explainText({ ...input, signal: next.signal });
-        if (id === generation.current) setExplanation(value);
+        const value: ExplanationResponse = await explainText({
+          ...input,
+          signal: next.signal,
+        });
+        if (id === generation.current) setExplanation(value.explanation);
         return id === generation.current ? value : null;
       } catch (e) {
         if (!next.signal.aborted && id === generation.current)

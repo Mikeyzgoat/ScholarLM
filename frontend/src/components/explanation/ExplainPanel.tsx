@@ -5,16 +5,21 @@ import { AnimatePresence, motion } from "framer-motion";
 import { SelectionPopover } from "../pdf/SelectionPopover";
 import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
+import type { MathPlot } from "../../lib/types";
 export function ExplainPanel({
   selectedText,
+  selectionImage,
   pageNumber,
   documentTitle,
   liveSelections = true,
+  onPlotGenerated,
 }: {
   selectedText: string;
+  selectionImage?: string;
   pageNumber: number | null;
   documentTitle: string;
   liveSelections?: boolean;
+  onPlotGenerated?: (plot: MathPlot, equation?: string) => void;
 }) {
   const state = useExplanation(),
     speech = useSpeech();
@@ -22,24 +27,34 @@ export function ExplainPanel({
   async function explain() {
     const value = await state.explain({
       selectedText,
+      imageDataUrl: selectionImage,
       documentTitle,
       pageNumber: pageNumber ?? undefined,
     });
-    if (value) await speech.speak(value);
+    if (value) {
+      if (value.plot) onPlotGenerated?.(value.plot, value.recognizedEquation);
+      await speech.speak(value.explanation);
+    }
   }
   useEffect(() => {
     if (
       !liveSelections ||
-      selectedText.trim().length < 3 ||
-      selectedText === lastExplained.current
+      (selectedText.trim().length < 3 && !selectionImage) ||
+      `${selectedText}:${selectionImage?.length ?? 0}` === lastExplained.current
     )
       return;
     const timer = setTimeout(() => {
-      lastExplained.current = selectedText;
+      lastExplained.current = `${selectedText}:${selectionImage?.length ?? 0}`;
       void explain();
     }, 350);
     return () => clearTimeout(timer);
-  }, [selectedText, pageNumber, documentTitle, liveSelections]);
+  }, [
+    selectedText,
+    selectionImage,
+    pageNumber,
+    documentTitle,
+    liveSelections,
+  ]);
   return (
     <motion.section
       layout

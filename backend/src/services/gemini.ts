@@ -91,6 +91,7 @@ async function ollamaGenerate(input: {
   prompt: string;
   system?: string;
   json?: boolean;
+  imageBase64?: string;
 }): Promise<string> {
   const response = await fetch(`${env.OLLAMA_BASE_URL}/api/generate`, {
     method: "POST",
@@ -102,6 +103,7 @@ async function ollamaGenerate(input: {
       format: input.json ? "json" : undefined,
       stream: false,
       keep_alive: "10m",
+      images: input.imageBase64 ? [input.imageBase64] : undefined,
     }),
   });
   const payload = (await response.json().catch(() => null)) as {
@@ -117,6 +119,140 @@ async function ollamaGenerate(input: {
   if (typeof payload?.response !== "string" || !payload.response.trim())
     throw new Error("Ollama returned no content");
   return payload.response.trim();
+}
+
+interface CanvasAnalysis {
+  explanation: string;
+  recognizedEquation?: string;
+  plot?: {
+    title: string;
+    xLabel: string;
+    yLabel: string;
+    points: Array<{ x: number; y: number }>;
+  };
+}
+
+function parseCanvasAnalysis(raw: string): CanvasAnalysis {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  const value = JSON.parse(cleaned) as Partial<CanvasAnalysis>;
+  if (typeof value.explanation !== "string" || !value.explanation.trim())
+    throw new Error("AI returned an invalid handwritten-math explanation");
+  const points = value.plot?.points
+    ?.filter(
+      (point) =>
+        Number.isFinite(point?.x) &&
+        Number.isFinite(point?.y),
+    )
+    .slice(0, 80);
+  return {
+    explanation: value.explanation.trim(),
+    recognizedEquation:
+      typeof value.recognizedEquation === "string"
+        ? value.recognizedEquation.trim()
+        : undefined,
+    plot:
+      value.plot &&
+      typeof value.plot.title === "string" &&
+      points &&
+      points.length >= 2
+        ? {
+            title: value.plot.title,
+            xLabel:
+              typeof value.plot.xLabel === "string" ? value.plot.xLabel : "x",
+            yLabel:
+              typeof value.plot.yLabel === "string" ? value.plot.yLabel : "y",
+            points,
+          }
+        : undefined,
+  };
+}
+
+export async function explainCanvasSelection(input: {
+  imageDataUrl: string;
+  selectedText?: string;
+  documentTitle?: string;
+  pageNumber?: number;
+}): Promise<CanvasAnalysis> {
+  const imageBase64 = input.imageDataUrl.slice(
+    input.imageDataUrl.indexOf(",") + 1,
+  );
+  const prompt = `Analyze the selected handwritten mathematics in the image.
+Recognize the equation accurately, solve it step by step, and explain the reasoning as a teacher.
+If the expression represents or benefits from a 2D graph, provide 17–41 ordered sample points across a useful domain. If plotting is not meaningful, omit plot.
+Return only JSON:
+{"recognizedEquation":"...","explanation":"...","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
+${input.documentTitle ? `Document context: ${input.documentTitle}` : ""}
+${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
+${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
+  const system =
+    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the explanation. Return valid JSON only.";
+  return runWithFallback(
+    async (client) => {
+      const response = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `${system}\n${prompt}` },
+              { inlineData: { mimeType: "image/png", data: imageBase64 } },
+            ],
+          },
+        ],
+        config: { responseMimeType: "application/json" },
+      });
+      const raw = response.text?.trim();
+      if (!raw) throw new Error("Gemini returned no visual analysis");
+      return parseCanvasAnalysis(raw);
+    },
+    env.SGLANG_BASE_URL && env.SGLANG_MODEL
+      ? async () => {
+          const response = await fetch(
+            `${env.SGLANG_BASE_URL}/v1/chat/completions`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: env.SGLANG_MODEL,
+                messages: [
+                  { role: "system", content: system },
+                  {
+                    role: "user",
+                    content: [
+                      { type: "text", text: prompt },
+                      {
+                        type: "image_url",
+                        image_url: { url: input.imageDataUrl },
+                      },
+                    ],
+                  },
+                ],
+                temperature: 0.1,
+              }),
+            },
+          );
+          const payload = (await response.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+          if (!response.ok) throw new Error(`SGLang returned ${response.status}`);
+          return parseCanvasAnalysis(
+            payload.choices?.[0]?.message?.content ?? "",
+          );
+        }
+      : null,
+    async () =>
+      parseCanvasAnalysis(
+        await ollamaGenerate({
+          prompt,
+          system,
+          json: true,
+          imageBase64,
+        }),
+      ),
+  );
 }
 
 async function ollamaEmbedding(text: string): Promise<number[]> {

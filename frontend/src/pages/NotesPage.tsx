@@ -11,6 +11,8 @@ import { useNoteAutosave } from "../hooks/useNoteAutosave";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { NotesHeader } from "../components/notes/NotesHeader";
 import { NotesPagination } from "../components/notes/NotesPagination";
+import { ExplainPanel } from "../components/explanation/ExplainPanel";
+import { drawMathPlot } from "../lib/drawMathPlot";
 export default function NotesPage() {
   const { noteId = "" } = useParams();
   const nav = useNavigate();
@@ -21,6 +23,8 @@ export default function NotesPage() {
   });
   const [editor, setEditor] = useState<Editor | null>(null),
     [note, setNote] = useState<NotePage | undefined>(),
+    [selectedText, setSelectedText] = useState(""),
+    [selectionImage, setSelectionImage] = useState<string>(),
     [title, setTitle] = useState(""),
     [titleSaveState, setTitleSaveState] = useState<SaveState | null>(null);
   const recovered = useMemo(
@@ -122,7 +126,34 @@ export default function NotesPage() {
             </motion.div>
           )}
       </AnimatePresence>
-      <NotesCanvas key={note.id} note={note} onEditorReady={setEditor} />
+      <NotesCanvas
+        key={note.id}
+        note={note}
+        onEditorReady={setEditor}
+        onTextSelected={(text) => {
+          setSelectedText(text);
+          setSelectionImage(undefined);
+        }}
+        onCanvasSelection={(selection) => {
+          setSelectedText(selection.text);
+          setSelectionImage(selection.imageDataUrl);
+        }}
+      />
+      <aside className="absolute bottom-4 right-4 top-28 z-20 w-80 overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
+        <ExplainPanel
+          selectedText={selectedText}
+          selectionImage={selectionImage}
+          pageNumber={null}
+          documentTitle={note.title}
+          onPlotGenerated={(plot, equation) => {
+            if (editor) drawMathPlot(editor, plot, equation);
+          }}
+        />
+        <p className="mt-3 px-1 text-xs leading-5 text-stone-500">
+          Select typed text or hand-drawn mathematics. Graphable equations are
+          plotted as editable canvas shapes.
+        </p>
+      </aside>
     </main>
   );
 }

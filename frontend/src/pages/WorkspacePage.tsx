@@ -19,12 +19,16 @@ import {
   type WorkspaceMode,
 } from "../components/layout/WorkspaceModeBar";
 import type { GraphNode } from "../lib/types";
+import type { Editor } from "tldraw";
+import { drawMathPlot } from "../lib/drawMathPlot";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
   const reduceMotion = useReducedMotion();
   const [activePage, setActivePage] = useState(1);
   const [selectedText, setSelectedText] = useState("");
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
+  const [selectionImage, setSelectionImage] = useState<string>();
+  const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
   const doc = useQuery({
     queryKey: ["document", documentId],
@@ -108,6 +112,7 @@ export default function WorkspacePage() {
               onPageChange={setActivePage}
               onTextSelected={(s) => {
                 setSelectedText(s.text);
+                setSelectionImage(undefined);
                 setSelectedTextPage(s.pageNumber);
               }}
             />
@@ -119,8 +124,15 @@ export default function WorkspacePage() {
               documentTitle={doc.data.name}
               onTextSelected={(text) => {
                 setSelectedText(text);
+                setSelectionImage(undefined);
                 setSelectedTextPage(null);
               }}
+              onCanvasSelection={(selection) => {
+                setSelectedText(selection.text);
+                setSelectionImage(selection.imageDataUrl);
+                setSelectedTextPage(null);
+              }}
+              onEditorReady={setCanvasEditor}
             />
           )}
         </div>
@@ -135,8 +147,12 @@ export default function WorkspacePage() {
       >
         <ExplainPanel
           selectedText={selectedText}
+          selectionImage={selectionImage}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
+          onPlotGenerated={(plot, equation) => {
+            if (canvasEditor) drawMathPlot(canvasEditor, plot, equation);
+          }}
         />
         <motion.section layout className="rounded-lg border bg-white p-4">
           <h2 className="mb-2 font-semibold">Knowledge graph</h2>

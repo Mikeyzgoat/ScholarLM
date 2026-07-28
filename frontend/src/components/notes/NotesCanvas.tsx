@@ -2,16 +2,19 @@ import { useCallback, useEffect, useRef } from "react";
 import { Tldraw, loadSnapshot, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import type { NotePage } from "../../lib/types";
+import type { CanvasSelection } from "../../lib/types";
 export function NotesCanvas({
   note,
   onEditorReady,
   embedded = false,
   onTextSelected,
+  onCanvasSelection,
 }: {
   note: NotePage;
   onEditorReady: (editor: Editor) => void;
   embedded?: boolean;
   onTextSelected?: (text: string) => void;
+  onCanvasSelection?: (selection: CanvasSelection) => void;
 }) {
   const selectionCleanup = useRef<(() => void) | null>(null);
   const lastSelection = useRef("");
@@ -37,7 +40,7 @@ export function NotesCanvas({
       selectionCleanup.current?.();
       selectionCleanup.current = editor.store.listen(
         () => {
-          if (!onTextSelected) return;
+          if (!onTextSelected && !onCanvasSelection) return;
           const selectedShapes = editor.getSelectedShapes();
           const parts: string[] = [];
           const collectText = (value: unknown): void => {
@@ -61,19 +64,46 @@ export function NotesCanvas({
             if (props.richText) collectText(props.richText);
           });
           const text = [...new Set(parts)].join(" ").trim();
-          if (!text) {
+          const signature = selectedShapes
+            .map((shape) => shape.id)
+            .sort()
+            .join(",");
+          if (!signature) {
             lastSelection.current = "";
+            onTextSelected?.("");
+            onCanvasSelection?.({ text: "" });
             return;
           }
-          if (text && text !== lastSelection.current) {
-            lastSelection.current = text;
-            onTextSelected(text);
-          }
+          if (signature === lastSelection.current) return;
+          lastSelection.current = signature;
+          if (text) onTextSelected?.(text);
+          const containsDrawing = selectedShapes.some((shape) =>
+            ["draw", "line", "arrow"].includes(shape.type),
+          );
+          if (!containsDrawing) onCanvasSelection?.({ text });
+          else
+            void editor
+              .toImageDataUrl(selectedShapes, {
+                format: "png",
+                background: true,
+                padding: 32,
+                scale: 2,
+              })
+              .then(({ url }) => {
+                if (lastSelection.current !== signature) return;
+                onCanvasSelection?.({
+                  text: text || "Handwritten equation",
+                  imageDataUrl: url,
+                });
+              })
+              .catch((error) =>
+                console.error("Could not capture canvas selection", error),
+              );
         },
         { scope: "session" },
       );
     },
-    [note.id, onEditorReady, onTextSelected],
+    [note.id, onEditorReady, onTextSelected, onCanvasSelection],
   );
   return (
     <div

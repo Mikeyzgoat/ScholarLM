@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Editor } from "tldraw";
-import type { NotePage } from "../../lib/types";
+import type { CanvasSelection, NotePage } from "../../lib/types";
 import { createNote, listDocumentNotes } from "../../services/notes";
 import { useNoteAutosave } from "../../hooks/useNoteAutosave";
 import { NotesCanvas } from "./NotesCanvas";
@@ -13,10 +13,14 @@ export function WorkspaceCanvas({
   documentId,
   documentTitle,
   onTextSelected,
+  onCanvasSelection,
+  onEditorReady,
 }: {
   documentId: string;
   documentTitle: string;
   onTextSelected?: (text: string) => void;
+  onCanvasSelection?: (selection: CanvasSelection) => void;
+  onEditorReady?: (editor: Editor) => void;
 }) {
   const client = useQueryClient();
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -98,8 +102,12 @@ export function WorkspaceCanvas({
         key={note.id}
         note={note}
         embedded
-        onEditorReady={setEditor}
+        onEditorReady={(nextEditor) => {
+          setEditor(nextEditor);
+          onEditorReady?.(nextEditor);
+        }}
         onTextSelected={onTextSelected}
+        onCanvasSelection={onCanvasSelection}
       />
     </section>
   );
