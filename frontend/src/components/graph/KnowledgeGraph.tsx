@@ -8,10 +8,14 @@ export function KnowledgeGraph({
   graph,
   isLoading,
   onNodeSelect,
+  focusedNodeId,
+  className,
 }: {
   graph: GraphResponse | undefined;
   isLoading: boolean;
   onNodeSelect: (node: GraphNode) => void;
+  focusedNodeId?: string | null;
+  className?: string;
 }) {
   const container = useRef<HTMLDivElement>(null),
     renderer = useRef<Sigma | null>(null),
@@ -58,11 +62,32 @@ export function KnowledgeGraph({
       model.current = null;
     };
   }, [graph, onNodeSelect]);
+  useEffect(() => {
+    const g = model.current;
+    const sigma = renderer.current;
+    if (!g || !sigma || !focusedNodeId || !g.hasNode(focusedNodeId)) return;
+    graph?.nodes.forEach((node) => {
+      if (!g.hasNode(node.id)) return;
+      g.setNodeAttribute(node.id, "size", node.id === focusedNodeId ? 13 : 7);
+      g.setNodeAttribute(
+        node.id,
+        "color",
+        node.id === focusedNodeId
+          ? "#f97316"
+          : node.pageNumber
+            ? "#fb923c"
+            : "#78716c",
+      );
+    });
+    const { x, y } = g.getNodeAttributes(focusedNodeId);
+    sigma.getCamera().animate({ x, y, ratio: 0.18 }, { duration: 420 });
+    sigma.refresh();
+  }, [focusedNodeId, graph]);
   if (isLoading) return <p className="text-sm">Loading graph…</p>;
   if (!graph?.nodes.length)
     return <p className="text-sm text-stone-500">No concepts were found.</p>;
   return (
-    <div className="relative h-72">
+    <div className={`relative ${className ?? "h-72"}`}>
       <GraphControls
         onZoomIn={() => renderer.current?.getCamera().animatedZoom()}
         onZoomOut={() => renderer.current?.getCamera().animatedUnzoom()}

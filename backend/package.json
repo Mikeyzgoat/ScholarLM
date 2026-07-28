@@ -9,7 +9,6 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "latest",
     "hono": "latest",
     "kokoro-js": "latest",
     "pdf-parse": "latest"

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import {
   explainCanvasSelection,
   explainSelectedText,
-} from "../services/gemini";
+} from "../services/localAi";
 const explanation = new Hono();
 explanation.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);

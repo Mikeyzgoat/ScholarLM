@@ -1,11 +1,14 @@
 # ScholarLM
 
-ScholarLM is a local-first semantic learning workspace for PDFs. It extracts page-aware text, searches it with Gemini embeddings, explains selected passages, reads explanations with Kokoro, visualizes a knowledge graph, and stores full tldraw note snapshots with local recovery.
+ScholarLM is a fully local semantic learning workspace for PDFs. It extracts
+page-aware text, searches with local Nomic embeddings, explains selections with
+a Gemma model served by SGLang, reads explanations with Kokoro, visualizes a
+knowledge graph, and stores full tldraw snapshots with local recovery.
 
 ## Requirements
 
 - [Bun](https://bun.sh/) 1.3 or newer
-- A Gemini API token
+- Ollama and an SGLang-compatible local Gemma model
 - A modern browser
 
 ## Setup
@@ -16,26 +19,17 @@ ScholarLM is a local-first semantic learning workspace for PDFs. It extracts pag
    cp .env.example .env
    ```
 
-2. Set `GEMINI_API_TOKEN` in `.env`. The backend also accepts
-   `GEMINI_API_KEY` for compatibility. For multiple independent keys, set
-   `GEMINI_API_TOKENS` to a comma-separated list.
-
-3. Install the local AI fallback used when Gemini is unavailable or
-   rate-limited:
+2. Pull the local embedding model:
 
    ```sh
    ollama pull nomic-embed-text
-   ollama pull gemma4:e2b
    ```
 
-   Ollama serves locally at `http://localhost:11434` by default. Override
-   `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, or `OLLAMA_EMBEDDING_MODEL` in `.env`
-   when needed.
+   Ollama serves embeddings locally at `http://localhost:11434` by default.
 
-   For concurrent generation on a separate GPU host, run an SGLang
-   OpenAI-compatible server and set `SGLANG_BASE_URL` plus `SGLANG_MODEL`.
-   ScholarLM then tries Gemini, SGLang, and finally local Ollama. SGLang uses
-   Hugging Face/PyTorch weights and does not consume Ollama GGUF blobs.
+3. Run a local Gemma model with SGLang and set `SGLANG_BASE_URL` and
+   `SGLANG_MODEL` in `.env`. Generation streams through SGLang with thinking
+   disabled. Gemini is not used.
 
 4. Install dependencies:
 
@@ -100,5 +94,5 @@ The database and uploaded PDFs are ignored by Git.
   tldraw canvas side by side.
 - Select PDF text to explain or save a page-aware highlight.
 - Select a tldraw text shape to explain its content live.
-- Gemini is attempted first. Independent Gemini keys rotate on failure, then
-  the backend falls back to local Ollama generation and embeddings.
+- Nomic embeddings run through local Ollama. Explanations and graph generation
+  run through the local SGLang-hosted Gemma model.

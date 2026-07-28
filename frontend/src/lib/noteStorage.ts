@@ -30,7 +30,11 @@ export function getLocalNoteDraft(noteId: string): LocalNoteDraft | null {
   }
 }
 export function removeLocalNoteDraft(noteId: string): void {
-  localStorage.removeItem(getNoteStorageKey(noteId));
+  try {
+    localStorage.removeItem(getNoteStorageKey(noteId));
+  } catch (error) {
+    console.warn(`Could not remove the local draft for note ${noteId}`, error);
+  }
 }
 export function chooseNewestNoteSource({
   server,

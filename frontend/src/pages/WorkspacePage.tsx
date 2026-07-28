@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { getDocument, getDocumentFileUrl } from "../services/documents";
@@ -23,8 +23,12 @@ import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const reduceMotion = useReducedMotion();
-  const [activePage, setActivePage] = useState(1);
+  const [activePage, setActivePage] = useState(() => {
+    const requested = Number(searchParams.get("page"));
+    return Number.isInteger(requested) && requested > 0 ? requested : 1;
+  });
   const [selectedText, setSelectedText] = useState("");
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();

@@ -1,6 +1,6 @@
 import { db } from "../db/database";
 import type { ChunkRecord, SearchResult } from "../types";
-import { generateEmbedding } from "./gemini";
+import { generateEmbedding } from "./localAi";
 import { cosineSimilarity, parseEmbedding } from "../utils/vectors";
 export async function semanticSearch(input: {
   documentId: string;

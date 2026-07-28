@@ -1,6 +1,6 @@
 import { db } from "../db/database";
 import type { ChunkRecord } from "../types";
-import { generateEmbedding } from "./gemini";
+import { generateEmbedding } from "./localAi";
 import { serializeEmbedding } from "../utils/vectors";
 export async function embedDocumentChunks(documentId: string): Promise<void> {
   const chunks = db

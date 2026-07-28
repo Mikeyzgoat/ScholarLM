@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileUp } from "lucide-react";
+import { FileUp, GitFork } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getDocument } from "../../services/documents";
 export function Topbar() {
@@ -15,9 +15,18 @@ export function Topbar() {
       <span className="mr-2 h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.9)]" />
       <span className="font-semibold tracking-tight lg:hidden">ScholarLM</span>
       {q.data && (
-        <span className="ml-auto truncate text-sm text-stone-600">
-          {q.data.name}
-        </span>
+        <>
+          <span className="ml-auto truncate text-sm text-stone-600">
+            {q.data.name}
+          </span>
+          <Link
+            to={`/graph/${q.data.id}`}
+            className="ml-4 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-white/5 hover:text-orange-300"
+          >
+            <GitFork size={16} />
+            Graph
+          </Link>
+        </>
       )}
       <Link
         to="/upload"

@@ -31,15 +31,26 @@ export function DocumentNotes({ documentId }: { documentId: string }) {
   });
   const remove = useMutation({
     mutationFn: deleteNote,
-    onSuccess: (_, deletedId) => {
+    onMutate: async (deletedId) => {
+      await client.cancelQueries({ queryKey: ["notes", documentId] });
+      const previous = client.getQueryData<
+        Awaited<ReturnType<typeof listDocumentNotes>>
+      >(["notes", documentId]);
       client.setQueryData(
         ["notes", documentId],
-        (notes: Awaited<ReturnType<typeof listDocumentNotes>> | undefined) =>
-          notes?.filter((note) => note.id !== deletedId) ?? [],
+        previous?.filter((note) => note.id !== deletedId) ?? [],
       );
-      void client.invalidateQueries({ queryKey: ["notes", documentId] });
+      return { previous };
+    },
+    onSuccess: (_, deletedId) => {
       setNoteToDelete(null);
     },
+    onError: (_error, _deletedId, context) => {
+      if (context?.previous)
+        client.setQueryData(["notes", documentId], context.previous);
+    },
+    onSettled: () =>
+      client.invalidateQueries({ queryKey: ["notes", documentId] }),
   });
   if (q.isLoading) return <p className="text-sm">Loading notes…</p>;
   if (q.isError)
@@ -82,6 +93,11 @@ export function DocumentNotes({ documentId }: { documentId: string }) {
               “{noteToDelete.title}” and its locally saved draft will be
               permanently removed.
             </p>
+            {remove.isError && (
+              <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {remove.error.message}
+              </p>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"

@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Home, PencilRuler } from "lucide-react";
+import { BookOpen, GitFork, Home, PencilRuler } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { listDocuments } from "../../services/documents";
 export function Sidebar() {
-  const { id } = useParams();
+  const { documentId } = useParams();
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
   return (
     <aside className="hidden w-56 shrink-0 border-r bg-stone-900 p-4 text-stone-200 lg:block">
@@ -25,12 +25,21 @@ export function Sidebar() {
         <PencilRuler size={18} />
         Canvas
       </Link>
+      {(documentId || q.data?.[0]?.id) && (
+        <Link
+          to={`/graph/${documentId ?? q.data![0].id}`}
+          className="mt-1 flex gap-2 rounded p-2 hover:bg-stone-800"
+        >
+          <GitFork size={18} />
+          Knowledge graph
+        </Link>
+      )}
       <p className="mb-2 mt-7 text-xs uppercase text-stone-500">Recent</p>
       {q.data?.slice(0, 6).map((d) => (
         <Link
           key={d.id}
           to={`/workspace/${d.id}`}
-          className={`block truncate rounded p-2 text-sm ${id === d.id ? "bg-stone-700 text-white" : "hover:bg-stone-800"}`}
+          className={`block truncate rounded p-2 text-sm ${documentId === d.id ? "bg-stone-700 text-white" : "hover:bg-stone-800"}`}
         >
           {d.name}
         </Link>

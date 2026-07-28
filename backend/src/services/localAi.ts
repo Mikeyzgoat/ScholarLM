@@ -1,51 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import { env } from "../env";
 
-const clients = env.GEMINI_API_KEYS.map(
-  (apiKey) => new GoogleGenAI({ apiKey }),
-);
-let preferOllama = clients.length === 0;
-
-export function getGeminiClient(): GoogleGenAI {
-  const client = clients[0];
-  if (!client) throw new Error("No Gemini API key is configured");
-  return client;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-async function wait(milliseconds: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-async function runWithFallback<T>(
-  geminiOperation: (client: GoogleGenAI) => Promise<T>,
-  sglangOperation: (() => Promise<T>) | null,
-): Promise<T> {
-  const failures: string[] = [];
-  if (!preferOllama) {
-    for (let index = 0; index < clients.length; index += 1) {
-      try {
-        return await geminiOperation(clients[index]);
-      } catch (error) {
-        failures.push(`Gemini key ${index + 1}: ${errorMessage(error)}`);
-        if (index < clients.length - 1) await wait(350 * (index + 1));
-      }
-    }
-    preferOllama = true;
-  }
-  if (sglangOperation && env.SGLANG_BASE_URL && env.SGLANG_MODEL) {
-    try {
-      return await sglangOperation();
-    } catch (error) {
-      failures.push(`SGLang: ${errorMessage(error)}`);
-    }
-  }
+function requireSglang(): void {
   if (!env.SGLANG_BASE_URL || !env.SGLANG_MODEL)
-    failures.push("SGLang fallback is not configured");
-  throw new Error(`AI providers unavailable. ${failures.join(" | ")}`);
+    throw new Error(
+      "Local inference is not configured. Set SGLANG_BASE_URL and SGLANG_MODEL.",
+    );
 }
 
 async function sglangGenerate(input: {
@@ -53,6 +12,7 @@ async function sglangGenerate(input: {
   system?: string;
   json?: boolean;
 }): Promise<string> {
+  requireSglang();
   const response = await fetch(`${env.SGLANG_BASE_URL}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -166,9 +126,6 @@ export async function explainCanvasSelection(input: {
   pageNumber?: number;
   graphRequested?: boolean;
 }): Promise<CanvasAnalysis> {
-  const imageBase64 = input.imageDataUrl?.slice(
-    input.imageDataUrl.indexOf(",") + 1,
-  );
   const prompt = `Analyze the selected mathematics${input.imageDataUrl ? " in the image" : ""}.
 Recognize the equation accurately, solve it step by step, and explain the reasoning as a teacher.
 Provide 17–41 ordered sample points across a useful domain when a graph materially helps the explanation${input.graphRequested ? " or because the user explicitly requested a graph" : ""}. Otherwise omit plot. If a requested graph is mathematically inapplicable, explain why instead of inventing one.
@@ -179,70 +136,38 @@ ${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
 ${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
   const system =
     "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the explanation. Return valid JSON only.";
-  return runWithFallback(
-    async (client) => {
-      const response = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
+  requireSglang();
+  const response = await fetch(
+    `${env.SGLANG_BASE_URL}/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: env.SGLANG_MODEL,
+        messages: [
+          { role: "system", content: system },
           {
             role: "user",
-            parts: [
-              { text: `${system}\n${prompt}` },
-              ...(imageBase64
+            content: [
+              { type: "text", text: prompt },
+              ...(input.imageDataUrl
                 ? [
                     {
-                      inlineData: {
-                        mimeType: "image/png",
-                        data: imageBase64,
-                      },
+                      type: "image_url",
+                      image_url: { url: input.imageDataUrl },
                     },
                   ]
                 : []),
             ],
           },
         ],
-        config: { responseMimeType: "application/json" },
-      });
-      const raw = response.text?.trim();
-      if (!raw) throw new Error("Gemini returned no visual analysis");
-      return parseCanvasAnalysis(raw);
+        temperature: 0.1,
+        stream: true,
+        chat_template_kwargs: { enable_thinking: false },
+      }),
     },
-    env.SGLANG_BASE_URL && env.SGLANG_MODEL
-      ? async () => {
-          const response = await fetch(
-            `${env.SGLANG_BASE_URL}/v1/chat/completions`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model: env.SGLANG_MODEL,
-                messages: [
-                  { role: "system", content: system },
-                  {
-                    role: "user",
-                    content: [
-                      { type: "text", text: prompt },
-                      ...(input.imageDataUrl
-                        ? [
-                            {
-                              type: "image_url",
-                              image_url: { url: input.imageDataUrl },
-                            },
-                          ]
-                        : []),
-                    ],
-                  },
-                ],
-                temperature: 0.1,
-                stream: true,
-                chat_template_kwargs: { enable_thinking: false },
-              }),
-            },
-          );
-          return parseCanvasAnalysis(await readSglangStream(response));
-        }
-      : null,
   );
+  return parseCanvasAnalysis(await readSglangStream(response));
 }
 
 async function ollamaEmbedding(text: string): Promise<number[]> {
@@ -293,18 +218,7 @@ export async function explainSelectedText(input: {
   const prompt = `${context}\n\nSELECTED PASSAGE:\n${input.selectedText}`;
   const system =
     "Explain only the selected passage. Do not answer unrelated questions. Use clear educational language, preserve important technical terminology, use short paragraphs, and return plain text.";
-  return runWithFallback(
-    async (client) => {
-      const response = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `${system}\n${prompt}`,
-      });
-      const text = response.text?.trim();
-      if (!text) throw new Error("Gemini returned no explanation");
-      return text;
-    },
-    () => sglangGenerate({ prompt, system }),
-  );
+  return sglangGenerate({ prompt, system });
 }
 
 interface ConceptGraph {
@@ -354,24 +268,11 @@ export async function extractConceptGraph(input: {
   chunks: Array<{ content: string; pageNumber: number }>;
 }): Promise<ConceptGraph> {
   const prompt = `Extract a knowledge graph from "${input.documentTitle}". Return concepts (maximum 30: label, description, pageNumber) and meaningful edges (source, target, relationship). Every edge label must exactly match a concept label. Use the most relevant page.\n\n${input.chunks.map((chunk) => `[Page ${chunk.pageNumber}] ${chunk.content}`).join("\n\n")}`;
-  return runWithFallback(
-    async (client) => {
-      const response = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" },
-      });
-      const raw = response.text?.trim();
-      if (!raw) throw new Error("Gemini returned no graph");
-      return parseConceptGraph(raw);
-    },
-    async () =>
-      parseConceptGraph(
-        await sglangGenerate({
-          prompt,
-          system: "Return only a valid JSON object with concepts and edges.",
-          json: true,
-        }),
-      ),
+  return parseConceptGraph(
+    await sglangGenerate({
+      prompt,
+      system: "Return only a valid JSON object with concepts and edges.",
+      json: true,
+    }),
   );
 }
