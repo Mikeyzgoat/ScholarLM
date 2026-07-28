@@ -1,2 +1,29 @@
-import {useCallback} from "react";import {Tldraw,loadSnapshot,type Editor} from "tldraw";import "tldraw/tldraw.css";import type {NotePage} from "../../lib/types";
-export function NotesCanvas({note,onEditorReady}:{note:NotePage;onEditorReady:(editor:Editor)=>void}){const mount=useCallback((editor:Editor)=>{if(note.snapshot&&typeof note.snapshot==="object"&&Object.keys(note.snapshot).length)loadSnapshot(editor.store,note.snapshot);onEditorReady(editor)},[note.id]);return <div className="absolute inset-0 top-14"><Tldraw onMount={mount}/></div>}
+import { useCallback } from "react";
+import { Tldraw, loadSnapshot, type Editor } from "tldraw";
+import "tldraw/tldraw.css";
+import type { NotePage } from "../../lib/types";
+export function NotesCanvas({
+  note,
+  onEditorReady,
+}: {
+  note: NotePage;
+  onEditorReady: (editor: Editor) => void;
+}) {
+  const mount = useCallback(
+    (editor: Editor) => {
+      if (
+        note.snapshot &&
+        typeof note.snapshot === "object" &&
+        Object.keys(note.snapshot).length
+      )
+        loadSnapshot(editor.store, note.snapshot);
+      onEditorReady(editor);
+    },
+    [note.id],
+  );
+  return (
+    <div className="absolute inset-0 top-14">
+      <Tldraw onMount={mount} />
+    </div>
+  );
+}

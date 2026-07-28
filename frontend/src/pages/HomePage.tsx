@@ -1,2 +1,36 @@
-import {useQuery} from "@tanstack/react-query";import {useNavigate} from "react-router-dom";import {UploadBox} from "../components/documents/UploadBox";import {DocumentCard} from "../components/documents/DocumentCard";import {listDocuments} from "../services/documents";
-export default function HomePage(){const nav=useNavigate();const q=useQuery({queryKey:["documents"],queryFn:listDocuments});return <main className="mx-auto max-w-4xl p-8"><h1 className="mb-2 text-3xl font-semibold">Your learning workspace</h1><p className="mb-8 text-stone-600">Upload a PDF to search, explore, and understand it.</p><UploadBox onUploaded={d=>nav(`/workspace/${d.id}`)}/><h2 className="mb-3 mt-10 text-lg font-semibold">Recent documents</h2>{q.isLoading?<p>Loading documents…</p>:q.isError?<p className="text-red-700">{q.error.message}</p>:q.data?.length?<div className="space-y-3">{q.data.map(d=><DocumentCard key={d.id} document={d} onOpen={id=>nav(`/workspace/${id}`)}/>)}</div>:<p className="text-stone-500">No documents yet.</p>}</main>}
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { UploadBox } from "../components/documents/UploadBox";
+import { DocumentCard } from "../components/documents/DocumentCard";
+import { listDocuments } from "../services/documents";
+export default function HomePage() {
+  const nav = useNavigate();
+  const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
+  return (
+    <main className="mx-auto max-w-4xl p-8">
+      <h1 className="mb-2 text-3xl font-semibold">Your learning workspace</h1>
+      <p className="mb-8 text-stone-600">
+        Upload a PDF to search, explore, and understand it.
+      </p>
+      <UploadBox onUploaded={(d) => nav(`/workspace/${d.id}`)} />
+      <h2 className="mb-3 mt-10 text-lg font-semibold">Recent documents</h2>
+      {q.isLoading ? (
+        <p>Loading documents…</p>
+      ) : q.isError ? (
+        <p className="text-red-700">{q.error.message}</p>
+      ) : q.data?.length ? (
+        <div className="space-y-3">
+          {q.data.map((d) => (
+            <DocumentCard
+              key={d.id}
+              document={d}
+              onOpen={(id) => nav(`/workspace/${id}`)}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-stone-500">No documents yet.</p>
+      )}
+    </main>
+  );
+}

@@ -451,19 +451,19 @@ export type DocumentStatus =
 Define and export interfaces for:
 
 ```ts
-DocumentRecord
-DocumentPageRecord
-ChunkRecord
-ConceptRecord
-ConceptEdgeRecord
-NotePageRecord
-SearchRequest
-SearchResult
-ExplainRequest
-ExplainResponse
-GraphResponse
-CreateNoteRequest
-UpdateNoteRequest
+DocumentRecord;
+DocumentPageRecord;
+ChunkRecord;
+ConceptRecord;
+ConceptEdgeRecord;
+NotePageRecord;
+SearchRequest;
+SearchResult;
+ExplainRequest;
+ExplainResponse;
+GraphResponse;
+CreateNoteRequest;
+UpdateNoteRequest;
 ```
 
 Use explicit property types. Do not use `any`.
@@ -489,7 +489,10 @@ Export:
 ```ts
 export async function ensureUploadDirectory(): Promise<void>;
 export function getUploadPath(documentId: string): string;
-export async function saveUploadedPdf(file: File, documentId: string): Promise<string>;
+export async function saveUploadedPdf(
+  file: File,
+  documentId: string,
+): Promise<string>;
 export async function deleteFileIfExists(filePath: string): Promise<void>;
 ```
 
@@ -642,7 +645,7 @@ export function chunkPages(
   options?: {
     maxCharacters?: number;
     overlapCharacters?: number;
-  }
+  },
 ): TextChunk[];
 ```
 
@@ -692,12 +695,14 @@ export async function semanticSearch(input: {
   documentId: string;
   query: string;
   limit?: number;
-}): Promise<Array<{
-  chunkId: string;
-  pageNumber: number;
-  content: string;
-  score: number;
-}>>;
+}): Promise<
+  Array<{
+    chunkId: string;
+    pageNumber: number;
+    content: string;
+    score: number;
+  }>
+>;
 ```
 
 Defaults:
@@ -772,17 +777,17 @@ Create private helper functions:
 async function updateDocumentStatus(
   documentId: string,
   status: DocumentStatus,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<void>;
 
 async function saveDocumentPages(
   documentId: string,
-  pages: ExtractedPdfPage[]
+  pages: ExtractedPdfPage[],
 ): Promise<void>;
 
 async function saveChunks(
   documentId: string,
-  chunks: TextChunk[]
+  chunks: TextChunk[],
 ): Promise<void>;
 ```
 
@@ -1164,17 +1169,17 @@ All errors must use this shape:
 Export explicit types for:
 
 ```ts
-DocumentStatus
-DocumentSummary
-DocumentDetails
-DocumentStatusResponse
-SearchResult
-GraphNode
-GraphEdge
-GraphResponse
-ExplanationResponse
-NotePage
-SaveState
+DocumentStatus;
+DocumentSummary;
+DocumentDetails;
+DocumentStatusResponse;
+SearchResult;
+GraphNode;
+GraphEdge;
+GraphResponse;
+ExplanationResponse;
+NotePage;
+SaveState;
 ```
 
 Required `SaveState`:
@@ -1219,7 +1224,7 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(
   path: string,
-  options?: RequestInit
+  options?: RequestInit,
 ): Promise<T>;
 ```
 
@@ -1243,7 +1248,9 @@ Export:
 export async function uploadDocument(file: File): Promise<DocumentSummary>;
 export async function listDocuments(): Promise<DocumentSummary[]>;
 export async function getDocument(documentId: string): Promise<DocumentDetails>;
-export async function getDocumentStatus(documentId: string): Promise<DocumentStatusResponse>;
+export async function getDocumentStatus(
+  documentId: string,
+): Promise<DocumentStatusResponse>;
 export function getDocumentFileUrl(documentId: string): string;
 ```
 
@@ -1264,7 +1271,9 @@ export async function searchDocument(input: {
 Export:
 
 ```ts
-export async function getDocumentGraph(documentId: string): Promise<GraphResponse>;
+export async function getDocumentGraph(
+  documentId: string,
+): Promise<GraphResponse>;
 ```
 
 ### `frontend/src/services/explanation.ts`
@@ -1287,7 +1296,7 @@ Export:
 ```ts
 export async function generateSpeech(
   text: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Blob>;
 ```
 
@@ -1303,7 +1312,9 @@ export async function createNote(input: {
   snapshot: unknown;
 }): Promise<NotePage>;
 
-export async function listDocumentNotes(documentId: string): Promise<NotePage[]>;
+export async function listDocumentNotes(
+  documentId: string,
+): Promise<NotePage[]>;
 export async function getNote(noteId: string): Promise<NotePage>;
 
 export async function updateNote(input: {
@@ -1408,7 +1419,7 @@ Export:
 ```ts
 export function useKnowledgeGraph(
   documentId: string | undefined,
-  documentStatus: DocumentStatus | undefined
+  documentStatus: DocumentStatus | undefined,
 ): {
   graph: GraphResponse | undefined;
   isLoading: boolean;
@@ -1679,10 +1690,7 @@ interface PDFViewerProps {
   fileUrl: string;
   activePage: number;
   onPageChange: (page: number) => void;
-  onTextSelected: (input: {
-    text: string;
-    pageNumber: number;
-  }) => void;
+  onTextSelected: (input: { text: string; pageNumber: number }) => void;
 }
 ```
 
@@ -2245,4 +2253,3 @@ Codex must deliver:
 13. No alternate frameworks.
 14. No added features outside this specification.
 15. TypeScript code that passes type checking.
-

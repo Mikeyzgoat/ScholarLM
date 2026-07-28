@@ -1,2 +1,46 @@
-import type {NotePage} from "../../lib/types";
-export function NotesList({notes,onOpen,onCreate,onDelete}:{notes:NotePage[];onOpen:(id:string)=>void;onCreate:()=>void;onDelete?:(id:string)=>void}){return <div><button onClick={onCreate} className="mb-3 w-full rounded bg-teal-700 px-3 py-2 text-sm text-white">New note</button>{notes.length?notes.map(n=><div key={n.id} className="mb-2 flex rounded border bg-white"><button className="min-w-0 flex-1 truncate p-2 text-left text-sm" onClick={()=>onOpen(n.id)}>{n.title}</button>{onDelete&&<button aria-label={`Delete ${n.title}`} className="px-2 text-red-700" onClick={()=>onDelete(n.id)}>×</button>}</div>):<p className="text-sm text-stone-500">No notes yet.</p>}</div>}
+import type { NotePage } from "../../lib/types";
+export function NotesList({
+  notes,
+  onOpen,
+  onCreate,
+  onDelete,
+}: {
+  notes: NotePage[];
+  onOpen: (id: string) => void;
+  onCreate: () => void;
+  onDelete?: (id: string) => void;
+}) {
+  return (
+    <div>
+      <button
+        onClick={onCreate}
+        className="mb-3 w-full rounded bg-teal-700 px-3 py-2 text-sm text-white"
+      >
+        New note
+      </button>
+      {notes.length ? (
+        notes.map((n) => (
+          <div key={n.id} className="mb-2 flex rounded border bg-white">
+            <button
+              className="min-w-0 flex-1 truncate p-2 text-left text-sm"
+              onClick={() => onOpen(n.id)}
+            >
+              {n.title}
+            </button>
+            {onDelete && (
+              <button
+                aria-label={`Delete ${n.title}`}
+                className="px-2 text-red-700"
+                onClick={() => onDelete(n.id)}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))
+      ) : (
+        <p className="text-sm text-stone-500">No notes yet.</p>
+      )}
+    </div>
+  );
+}

@@ -1,3 +1,25 @@
-import type {DocumentStatusResponse} from "../../lib/types";
-const labels:Record<DocumentStatusResponse["status"],string>={uploaded:"Upload saved. Preparing ingestion…",extracting:"Extracting page-aware text…",chunking:"Creating semantic chunks…",embedding:"Generating embeddings…",graphing:"Building the knowledge graph…",ready:"Document is ready.",failed:"Ingestion failed."};
-export function IngestionStatus({status}:{status:DocumentStatusResponse}){return <div role="status" className={status.status==="failed"?"text-red-700":"text-stone-600"}>{labels[status.status]}{status.errorMessage&&` ${status.errorMessage}`}</div>}
+import type { DocumentStatusResponse } from "../../lib/types";
+const labels: Record<DocumentStatusResponse["status"], string> = {
+  uploaded: "Upload saved. Preparing ingestion…",
+  extracting: "Extracting page-aware text…",
+  chunking: "Creating semantic chunks…",
+  embedding: "Generating embeddings…",
+  graphing: "Building the knowledge graph…",
+  ready: "Document is ready.",
+  failed: "Ingestion failed.",
+};
+export function IngestionStatus({
+  status,
+}: {
+  status: DocumentStatusResponse;
+}) {
+  return (
+    <div
+      role="status"
+      className={status.status === "failed" ? "text-red-700" : "text-stone-600"}
+    >
+      {labels[status.status]}
+      {status.errorMessage && ` ${status.errorMessage}`}
+    </div>
+  );
+}

@@ -11,16 +11,24 @@ import graph from "./routes/graph";
 import notes from "./routes/notes";
 initializeDatabase();
 await ensureUploadDirectory();
-const app=new Hono();
-app.use("*",cors({origin:env.FRONTEND_ORIGIN}));
-app.get("/health",c=>c.json({ok:true}));
-app.route("/documents",documents);
-app.route("/search",search);
-app.route("/explain",explanation);
-app.route("/tts",speech);
-app.route("/graph",graph);
-app.route("/notes",notes);
-app.notFound(c=>c.json({error:{message:"Route not found",code:"NOT_FOUND"}},404));
-app.onError((error,c)=>{console.error(error);return c.json({error:{message:"Internal server error",code:"INTERNAL_ERROR"}},500)});
+const app = new Hono();
+app.use("*", cors({ origin: env.FRONTEND_ORIGIN }));
+app.get("/health", (c) => c.json({ ok: true }));
+app.route("/documents", documents);
+app.route("/search", search);
+app.route("/explain", explanation);
+app.route("/tts", speech);
+app.route("/graph", graph);
+app.route("/notes", notes);
+app.notFound((c) =>
+  c.json({ error: { message: "Route not found", code: "NOT_FOUND" } }, 404),
+);
+app.onError((error, c) => {
+  console.error(error);
+  return c.json(
+    { error: { message: "Internal server error", code: "INTERNAL_ERROR" } },
+    500,
+  );
+});
 export default app;
-if(import.meta.main) Bun.serve({port:env.BACKEND_PORT,fetch:app.fetch});
+if (import.meta.main) Bun.serve({ port: env.BACKEND_PORT, fetch: app.fetch });

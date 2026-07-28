@@ -1,1 +1,21 @@
-{"name":"scholarlm-backend","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"bun --watch src/index.ts","start":"NODE_ENV=production bun src/index.ts","typecheck":"bunx tsc --noEmit"},"dependencies":{"@google/genai":"latest","hono":"latest","kokoro-js":"latest","pdf-parse":"latest"},"devDependencies":{"@types/bun":"latest","typescript":"latest"}}
+{
+  "name": "scholarlm-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../.env --watch src/index.ts",
+    "start": "NODE_ENV=production bun --env-file=../.env src/index.ts",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "latest",
+    "hono": "latest",
+    "kokoro-js": "latest",
+    "pdf-parse": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}

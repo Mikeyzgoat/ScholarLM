@@ -1,1 +1,33 @@
-{"name":"scholarlm-frontend","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"bun --hot src/main.tsx","start":"bun src/main.tsx","build":"bun build ./src/main.tsx --outdir ./dist --minify","typecheck":"bunx tsc --noEmit"},"dependencies":{"@tanstack/react-query":"latest","framer-motion":"latest","graphology":"latest","graphology-layout-forceatlas2":"latest","lucide-react":"latest","pdfjs-dist":"latest","react":"latest","react-dom":"latest","react-pdf":"latest","react-router-dom":"latest","sigma":"latest","tldraw":"latest"},"devDependencies":{"@types/react":"latest","@types/react-dom":"latest","bun-plugin-tailwind":"latest","tailwindcss":"latest","typescript":"latest"}}
+{
+  "name": "scholarlm-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot index.html",
+    "start": "bun index.html",
+    "build": "bun build ./src/main.tsx --outdir ./dist --minify",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "latest",
+    "framer-motion": "latest",
+    "graphology": "latest",
+    "graphology-layout-forceatlas2": "latest",
+    "lucide-react": "latest",
+    "pdfjs-dist": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-pdf": "latest",
+    "react-router-dom": "latest",
+    "sigma": "latest",
+    "tldraw": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "bun-plugin-tailwind": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest"
+  }
+}

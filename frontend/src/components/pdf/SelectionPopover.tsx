@@ -1,1 +1,27 @@
-export function SelectionPopover({selectedText,onExplain,onDismiss}:{selectedText:string;onExplain:()=>void;onDismiss:()=>void}){if(!selectedText)return null;return <div className="rounded-lg border border-teal-200 bg-teal-50 p-3"><p className="line-clamp-2 text-xs text-stone-600">{selectedText}</p><div className="mt-2 flex gap-2"><button onClick={onExplain} className="rounded bg-teal-700 px-3 py-1.5 text-sm text-white">Explain selection</button><button onClick={onDismiss} className="text-sm">Dismiss</button></div></div>}
+export function SelectionPopover({
+  selectedText,
+  onExplain,
+  onDismiss,
+}: {
+  selectedText: string;
+  onExplain: () => void;
+  onDismiss: () => void;
+}) {
+  if (!selectedText) return null;
+  return (
+    <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+      <p className="line-clamp-2 text-xs text-stone-600">{selectedText}</p>
+      <div className="mt-2 flex gap-2">
+        <button
+          onClick={onExplain}
+          className="rounded bg-teal-700 px-3 py-1.5 text-sm text-white"
+        >
+          Explain selection
+        </button>
+        <button onClick={onDismiss} className="text-sm">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}

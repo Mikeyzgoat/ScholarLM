@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { initializeSchema } from "./schema";
 const dataDir = resolve(import.meta.dir, "../../data");
 mkdirSync(dataDir, { recursive: true });
-export const db = new Database(resolve(dataDir, "scholarlm.sqlite"), { create: true });
+export const db = new Database(resolve(dataDir, "scholarlm.sqlite"), {
+  create: true,
+});
 let initialized = false;
 export function initializeDatabase(): void {
   if (initialized) return;

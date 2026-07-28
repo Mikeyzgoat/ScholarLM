@@ -1,2 +1,21 @@
-import {useParams} from "react-router-dom";import {useQuery} from "@tanstack/react-query";import {getDocument} from "../../services/documents";
-export function Topbar(){const{documentId}=useParams();const q=useQuery({queryKey:["document",documentId],queryFn:()=>getDocument(documentId!),enabled:!!documentId});return <header className="flex h-14 items-center border-b bg-white px-5"><span className="font-semibold lg:hidden">ScholarLM</span>{q.data&&<span className="ml-auto truncate text-sm text-stone-600">{q.data.name}</span>}</header>}
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { getDocument } from "../../services/documents";
+export function Topbar() {
+  const { documentId } = useParams();
+  const q = useQuery({
+    queryKey: ["document", documentId],
+    queryFn: () => getDocument(documentId!),
+    enabled: !!documentId,
+  });
+  return (
+    <header className="flex h-14 items-center border-b bg-white px-5">
+      <span className="font-semibold lg:hidden">ScholarLM</span>
+      {q.data && (
+        <span className="ml-auto truncate text-sm text-stone-600">
+          {q.data.name}
+        </span>
+      )}
+    </header>
+  );
+}
