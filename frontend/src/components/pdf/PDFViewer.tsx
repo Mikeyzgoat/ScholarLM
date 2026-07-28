@@ -33,7 +33,9 @@ export function PDFViewer({
   const [count, setCount] = useState(0),
     [zoom, setZoom] = useState(1),
     [highlights, setHighlights] = useState<PageHighlight[]>([]),
-    [pending, setPending] = useState<PageHighlight | null>(null);
+    [pending, setPending] = useState<PageHighlight | null>(null),
+    [pdfUrl, setPdfUrl] = useState(""),
+    [pdfError, setPdfError] = useState("");
   const pageContainer = useRef<HTMLDivElement>(null);
   const storageKey = `scholarlm-pdf-highlights:${fileUrl}`;
 
@@ -47,6 +49,30 @@ export function PDFViewer({
       setHighlights([]);
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl = "";
+    setPdfUrl("");
+    setPdfError("");
+    void fetch(fileUrl, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(`PDF request failed (${response.status})`);
+        objectUrl = URL.createObjectURL(await response.blob());
+        setPdfUrl(objectUrl);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setPdfError(
+            error instanceof Error ? error.message : "Unable to load this PDF",
+          );
+      });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileUrl]);
 
   function persist(next: PageHighlight[]) {
     setHighlights(next);
@@ -108,14 +134,23 @@ export function PDFViewer({
         onMouseUp={captureSelection}
       >
         <div className="relative">
-          <Document
-            file={fileUrl}
-            onLoadSuccess={(p) => setCount(p.numPages)}
-            loading={<p>Loading PDF…</p>}
-            error={<p className="text-red-700">Unable to load this PDF.</p>}
-          >
-            <Page pageNumber={activePage} scale={zoom} />
-          </Document>
+          {pdfError ? (
+            <p className="p-6 text-red-700">{pdfError}</p>
+          ) : !pdfUrl ? (
+            <p className="p-6">Loading PDF…</p>
+          ) : (
+            <Document
+              file={pdfUrl}
+              onLoadSuccess={(p) => setCount(p.numPages)}
+              onLoadError={(error) => setPdfError(error.message)}
+              loading={<p className="p-6">Rendering PDF…</p>}
+              error={
+                <p className="p-6 text-red-700">Unable to render this PDF.</p>
+              }
+            >
+              <Page pageNumber={activePage} scale={zoom} />
+            </Document>
+          )}
           <div className="pointer-events-none absolute inset-0 z-10">
             {highlights
               .filter((highlight) => highlight.pageNumber === activePage)
