@@ -23,7 +23,6 @@ async function wait(milliseconds: number): Promise<void> {
 async function runWithFallback<T>(
   geminiOperation: (client: GoogleGenAI) => Promise<T>,
   sglangOperation: (() => Promise<T>) | null,
-  ollamaOperation: () => Promise<T>,
 ): Promise<T> {
   const failures: string[] = [];
   if (!preferOllama) {
@@ -44,12 +43,9 @@ async function runWithFallback<T>(
       failures.push(`SGLang: ${errorMessage(error)}`);
     }
   }
-  try {
-    return await ollamaOperation();
-  } catch (error) {
-    failures.push(`Ollama: ${errorMessage(error)}`);
-    throw new Error(`AI providers unavailable. ${failures.join(" | ")}`);
-  }
+  if (!env.SGLANG_BASE_URL || !env.SGLANG_MODEL)
+    failures.push("SGLang fallback is not configured");
+  throw new Error(`AI providers unavailable. ${failures.join(" | ")}`);
 }
 
 async function sglangGenerate(input: {
@@ -66,84 +62,51 @@ async function sglangGenerate(input: {
         ...(input.system ? [{ role: "system", content: input.system }] : []),
         { role: "user", content: input.prompt },
       ],
-      stream: false,
+      stream: true,
       temperature: 0.2,
       response_format: input.json ? { type: "json_object" } : undefined,
+      chat_template_kwargs: { enable_thinking: false },
     }),
   });
-  const payload = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: unknown } }>;
-    error?: { message?: unknown };
-  } | null;
-  if (!response.ok)
+  return readSglangStream(response);
+}
+
+async function readSglangStream(response: Response): Promise<string> {
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: { message?: unknown };
+    } | null;
     throw new Error(
       typeof payload?.error?.message === "string"
         ? payload.error.message
         : `SGLang returned ${response.status}`,
     );
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim())
-    throw new Error("SGLang returned no content");
-  return content.trim();
-}
-
-async function ollamaGenerate(input: {
-  prompt: string;
-  system?: string;
-  json?: boolean;
-  imageBase64?: string;
-}): Promise<string> {
-  const response = await fetch(`${env.OLLAMA_BASE_URL}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: env.OLLAMA_MODEL,
-      prompt: input.prompt,
-      system: input.system,
-      format: input.json ? "json" : undefined,
-      think: false,
-      stream: true,
-      keep_alive: "10m",
-      images: input.imageBase64 ? [input.imageBase64] : undefined,
-    }),
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      error?: unknown;
-    } | null;
-    throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Ollama returned ${response.status}`,
-    );
   }
-  if (!response.body) throw new Error("Ollama returned no response stream");
+  if (!response.body) throw new Error("SGLang returned no response stream");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
-  let streamError: string | null = null;
-  const consumeLine = (line: string) => {
-    if (!line.trim()) return;
-    const part = JSON.parse(line) as {
-      response?: unknown;
-      error?: unknown;
+  const consume = (line: string) => {
+    if (!line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    const part = JSON.parse(data) as {
+      choices?: Array<{ delta?: { content?: unknown } }>;
     };
-    if (typeof part.error === "string") streamError = part.error;
-    if (typeof part.response === "string") content += part.response;
+    const token = part.choices?.[0]?.delta?.content;
+    if (typeof token === "string") content += token;
   };
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value, { stream: !done });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
-    lines.forEach(consumeLine);
+    lines.forEach(consume);
     if (done) break;
   }
-  consumeLine(buffer);
-  if (streamError) throw new Error(streamError);
-  if (!content.trim())
-    throw new Error("Ollama returned no content");
+  consume(buffer);
+  if (!content.trim()) throw new Error("SGLang returned no content");
   return content.trim();
 }
 
@@ -197,17 +160,18 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
 }
 
 export async function explainCanvasSelection(input: {
-  imageDataUrl: string;
+  imageDataUrl?: string;
   selectedText?: string;
   documentTitle?: string;
   pageNumber?: number;
+  graphRequested?: boolean;
 }): Promise<CanvasAnalysis> {
-  const imageBase64 = input.imageDataUrl.slice(
+  const imageBase64 = input.imageDataUrl?.slice(
     input.imageDataUrl.indexOf(",") + 1,
   );
-  const prompt = `Analyze the selected handwritten mathematics in the image.
+  const prompt = `Analyze the selected mathematics${input.imageDataUrl ? " in the image" : ""}.
 Recognize the equation accurately, solve it step by step, and explain the reasoning as a teacher.
-If the expression represents or benefits from a 2D graph, provide 17–41 ordered sample points across a useful domain. If plotting is not meaningful, omit plot.
+Provide 17–41 ordered sample points across a useful domain when a graph materially helps the explanation${input.graphRequested ? " or because the user explicitly requested a graph" : ""}. Otherwise omit plot. If a requested graph is mathematically inapplicable, explain why instead of inventing one.
 Return only JSON:
 {"recognizedEquation":"...","explanation":"...","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
 ${input.documentTitle ? `Document context: ${input.documentTitle}` : ""}
@@ -224,7 +188,16 @@ ${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
             role: "user",
             parts: [
               { text: `${system}\n${prompt}` },
-              { inlineData: { mimeType: "image/png", data: imageBase64 } },
+              ...(imageBase64
+                ? [
+                    {
+                      inlineData: {
+                        mimeType: "image/png",
+                        data: imageBase64,
+                      },
+                    },
+                  ]
+                : []),
             ],
           },
         ],
@@ -249,35 +222,26 @@ ${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
                     role: "user",
                     content: [
                       { type: "text", text: prompt },
-                      {
-                        type: "image_url",
-                        image_url: { url: input.imageDataUrl },
-                      },
+                      ...(input.imageDataUrl
+                        ? [
+                            {
+                              type: "image_url",
+                              image_url: { url: input.imageDataUrl },
+                            },
+                          ]
+                        : []),
                     ],
                   },
                 ],
                 temperature: 0.1,
+                stream: true,
+                chat_template_kwargs: { enable_thinking: false },
               }),
             },
           );
-          const payload = (await response.json()) as {
-            choices?: Array<{ message?: { content?: string } }>;
-          };
-          if (!response.ok) throw new Error(`SGLang returned ${response.status}`);
-          return parseCanvasAnalysis(
-            payload.choices?.[0]?.message?.content ?? "",
-          );
+          return parseCanvasAnalysis(await readSglangStream(response));
         }
       : null,
-    async () =>
-      parseCanvasAnalysis(
-        await ollamaGenerate({
-          prompt,
-          system,
-          json: true,
-          imageBase64,
-        }),
-      ),
   );
 }
 
@@ -312,19 +276,7 @@ async function ollamaEmbedding(text: string): Promise<number[]> {
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  return runWithFallback(
-    async (client) => {
-      const response = await client.models.embedContent({
-        model: "gemini-embedding-001",
-        contents: text,
-      });
-      const values = response.embeddings?.[0]?.values;
-      if (!values?.length) throw new Error("Gemini returned no embedding");
-      return values;
-    },
-    null,
-    () => ollamaEmbedding(text),
-  );
+  return ollamaEmbedding(text);
 }
 
 export async function explainSelectedText(input: {
@@ -352,7 +304,6 @@ export async function explainSelectedText(input: {
       return text;
     },
     () => sglangGenerate({ prompt, system }),
-    () => ollamaGenerate({ prompt, system }),
   );
 }
 
@@ -417,14 +368,6 @@ export async function extractConceptGraph(input: {
     async () =>
       parseConceptGraph(
         await sglangGenerate({
-          prompt,
-          system: "Return only a valid JSON object with concepts and edges.",
-          json: true,
-        }),
-      ),
-    async () =>
-      parseConceptGraph(
-        await ollamaGenerate({
           prompt,
           system: "Return only a valid JSON object with concepts and edges.",
           json: true,

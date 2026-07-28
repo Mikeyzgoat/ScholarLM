@@ -29,7 +29,7 @@ export function AudioControls({
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
         onClick={isPlaying ? onPause : onResume}
-        disabled={isLoading || (!isPlaying && !isPaused && !isReady)}
+        disabled={!isReady}
       >
         {isPlaying ? <Pause size={17} /> : <Play size={17} />}
       </button>

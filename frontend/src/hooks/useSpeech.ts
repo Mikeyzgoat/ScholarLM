@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { generateSpeech } from "../services/speech";
+import { streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
 const silentWav =
@@ -7,10 +7,13 @@ const silentWav =
 
 export function useSpeech() {
   const audio = useRef<HTMLAudioElement | null>(null);
-  const url = useRef<string | null>(null);
+  const urls = useRef<string[]>([]);
+  const activeIndex = useRef(0);
+  const streamComplete = useRef(false);
+  const continuePlayback = useRef(false);
+  const playing = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const latestText = useRef("");
-  const fallbackUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   const fallbackActive = useRef(false);
   const [isLoading, setLoading] = useState(false);
   const [isPlaying, setPlaying] = useState(false);
@@ -22,17 +25,10 @@ export function useSpeech() {
     () => localStorage.getItem(key) !== "false",
   );
 
-  const stop = useCallback(() => {
-    controller.current?.abort();
-    controller.current = null;
-    audio.current?.pause();
-    if (audio.current) audio.current.currentTime = 0;
-    globalThis.speechSynthesis?.cancel();
-    fallbackUtterance.current = null;
-    setPlaying(false);
-    setPaused(false);
-    setLoading(false);
-  }, []);
+  const setPlaybackState = (value: boolean) => {
+    playing.current = value;
+    setPlaying(value);
+  };
 
   const playFallback = useCallback((text: string) => {
     if (!globalThis.speechSynthesis || !globalThis.SpeechSynthesisUtterance)
@@ -41,29 +37,82 @@ export function useSpeech() {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.96;
     utterance.onstart = () => {
+      playing.current = true;
       setPlaying(true);
       setPaused(false);
     };
     utterance.onpause = () => {
+      playing.current = false;
       setPlaying(false);
       setPaused(true);
     };
     utterance.onresume = () => {
+      playing.current = true;
       setPlaying(true);
       setPaused(false);
     };
     utterance.onend = () => {
+      playing.current = false;
       setPlaying(false);
       setPaused(false);
     };
     utterance.onerror = (event) => {
+      playing.current = false;
       setPlaying(false);
       setPaused(false);
       if (event.error !== "canceled" && event.error !== "interrupted")
         setError(new Error(`Browser speech failed: ${event.error}`));
     };
-    fallbackUtterance.current = utterance;
     globalThis.speechSynthesis.speak(utterance);
+  }, []);
+
+  const playChunk = useCallback((index: number) => {
+    const source = urls.current[index];
+    if (!source) return;
+    const player = audio.current ?? new Audio();
+    audio.current = player;
+    activeIndex.current = index;
+    if (player.src !== source) {
+      player.src = source;
+      player.load();
+    }
+    player.onplay = () => {
+      setPlaybackState(true);
+      setPaused(false);
+    };
+    player.onpause = () => {
+      setPlaybackState(false);
+      if (player.currentTime > 0 && !player.ended) setPaused(true);
+    };
+    player.onended = () => {
+      setPlaybackState(false);
+      setPaused(false);
+      const nextIndex = activeIndex.current + 1;
+      if (continuePlayback.current && urls.current[nextIndex])
+        playChunk(nextIndex);
+    };
+    player.onerror = () =>
+      setError(new Error("The browser could not decode Kokoro audio"));
+    void player.play().catch(() => setPaused(true));
+  }, []);
+
+  const stop = useCallback(() => {
+    controller.current?.abort();
+    controller.current = null;
+    continuePlayback.current = false;
+    audio.current?.pause();
+    if (audio.current) audio.current.currentTime = 0;
+    globalThis.speechSynthesis?.cancel();
+    setPlaybackState(false);
+    setPaused(false);
+    setLoading(false);
+  }, []);
+
+  const clearQueue = useCallback(() => {
+    for (const source of urls.current) URL.revokeObjectURL(source);
+    urls.current = [];
+    activeIndex.current = 0;
+    streamComplete.current = false;
   }, []);
 
   useEffect(() => {
@@ -84,66 +133,65 @@ export function useSpeech() {
   useEffect(
     () => () => {
       stop();
-      if (url.current) URL.revokeObjectURL(url.current);
+      clearQueue();
     },
-    [stop],
+    [clearQueue, stop],
   );
 
   const speak = async (text: string) => {
     stop();
+    clearQueue();
     latestText.current = text;
+    fallbackActive.current = false;
     setReady(false);
     setUsingFallback(false);
-    fallbackActive.current = false;
     setLoading(true);
     setError(null);
     const next = new AbortController();
     controller.current = next;
     try {
-      const blob = await generateSpeech(text, next.signal);
-      if (next.signal.aborted) return;
-      if (!blob.size) throw new Error("Kokoro returned an empty audio file");
-      if (url.current) URL.revokeObjectURL(url.current);
-      url.current = URL.createObjectURL(blob);
-      const player = audio.current ?? new Audio();
-      player.src = url.current;
-      player.load();
-      audio.current = player;
-      player.onplay = () => {
-        setPlaying(true);
-        setPaused(false);
-      };
-      player.onpause = () => {
-        if (player.currentTime > 0 && !player.ended) setPaused(true);
-        setPlaying(false);
-      };
-      player.onended = () => {
-        setPlaying(false);
-        setPaused(false);
-      };
-      player.onerror = () =>
-        setError(new Error("The browser could not decode Kokoro audio"));
-      setReady(true);
-      if (autoRead) {
-        try {
-          await player.play();
-        } catch {
-          setPaused(true);
-        }
-      }
+      await streamSpeech(
+        text,
+        (blob) => {
+          if (next.signal.aborted || !blob.size) return;
+          urls.current.push(URL.createObjectURL(blob));
+          setReady(true);
+          const nextIndex = audio.current?.ended
+            ? activeIndex.current + 1
+            : activeIndex.current;
+          if (autoRead && urls.current.length === 1) {
+            continuePlayback.current = true;
+            playChunk(0);
+          } else if (
+            continuePlayback.current &&
+            !playing.current &&
+            urls.current[nextIndex]
+          ) {
+            playChunk(nextIndex);
+          }
+        },
+        next.signal,
+      );
+      streamComplete.current = true;
+      if (!urls.current.length)
+        throw new Error("Kokoro returned no audio chunks");
     } catch (kokoroError) {
       if (next.signal.aborted) return;
-      try {
-        fallbackActive.current = true;
-        setUsingFallback(true);
-        setReady(true);
-        if (autoRead) playFallback(text);
-      } catch {
-        setError(
-          kokoroError instanceof Error
-            ? kokoroError
-            : new Error("Speech generation failed"),
-        );
+      if (urls.current.length) {
+        setError(new Error("Kokoro’s audio stream ended early"));
+      } else {
+        try {
+          fallbackActive.current = true;
+          setUsingFallback(true);
+          setReady(true);
+          if (autoRead) playFallback(text);
+        } catch {
+          setError(
+            kokoroError instanceof Error
+              ? kokoroError
+              : new Error("Speech generation failed"),
+          );
+        }
       }
     } finally {
       if (controller.current === next) setLoading(false);
@@ -153,25 +201,29 @@ export function useSpeech() {
   return {
     speak,
     pause: () => {
+      continuePlayback.current = false;
       if (fallbackActive.current) globalThis.speechSynthesis?.pause();
       else audio.current?.pause();
     },
     resume: () => {
+      continuePlayback.current = true;
       if (fallbackActive.current) {
         if (globalThis.speechSynthesis?.paused)
           globalThis.speechSynthesis.resume();
         else playFallback(latestText.current);
-      } else if (audio.current) {
-        void audio.current.play();
+      } else {
+        const player = audio.current;
+        const index =
+          player?.ended && urls.current[activeIndex.current + 1]
+            ? activeIndex.current + 1
+            : activeIndex.current;
+        playChunk(index);
       }
     },
     replay: () => {
-      if (fallbackActive.current) {
-        playFallback(latestText.current);
-      } else if (audio.current) {
-        audio.current.currentTime = 0;
-        void audio.current.play();
-      }
+      continuePlayback.current = true;
+      if (fallbackActive.current) playFallback(latestText.current);
+      else playChunk(0);
     },
     stop,
     isLoading,

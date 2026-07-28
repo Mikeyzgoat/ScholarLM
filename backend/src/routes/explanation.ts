@@ -14,6 +14,7 @@ explanation.post("/", async (c) => {
   const b = body as {
     selectedText?: unknown;
     imageDataUrl?: unknown;
+    graphRequested?: unknown;
     documentTitle?: unknown;
     pageNumber?: unknown;
   };
@@ -27,6 +28,8 @@ explanation.post("/", async (c) => {
     b.imageDataUrl.length <= 6_000_000;
   if (
     (!hasText && !hasImage) ||
+    (b.graphRequested !== undefined &&
+      typeof b.graphRequested !== "boolean") ||
     (b.documentTitle !== undefined && typeof b.documentTitle !== "string") ||
     (b.pageNumber !== undefined &&
       (!Number.isInteger(b.pageNumber) || Number(b.pageNumber) < 1))
@@ -45,12 +48,13 @@ explanation.post("/", async (c) => {
     documentTitle: b.documentTitle as string | undefined,
     pageNumber: b.pageNumber as number | undefined,
   };
-  if (hasImage)
+  if (hasImage || b.graphRequested === true)
     return c.json(
       await explainCanvasSelection({
         ...context,
         selectedText: hasText ? (b.selectedText as string).trim() : undefined,
-        imageDataUrl: b.imageDataUrl as string,
+        imageDataUrl: hasImage ? (b.imageDataUrl as string) : undefined,
+        graphRequested: b.graphRequested === true,
       }),
     );
   return c.json({

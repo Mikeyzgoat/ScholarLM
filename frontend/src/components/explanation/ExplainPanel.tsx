@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
 import { AnimatePresence, motion } from "framer-motion";
@@ -23,11 +23,13 @@ export function ExplainPanel({
 }) {
   const state = useExplanation(),
     speech = useSpeech();
+  const [graphRequested, setGraphRequested] = useState(false);
   const lastExplained = useRef("");
   async function explain() {
     const value = await state.explain({
       selectedText,
       imageDataUrl: selectionImage,
+      graphRequested,
       documentTitle,
       pageNumber: pageNumber ?? undefined,
     });
@@ -61,7 +63,19 @@ export function ExplainPanel({
       transition={{ layout: { duration: 0.24, ease: "easeOut" } }}
       className="space-y-3 rounded-lg border bg-white p-4"
     >
-      <h2 className="font-semibold">Explanation</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold">Explanation</h2>
+        {selectedText && (
+          <label className="flex items-center gap-2 text-xs text-stone-400">
+            <input
+              type="checkbox"
+              checked={graphRequested}
+              onChange={(event) => setGraphRequested(event.target.checked)}
+            />
+            Add graph
+          </label>
+        )}
+      </div>
       <AnimatePresence mode="popLayout">
         {selectedText && !state.explanation && (
           <motion.div
@@ -88,19 +102,31 @@ export function ExplainPanel({
         <p className="text-xs text-red-700">{speech.error.message}</p>
       )}
       {state.explanation && (
-        <AudioControls
-          isLoading={speech.isLoading}
-          isPlaying={speech.isPlaying}
-          isPaused={speech.isPaused}
-          isReady={speech.isReady}
-          usingFallback={speech.usingFallback}
-          autoRead={speech.autoRead}
-          onPause={speech.pause}
-          onResume={speech.resume}
-          onReplay={speech.replay}
-          onStop={speech.stop}
-          onAutoReadChange={speech.setAutoRead}
-        />
+        <>
+          {selectedText && graphRequested && (
+            <button
+              type="button"
+              className="w-full rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/15"
+              disabled={state.isExplaining}
+              onClick={() => void explain()}
+            >
+              {state.isExplaining ? "Generating graph…" : "Explain + add graph"}
+            </button>
+          )}
+          <AudioControls
+            isLoading={speech.isLoading}
+            isPlaying={speech.isPlaying}
+            isPaused={speech.isPaused}
+            isReady={speech.isReady}
+            usingFallback={speech.usingFallback}
+            autoRead={speech.autoRead}
+            onPause={speech.pause}
+            onResume={speech.resume}
+            onReplay={speech.replay}
+            onStop={speech.stop}
+            onAutoReadChange={speech.setAutoRead}
+          />
+        </>
       )}
     </motion.section>
   );

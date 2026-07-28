@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { synthesizeSpeech } from "../services/speech";
+import { streamSpeech, synthesizeSpeech } from "../services/speech";
 const speech = new Hono();
 speech.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
@@ -15,6 +15,41 @@ speech.post("/", async (c) => {
       },
       400,
     );
+  if (c.req.query("stream") === "1") {
+    const encoder = new TextEncoder();
+    const iterator = streamSpeech(text.trim());
+    const body = new ReadableStream({
+      async pull(controller) {
+        try {
+          const next = await iterator.next();
+          if (next.done) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(
+            encoder.encode(
+              `${JSON.stringify({
+                text: next.value.text,
+                audio: Buffer.from(next.value.audio).toString("base64"),
+              })}\n`,
+            ),
+          );
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+      async cancel() {
+        await iterator.return(undefined);
+      },
+    });
+    return new Response(body, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
   const bytes = await synthesizeSpeech(text.trim());
   const wav = bytes.buffer.slice(
     bytes.byteOffset,

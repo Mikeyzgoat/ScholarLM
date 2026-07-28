@@ -18,6 +18,7 @@ export function useExplanation() {
     explain: async (input: {
       selectedText?: string;
       imageDataUrl?: string;
+      graphRequested?: boolean;
       documentTitle?: string;
       pageNumber?: number;
     }) => {
