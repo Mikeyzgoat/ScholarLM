@@ -96,8 +96,8 @@ export default function NotesLibraryPage() {
         </p>
       </div>
 
-      <motion.div
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      <motion.section
+        className="max-w-md"
         initial={reduceMotion ? false : "hidden"}
         animate="visible"
         variants={{
@@ -117,7 +117,7 @@ export default function NotesLibraryPage() {
               const canvas = createLocalCanvas();
               navigate(`/canvas/${canvas.id}`);
             }}
-            className="group flex min-h-44 flex-col rounded-2xl border border-orange-400/20 bg-orange-500/5 p-5 shadow-[0_0_40px_rgba(249,115,22,0.04)] transition hover:-translate-y-0.5 hover:border-orange-400/40 hover:bg-orange-500/10"
+            className="group flex min-h-44 w-full flex-col rounded-2xl border border-orange-400/20 bg-orange-500/5 p-5 text-left shadow-[0_0_40px_rgba(249,115,22,0.04)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-orange-400/40 hover:bg-orange-500/10"
           >
             <Plus size={20} className="text-orange-400" />
             <h2 className="mt-5 font-semibold">New empty canvas</h2>
@@ -130,7 +130,29 @@ export default function NotesLibraryPage() {
             />
           </button>
         </motion.div>
+      </motion.section>
 
+      <div className="mb-4 mt-10 flex items-end justify-between gap-4 border-b border-white/10 pb-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Saved notes</h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Continue your independent and document-linked canvases.
+          </p>
+        </div>
+        <span className="text-xs text-stone-600">
+          {localCanvases.length + (notes.data?.length ?? 0)} saved
+        </span>
+      </div>
+
+      <motion.div
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        initial={reduceMotion ? false : "hidden"}
+        animate="visible"
+        variants={{
+          hidden: {},
+          visible: { transition: { staggerChildren: 0.055 } },
+        }}
+      >
         {localCanvases.map((canvas) => (
           <motion.div
             key={canvas.id}
