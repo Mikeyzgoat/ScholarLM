@@ -1,4 +1,5 @@
 import type { DocumentStatusResponse } from "../../lib/types";
+import { motion } from "framer-motion";
 const labels: Record<DocumentStatusResponse["status"], string> = {
   uploaded: "Upload saved. Preparing ingestion…",
   extracting: "Extracting page-aware text…",
@@ -14,12 +15,16 @@ export function IngestionStatus({
   status: DocumentStatusResponse;
 }) {
   return (
-    <div
+    <motion.div
+      key={status.status}
+      initial={{ opacity: 0, x: -5 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.24 }}
       role="status"
       className={status.status === "failed" ? "text-red-700" : "text-stone-600"}
     >
       {labels[status.status]}
       {status.errorMessage && ` ${status.errorMessage}`}
-    </div>
+    </motion.div>
   );
 }

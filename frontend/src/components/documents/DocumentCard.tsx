@@ -1,4 +1,5 @@
 import type { DocumentSummary } from "../../lib/types";
+import { motion } from "framer-motion";
 export function DocumentCard({
   document,
   onOpen,
@@ -7,7 +8,14 @@ export function DocumentCard({
   onOpen: (id: string) => void;
 }) {
   return (
-    <article className="flex items-center justify-between rounded-lg border border-stone-200 bg-white p-4">
+    <motion.article
+      variants={{
+        hidden: { opacity: 0, y: 8 },
+        visible: { opacity: 1, y: 0 },
+      }}
+      whileHover={{ y: -2, transition: { duration: 0.16 } }}
+      className="flex items-center justify-between rounded-lg border border-stone-200 bg-white p-4"
+    >
       <div>
         <h3 className="font-medium">{document.name}</h3>
         <p className="text-sm capitalize text-stone-500">
@@ -21,6 +29,6 @@ export function DocumentCard({
       >
         Open
       </button>
-    </article>
+    </motion.article>
   );
 }

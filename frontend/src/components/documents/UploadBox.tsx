@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
+import { motion } from "framer-motion";
 import { uploadDocument } from "../../services/documents";
 import type { DocumentSummary } from "../../lib/types";
 export function UploadBox({
@@ -34,7 +35,9 @@ export function UploadBox({
     }
   }
   return (
-    <section
+    <motion.section
+      whileHover={{ scale: 1.005 }}
+      transition={{ duration: 0.2 }}
       className="rounded-xl border-2 border-dashed border-stone-300 bg-white p-10 text-center"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
@@ -60,6 +63,6 @@ export function UploadBox({
         onChange={(e) => void accept(e.target.files?.[0])}
       />
       {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-    </section>
+    </motion.section>
   );
 }

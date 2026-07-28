@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import type { Editor } from "tldraw";
 import type { NotePage } from "../lib/types";
 import { getNote, updateNote } from "../services/notes";
@@ -67,13 +68,20 @@ export default function NotesPage() {
         onTitleChange={(value) => void rename(value)}
         onBack={() => nav(`/workspace/${note.documentId}`)}
       />
-      {recovered &&
-        chooseNewestNoteSource({ server: q.data, local: recovered }) ===
-          "local" && (
-          <div className="absolute right-4 top-16 z-20 rounded bg-amber-100 px-3 py-2 text-xs">
-            Recovered newer local changes.
-          </div>
-        )}
+      <AnimatePresence>
+        {recovered &&
+          chooseNewestNoteSource({ server: q.data, local: recovered }) ===
+            "local" && (
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="absolute right-4 top-16 z-20 rounded border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs backdrop-blur-xl"
+            >
+              Recovered newer local changes.
+            </motion.div>
+          )}
+      </AnimatePresence>
       <NotesCanvas note={note} onEditorReady={setEditor} />
     </main>
   );

@@ -1,5 +1,6 @@
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
+import { AnimatePresence, motion } from "framer-motion";
 import { SelectionPopover } from "../pdf/SelectionPopover";
 import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
@@ -23,15 +24,28 @@ export function ExplainPanel({
     if (value) await speech.speak(value);
   }
   return (
-    <section className="space-y-3 rounded-lg border bg-white p-4">
+    <motion.section
+      layout
+      transition={{ layout: { duration: 0.24, ease: "easeOut" } }}
+      className="space-y-3 rounded-lg border bg-white p-4"
+    >
       <h2 className="font-semibold">Explanation</h2>
-      {selectedText && !state.explanation && (
-        <SelectionPopover
-          selectedText={selectedText}
-          onExplain={() => void explain()}
-          onDismiss={state.clear}
-        />
-      )}
+      <AnimatePresence mode="popLayout">
+        {selectedText && !state.explanation && (
+          <motion.div
+            key="selection"
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+          >
+            <SelectionPopover
+              selectedText={selectedText}
+              onExplain={() => void explain()}
+              onDismiss={state.clear}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <ExplanationContent
         selectedText={selectedText}
         explanation={state.explanation}
@@ -54,6 +68,6 @@ export function ExplainPanel({
           onAutoReadChange={speech.setAutoRead}
         />
       )}
-    </section>
+    </motion.section>
   );
 }

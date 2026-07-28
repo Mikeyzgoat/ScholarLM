@@ -23,7 +23,7 @@ export function NotesCanvas({
   );
   return (
     <div className="absolute inset-0 top-14">
-      <Tldraw onMount={mount} />
+      <Tldraw colorScheme="dark" onMount={mount} />
     </div>
   );
 }

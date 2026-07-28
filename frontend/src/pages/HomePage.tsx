@@ -1,14 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { UploadBox } from "../components/documents/UploadBox";
 import { DocumentCard } from "../components/documents/DocumentCard";
 import { listDocuments } from "../services/documents";
 export default function HomePage() {
   const nav = useNavigate();
+  const reduceMotion = useReducedMotion();
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
   return (
-    <main className="mx-auto max-w-4xl p-8">
-      <h1 className="mb-2 text-3xl font-semibold">Your learning workspace</h1>
+    <motion.main
+      className="mx-auto max-w-4xl p-8"
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <p className="mb-3 font-mono text-xs uppercase tracking-[0.24em] text-orange-400">
+        Semantic learning system
+      </p>
+      <h1 className="mb-2 text-3xl font-semibold tracking-tight">
+        Your learning workspace
+      </h1>
       <p className="mb-8 text-stone-600">
         Upload a PDF to search, explore, and understand it.
       </p>
@@ -19,7 +31,17 @@ export default function HomePage() {
       ) : q.isError ? (
         <p className="text-red-700">{q.error.message}</p>
       ) : q.data?.length ? (
-        <div className="space-y-3">
+        <motion.div
+          className="space-y-3"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: {},
+            visible: {
+              transition: { staggerChildren: reduceMotion ? 0 : 0.055 },
+            },
+          }}
+        >
           {q.data.map((d) => (
             <DocumentCard
               key={d.id}
@@ -27,10 +49,10 @@ export default function HomePage() {
               onOpen={(id) => nav(`/workspace/${id}`)}
             />
           ))}
-        </div>
+        </motion.div>
       ) : (
         <p className="text-stone-500">No documents yet.</p>
       )}
-    </main>
+    </motion.main>
   );
 }

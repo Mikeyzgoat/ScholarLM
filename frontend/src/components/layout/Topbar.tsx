@@ -10,7 +10,8 @@ export function Topbar() {
   });
   return (
     <header className="flex h-14 items-center border-b bg-white px-5">
-      <span className="font-semibold lg:hidden">ScholarLM</span>
+      <span className="mr-2 h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.9)]" />
+      <span className="font-semibold tracking-tight lg:hidden">ScholarLM</span>
       {q.data && (
         <span className="ml-auto truncate text-sm text-stone-600">
           {q.data.name}
