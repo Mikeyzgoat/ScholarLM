@@ -2,6 +2,8 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
+const sglangVenv = resolve(root, ".venv-sglang-py311");
+const sglangVenvPython = resolve(sglangVenv, "bin/python");
 const children: Array<{ name: string; process: Bun.Subprocess }> = [];
 let stopping = false;
 
@@ -45,6 +47,106 @@ async function commandSucceeds(command: string[]): Promise<boolean> {
     stderr: "ignore",
   });
   return (await result.exited) === 0;
+}
+
+async function pythonVersion(python: string): Promise<string | null> {
+  try {
+    const result = Bun.spawn(
+      [
+        python,
+        "-c",
+        "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
+      ],
+      {
+        cwd: root,
+        env: { ...Bun.env },
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "ignore",
+      },
+    );
+    if ((await result.exited) !== 0) return null;
+    return (await new Response(result.stdout).text()).trim();
+  } catch {
+    return null;
+  }
+}
+
+function supportsSglang(version: string | null): boolean {
+  if (!version) return false;
+  const [major, minor] = version.split(".").map(Number);
+  return major === 3 && minor >= 10 && minor <= 12;
+}
+
+async function runChecked(
+  command: string[],
+  failureMessage: string,
+): Promise<void> {
+  const result = Bun.spawn(command, {
+    cwd: root,
+    env: { ...Bun.env },
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if ((await result.exited) !== 0) throw new Error(failureMessage);
+}
+
+async function resolveSglangPython(): Promise<string> {
+  if (Bun.env.SGLANG_PYTHON) {
+    const configured = Bun.env.SGLANG_PYTHON.startsWith("/")
+      ? Bun.env.SGLANG_PYTHON
+      : resolve(root, Bun.env.SGLANG_PYTHON);
+    const version = await pythonVersion(configured);
+    if (!supportsSglang(version)) {
+      throw new Error(
+        `SGLANG_PYTHON must use Python 3.10-3.12; ${configured} reports ${version || "an unknown version"}.`,
+      );
+    }
+    return configured;
+  }
+
+  if (
+    (await executableExists(sglangVenvPython)) &&
+    supportsSglang(await pythonVersion(sglangVenvPython))
+  ) {
+    return sglangVenvPython;
+  }
+
+  let basePython: string | undefined;
+  for (const candidate of ["python3.11", "python3.12", "python3.10"]) {
+    if (supportsSglang(await pythonVersion(candidate))) {
+      basePython = candidate;
+      break;
+    }
+  }
+  if (!basePython) {
+    throw new Error(
+      "SGLang requires Python 3.10-3.12. Install Python 3.11, or set SGLANG_PYTHON to a compatible interpreter.",
+    );
+  }
+
+  console.log(
+    `\n[ScholarLM] Creating a compatible SGLang environment with ${basePython}…`,
+  );
+  await runChecked(
+    [basePython, "-m", "venv", sglangVenv],
+    `Could not create ${sglangVenv}. Ensure the ${basePython} venv package is installed.`,
+  );
+  await runChecked(
+    [
+      sglangVenvPython,
+      "-m",
+      "pip",
+      "install",
+      "--upgrade",
+      "pip",
+      "setuptools",
+      "wheel",
+    ],
+    "Could not prepare the SGLang Python environment.",
+  );
+  return sglangVenvPython;
 }
 
 async function ensureSglang(python: string): Promise<void> {
@@ -106,10 +208,7 @@ const sglangBaseUrl = (
 if (await isReachable(`${sglangBaseUrl}/v1/models`)) {
   console.log(`[ScholarLM] Reusing SGLang at ${sglangBaseUrl}`);
 } else {
-  const venvPython = resolve(root, ".venv-sglang/bin/python");
-  const python =
-    Bun.env.SGLANG_PYTHON ||
-    ((await executableExists(venvPython)) ? venvPython : "python3");
+  const python = await resolveSglangPython();
   await ensureSglang(python);
   const model = Bun.env.SGLANG_MODEL || "google/gemma-4-E2B-it";
   const memoryFraction = Bun.env.SGLANG_MEM_FRACTION || "0.82";
