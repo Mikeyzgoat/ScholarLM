@@ -1,3 +1,5 @@
+import { createRandomCanvasName } from "./randomName";
+
 export interface LocalCanvasSummary {
   id: string;
   title: string;
@@ -55,13 +57,34 @@ export function createLocalCanvas(): LocalCanvasSummary {
   const now = new Date().toISOString();
   const canvas: LocalCanvasSummary = {
     id: crypto.randomUUID(),
-    title: "Untitled canvas",
+    title: createRandomCanvasName(),
     createdAt: now,
     updatedAt: now,
   };
   localStorage.setItem(snapshotKey(canvas.id), "{}");
   writeIndex([canvas, ...listLocalCanvases()]);
   return canvas;
+}
+
+export function updateLocalCanvasTitle(
+  id: string,
+  title: string,
+): LocalCanvasSummary | null {
+  const value = title.trim();
+  if (!value) return null;
+  let updated: LocalCanvasSummary | null = null;
+  writeIndex(
+    listLocalCanvases().map((canvas) => {
+      if (canvas.id !== id) return canvas;
+      updated = {
+        ...canvas,
+        title: value,
+        updatedAt: new Date().toISOString(),
+      };
+      return updated;
+    }),
+  );
+  return updated;
 }
 
 export function getLocalCanvas(id: string): LocalCanvasSummary | null {

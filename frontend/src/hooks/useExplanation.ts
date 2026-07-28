@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { explainText } from "../services/explanation";
 import type { ExplanationResponse } from "../lib/types";
+import { cleanExplanation } from "../lib/plainExplanation";
 export function useExplanation() {
   const [explanation, setExplanation] = useState(""),
     [isExplaining, setLoading] = useState(false),
@@ -33,8 +34,12 @@ export function useExplanation() {
           ...input,
           signal: next.signal,
         });
-        if (id === generation.current) setExplanation(value.explanation);
-        return id === generation.current ? value : null;
+        const cleaned = {
+          ...value,
+          explanation: cleanExplanation(value.explanation),
+        };
+        if (id === generation.current) setExplanation(cleaned.explanation);
+        return id === generation.current ? cleaned : null;
       } catch (e) {
         if (!next.signal.aborted && id === generation.current)
           setError(e instanceof Error ? e : new Error("Explanation failed"));

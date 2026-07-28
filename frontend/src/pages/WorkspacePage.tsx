@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -22,6 +22,7 @@ import type { GraphNode } from "../lib/types";
 import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { DocumentQA } from "../components/rag/DocumentQA";
+import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
   const [searchParams] = useSearchParams();
@@ -33,8 +34,17 @@ export default function WorkspacePage() {
   const [selectedText, setSelectedText] = useState("");
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();
-  const [explanationRequest, setExplanationRequest] = useState(0);
+  const [selectionOrigin, setSelectionOrigin] = useState<
+    "pdf" | "canvas" | null
+  >(null);
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
+  const queuedCanvasExplanations = useRef<
+    Array<{
+      selectedText: string;
+      explanation: string;
+      pageNumber?: number;
+    }>
+  >([]);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
   const doc = useQuery({
     queryKey: ["document", documentId],
@@ -47,6 +57,17 @@ export default function WorkspacePage() {
   const selectNode = useCallback((n: GraphNode) => {
     if (n.pageNumber) setActivePage(n.pageNumber);
   }, []);
+  const saveExplanationToCanvas = useCallback(
+    (input: {
+      selectedText: string;
+      explanation: string;
+      pageNumber?: number;
+    }) => {
+      if (canvasEditor) addExplanationToCanvas(canvasEditor, input);
+      else queuedCanvasExplanations.current.push(input);
+    },
+    [canvasEditor],
+  );
   if (doc.isLoading)
     return <main className="p-6">Loading workspace…</main>;
   if (doc.isError || !doc.data)
@@ -120,14 +141,16 @@ export default function WorkspacePage() {
           {workspaceMode !== "canvas" && (
             <PDFViewer
               fileUrl={getDocumentFileUrl(documentId)}
+              documentTitle={doc.data.name}
               activePage={activePage}
               onPageChange={setActivePage}
               onTextSelected={(s) => {
                 setSelectedText(s.text);
                 setSelectionImage(undefined);
                 setSelectedTextPage(s.pageNumber);
-                setExplanationRequest((request) => request + 1);
+                setSelectionOrigin("pdf");
               }}
+              onExplanationGenerated={saveExplanationToCanvas}
             />
           )}
           {workspaceMode !== "pdf" && (
@@ -138,13 +161,20 @@ export default function WorkspacePage() {
                 setSelectedText(text);
                 setSelectionImage(undefined);
                 setSelectedTextPage(null);
+                setSelectionOrigin("canvas");
               }}
               onCanvasSelection={(selection) => {
                 setSelectedText(selection.text);
                 setSelectionImage(selection.imageDataUrl);
                 setSelectedTextPage(null);
+                setSelectionOrigin("canvas");
               }}
-              onEditorReady={setCanvasEditor}
+              onEditorReady={(editor) => {
+                setCanvasEditor(editor);
+                queuedCanvasExplanations.current.splice(0).forEach((item) => {
+                  addExplanationToCanvas(editor, item);
+                });
+              }}
             />
           )}
         </div>
@@ -162,10 +192,11 @@ export default function WorkspacePage() {
           selectionImage={selectionImage}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
-          requestKey={explanationRequest}
+          liveSelections={selectionOrigin !== "pdf"}
           onPlotGenerated={(plot, equation) => {
             if (canvasEditor) drawMathPlot(canvasEditor, plot, equation);
           }}
+          onExplanationGenerated={saveExplanationToCanvas}
         />
         <motion.section layout className="rounded-lg border bg-white p-4">
           <h2 className="mb-2 font-semibold">Knowledge graph</h2>

@@ -12,7 +12,9 @@ import {
   getLocalCanvas,
   loadLocalCanvasSnapshot,
   saveLocalCanvasSnapshot,
+  updateLocalCanvasTitle,
 } from "../lib/localCanvases";
+import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
 
 export default function StandaloneCanvasPage() {
   const { canvasId = "" } = useParams();
@@ -22,6 +24,7 @@ export default function StandaloneCanvasPage() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [title, setTitle] = useState(canvas?.title ?? "");
   const unsubscribe = useRef<(() => void) | null>(null);
   const [note] = useState<NotePage>(() => ({
     id: canvasId,
@@ -89,7 +92,20 @@ export default function StandaloneCanvasPage() {
     <main className="fixed inset-0 flex flex-col bg-neutral-950">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-white px-4">
         <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.9)]" />
-        <strong className="tracking-tight">{canvas.title}</strong>
+        <input
+          value={title}
+          maxLength={120}
+          aria-label="Canvas name"
+          onChange={(event) => setTitle(event.target.value)}
+          onBlur={() => {
+            const updated = updateLocalCanvasTitle(canvasId, title);
+            setTitle(updated?.title ?? canvas.title);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="min-w-0 max-w-64 rounded border border-transparent bg-transparent px-2 py-1 font-semibold tracking-tight outline-none hover:border-stone-300 focus:border-orange-400/40"
+        />
         <span className="text-xs">
           <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
         </span>
@@ -146,6 +162,9 @@ export default function StandaloneCanvasPage() {
             documentTitle="Independent canvas"
             onPlotGenerated={(plot, equation) => {
               if (editor) drawMathPlot(editor, plot, equation);
+            }}
+            onExplanationGenerated={(input) => {
+              if (editor) addExplanationToCanvas(editor, input);
             }}
           />
           <p className="mt-3 text-xs leading-5 text-stone-500">

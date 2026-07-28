@@ -8,6 +8,7 @@ import { createNote, listDocumentNotes } from "../../services/notes";
 import { useNoteAutosave } from "../../hooks/useNoteAutosave";
 import { NotesCanvas } from "./NotesCanvas";
 import { SaveStatus } from "./SaveStatus";
+import { createRandomCanvasName } from "../../lib/randomName";
 
 export function WorkspaceCanvas({
   documentId,
@@ -37,7 +38,7 @@ export function WorkspaceCanvas({
     if (notes.isLoading || notes.isError || note || createError) return;
     void createNote({
       documentId,
-      title: "Untitled note",
+      title: createRandomCanvasName(),
       metadata: { page: 1 },
       snapshot: {},
     })

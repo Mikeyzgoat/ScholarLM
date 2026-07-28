@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Highlighter, Sparkles, Trash2 } from "lucide-react";
+import { Highlighter, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs" with { type: "file" };
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { PDFToolbar } from "./PDFToolbar";
+import { explainText } from "../../services/explanation";
+import { cleanExplanation } from "../../lib/plainExplanation";
+import { useSpeech } from "../../hooks/useSpeech";
+import { AudioControls } from "../explanation/AudioControls";
+import { HighlightedSpeechText } from "../explanation/ExplanationContent";
+import { AnimatePresence, motion } from "framer-motion";
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface PageHighlight {
@@ -19,25 +25,77 @@ interface PageHighlight {
   }>;
 }
 
+interface CachedExplanation {
+  positionKey: string;
+  selection: PageHighlight;
+  text: string;
+}
+
+function selectionPositionKey(selection: PageHighlight): string {
+  const rectangles = selection.rectangles
+    .map((item) =>
+      [item.left, item.top, item.width, item.height]
+        .map((value) => value.toFixed(2))
+        .join(","),
+    )
+    .join("|");
+  return `${selection.pageNumber}:${selection.text}:${rectangles}`;
+}
+
+function explanationPosition(selection: PageHighlight) {
+  const left = Math.min(
+    62,
+    Math.max(2, Math.min(...selection.rectangles.map((item) => item.left))),
+  );
+  const top =
+    Math.max(
+      ...selection.rectangles.map((item) => item.top + item.height),
+    ) + 1;
+  return {
+    left: `${left}%`,
+    top: `${top}%`,
+  };
+}
+
 export function PDFViewer({
   fileUrl,
+  documentTitle,
   activePage,
   onPageChange,
   onTextSelected,
+  onExplanationGenerated,
 }: {
   fileUrl: string;
+  documentTitle: string;
   activePage: number;
   onPageChange: (p: number) => void;
   onTextSelected: (i: { text: string; pageNumber: number }) => void;
+  onExplanationGenerated?: (input: {
+    selectedText: string;
+    explanation: string;
+    pageNumber: number;
+  }) => void;
 }) {
+  const speech = useSpeech();
   const [count, setCount] = useState(0),
     [zoom, setZoom] = useState(1),
     [highlights, setHighlights] = useState<PageHighlight[]>([]),
+    [cachedExplanations, setCachedExplanations] = useState<
+      CachedExplanation[]
+    >([]),
     [pending, setPending] = useState<PageHighlight | null>(null),
+    [inlineExplanation, setInlineExplanation] = useState<{
+      selection: PageHighlight;
+      text: string;
+      error: string;
+      loading: boolean;
+    } | null>(null),
     [pdfUrl, setPdfUrl] = useState(""),
     [pdfError, setPdfError] = useState("");
   const pageContainer = useRef<HTMLDivElement>(null);
+  const explanationGeneration = useRef(0);
   const storageKey = `scholarlm-pdf-highlights:${fileUrl}`;
+  const explanationStorageKey = `scholarlm-pdf-explanations:${fileUrl}`;
 
   useEffect(() => {
     try {
@@ -49,6 +107,19 @@ export function PDFViewer({
       setHighlights([]);
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      const stored: unknown = JSON.parse(
+        localStorage.getItem(explanationStorageKey) ?? "[]",
+      );
+      setCachedExplanations(
+        Array.isArray(stored) ? (stored as CachedExplanation[]) : [],
+      );
+    } catch {
+      setCachedExplanations([]);
+    }
+  }, [explanationStorageKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,11 +173,90 @@ export function PDFViewer({
     });
   }
 
+  function persistExplanation(value: CachedExplanation) {
+    const next = [
+      value,
+      ...cachedExplanations.filter(
+        (item) => item.positionKey !== value.positionKey,
+      ),
+    ].slice(0, 100);
+    setCachedExplanations(next);
+    localStorage.setItem(explanationStorageKey, JSON.stringify(next));
+  }
+
+  async function explainSelection(
+    selection: PageHighlight,
+    force = false,
+  ) {
+    const generation = ++explanationGeneration.current;
+    speech.stop();
+    onTextSelected({
+      text: selection.text,
+      pageNumber: selection.pageNumber,
+    });
+    const positionKey = selectionPositionKey(selection);
+    const cached = cachedExplanations.find(
+      (item) => item.positionKey === positionKey,
+    );
+    if (cached && !force) {
+      setInlineExplanation({
+        selection,
+        text: cached.text,
+        error: "",
+        loading: false,
+      });
+      await speech.speak(cached.text);
+      return;
+    }
+    setInlineExplanation({
+      selection,
+      text: "",
+      error: "",
+      loading: true,
+    });
+    try {
+      const response = await explainText({
+        selectedText: selection.text,
+        documentTitle,
+        pageNumber: selection.pageNumber,
+      });
+      const explanation = cleanExplanation(response.explanation);
+      if (generation !== explanationGeneration.current) return;
+      setInlineExplanation({
+        selection,
+        text: explanation,
+        error: "",
+        loading: false,
+      });
+      persistExplanation({
+        positionKey,
+        selection,
+        text: explanation,
+      });
+      onExplanationGenerated?.({
+        selectedText: selection.text,
+        explanation,
+        pageNumber: selection.pageNumber,
+      });
+      await speech.speak(explanation);
+    } catch (error) {
+      if (generation !== explanationGeneration.current) return;
+      setInlineExplanation({
+        selection,
+        text: "",
+        error:
+          error instanceof Error ? error.message : "Unable to explain selection",
+        loading: false,
+      });
+    }
+  }
+
   function explainPending() {
     if (!pending) return;
-    onTextSelected({ text: pending.text, pageNumber: pending.pageNumber });
+    const selection = pending;
     setPending(null);
     getSelection()?.removeAllRanges();
+    void explainSelection(selection);
   }
 
   function highlightPending() {
@@ -170,33 +320,121 @@ export function PDFViewer({
                 )),
               )}
           </div>
+          <AnimatePresence>
+            {inlineExplanation?.selection.pageNumber === activePage && (
+            <motion.aside
+              initial={{ opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 360, damping: 28 }}
+              className="absolute z-30 w-80 max-w-[92%] rounded-xl border border-orange-400/25 bg-neutral-950/80 p-3 text-left shadow-[0_18px_60px_rgba(0,0,0,0.55),0_0_30px_rgba(249,115,22,0.12)] backdrop-blur-2xl"
+              style={explanationPosition(inlineExplanation.selection)}
+            >
+              {!inlineExplanation.loading && (
+                <button
+                  type="button"
+                  aria-label="Retry explanation"
+                  title="Generate a new explanation"
+                  onClick={() =>
+                    void explainSelection(inlineExplanation.selection, true)
+                  }
+                  className="absolute right-8 top-1 rounded p-1 text-stone-500 transition hover:bg-white/5 hover:text-orange-300"
+                >
+                  <RotateCcw size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Close explanation"
+                onClick={() => {
+                  speech.stop();
+                  setInlineExplanation(null);
+                }}
+                className="absolute right-2 top-1 text-stone-500 hover:text-stone-200"
+              >
+                ×
+              </button>
+              <p className="pr-5 font-mono text-[10px] uppercase tracking-[0.16em] text-orange-400">
+                Selected explanation
+              </p>
+              {inlineExplanation.loading ? (
+                <p className="mt-2 text-xs text-stone-400">Thinking locally…</p>
+              ) : inlineExplanation.error ? (
+                <p className="mt-2 text-xs leading-5 text-red-400">
+                  {inlineExplanation.error}
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-200">
+                    <HighlightedSpeechText
+                      text={inlineExplanation.text}
+                      activeWordIndex={speech.activeWordIndex}
+                    />
+                  </p>
+                  <AudioControls
+                    isLoading={speech.isLoading}
+                    isPlaying={speech.isPlaying}
+                    isPaused={speech.isPaused}
+                    isReady={speech.isReady}
+                    usingFallback={speech.usingFallback}
+                    autoRead={speech.autoRead}
+                    onPause={speech.pause}
+                    onResume={speech.resume}
+                    onReplay={speech.replay}
+                    onStop={speech.stop}
+                    onAutoReadChange={speech.setAutoRead}
+                  />
+                  {speech.error && (
+                    <p className="mt-2 text-xs text-red-400">
+                      {speech.error.message}
+                    </p>
+                  )}
+                </>
+              )}
+            </motion.aside>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-      {pending && (
-        <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-neutral-950/90 p-1.5 shadow-2xl backdrop-blur-xl">
-          <button
-            onClick={explainPending}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/10"
+      <AnimatePresence>
+        {pending && (
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.96 }}
+          transition={{ type: "spring", stiffness: 420, damping: 30 }}
+          className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/15 bg-neutral-950/65 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.55),0_0_32px_rgba(249,115,22,0.16)] backdrop-blur-2xl"
+        >
+          <motion.button
+            whileHover={{ y: -1, scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => void explainPending()}
+            className="flex items-center gap-2 rounded-xl border border-orange-400/15 bg-orange-500/10 px-3 py-2 text-xs text-orange-200 transition hover:bg-orange-500/20"
           >
             <Sparkles size={15} />
             Select &amp; explain
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.97 }}
             onClick={highlightPending}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs hover:bg-white/5"
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-stone-300 transition hover:bg-white/10"
           >
             <Highlighter size={15} />
             Highlight
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileHover={{ rotate: 4, scale: 1.05 }}
+            whileTap={{ scale: 0.94 }}
             aria-label="Dismiss selection"
             onClick={() => setPending(null)}
-            className="rounded-lg px-2 py-2 text-stone-500 hover:bg-white/5"
+            className="rounded-xl px-2 py-2 text-stone-500 transition hover:bg-white/10 hover:text-stone-200"
           >
             ×
-          </button>
-        </div>
-      )}
+          </motion.button>
+        </motion.div>
+        )}
+      </AnimatePresence>
       {!!highlights.length && (
         <button
           onClick={() => persist([])}

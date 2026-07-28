@@ -25,7 +25,7 @@ export async function generateSpeech(
 
 export async function streamSpeech(
   text: string,
-  onChunk: (audio: Blob) => void,
+  onChunk: (audio: Blob, text: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/tts?stream=1`, {
@@ -48,14 +48,14 @@ export async function streamSpeech(
   let buffer = "";
   const consume = (line: string) => {
     if (!line.trim()) return;
-    const chunk = JSON.parse(line) as { audio?: unknown };
-    if (typeof chunk.audio !== "string")
+    const chunk = JSON.parse(line) as { audio?: unknown; text?: unknown };
+    if (typeof chunk.audio !== "string" || typeof chunk.text !== "string")
       throw new Error("Invalid Kokoro audio stream");
     const binary = atob(chunk.audio);
     const bytes = Uint8Array.from(binary, (character) =>
       character.charCodeAt(0),
     );
-    onChunk(new Blob([bytes], { type: "audio/wav" }));
+    onChunk(new Blob([bytes], { type: "audio/wav" }), chunk.text);
   };
   while (true) {
     const { done, value } = await reader.read();

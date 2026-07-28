@@ -13,6 +13,7 @@ import { NotesHeader } from "../components/notes/NotesHeader";
 import { NotesPagination } from "../components/notes/NotesPagination";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
+import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
 export default function NotesPage() {
   const { noteId = "" } = useParams();
   const nav = useNavigate();
@@ -147,6 +148,9 @@ export default function NotesPage() {
           documentTitle={note.title}
           onPlotGenerated={(plot, equation) => {
             if (editor) drawMathPlot(editor, plot, equation);
+          }}
+          onExplanationGenerated={(input) => {
+            if (editor) addExplanationToCanvas(editor, input);
           }}
         />
         <p className="mt-3 px-1 text-xs leading-5 text-stone-500">

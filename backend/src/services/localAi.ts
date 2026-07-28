@@ -220,7 +220,7 @@ export async function explainSelectedText(input: {
     .join("\n");
   const prompt = `${context}\n\nSELECTED PASSAGE:\n${input.selectedText}`;
   const system =
-    "Explain only the selected passage. Do not answer unrelated questions. Use clear educational language, preserve important technical terminology, use short paragraphs, and return plain text.";
+    "Explain only the selected passage in English. Do not answer unrelated questions. Use clear educational language, preserve important technical terminology, and use short paragraphs. Return plain text only: no Markdown, headings, bullets, code fences, or LaTeX delimiters. Write mathematical notation with Unicode symbols.";
   return ollamaGenerate({ prompt, system, signal: input.signal });
 }
 

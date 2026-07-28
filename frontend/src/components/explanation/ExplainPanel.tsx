@@ -14,6 +14,7 @@ export function ExplainPanel({
   liveSelections = true,
   requestKey = 0,
   onPlotGenerated,
+  onExplanationGenerated,
 }: {
   selectedText: string;
   selectionImage?: string;
@@ -22,6 +23,10 @@ export function ExplainPanel({
   liveSelections?: boolean;
   requestKey?: number;
   onPlotGenerated?: (plot: MathPlot, equation?: string) => void;
+  onExplanationGenerated?: (input: {
+    selectedText: string;
+    explanation: string;
+  }) => void;
 }) {
   const state = useExplanation(),
     speech = useSpeech();
@@ -37,6 +42,10 @@ export function ExplainPanel({
     });
     if (value) {
       if (value.plot) onPlotGenerated?.(value.plot, value.recognizedEquation);
+      onExplanationGenerated?.({
+        selectedText,
+        explanation: value.explanation,
+      });
       await speech.speak(value.explanation);
     }
   }
@@ -101,6 +110,7 @@ export function ExplainPanel({
         explanation={state.explanation}
         isLoading={state.isExplaining}
         error={state.error}
+        activeWordIndex={speech.activeWordIndex}
       />
       {speech.error && (
         <p className="text-xs text-red-700">{speech.error.message}</p>
