@@ -1,4 +1,5 @@
 import { apiFetch } from "../lib/api";
+import { removeLocalNoteDraft } from "../lib/noteStorage";
 import type { NotePage } from "../lib/types";
 export async function createNote(input: {
   documentId: string;
@@ -40,4 +41,5 @@ export async function updateNote(input: {
 }
 export async function deleteNote(noteId: string): Promise<void> {
   await apiFetch(`/notes/${noteId}`, { method: "DELETE" });
+  removeLocalNoteDraft(noteId);
 }

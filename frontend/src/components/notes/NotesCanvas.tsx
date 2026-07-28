@@ -23,8 +23,16 @@ export function NotesCanvas({
         note.snapshot &&
         typeof note.snapshot === "object" &&
         Object.keys(note.snapshot).length
-      )
-        loadSnapshot(editor.store, note.snapshot);
+      ) {
+        try {
+          loadSnapshot(editor.store, note.snapshot);
+        } catch (error) {
+          console.error(
+            `Could not restore the tldraw snapshot for note ${note.id}. The saved data was left untouched.`,
+            error,
+          );
+        }
+      }
       onEditorReady(editor);
       selectionCleanup.current?.();
       selectionCleanup.current = editor.store.listen(
