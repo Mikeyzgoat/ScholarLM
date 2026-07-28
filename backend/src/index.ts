@@ -31,4 +31,3 @@ app.onError((error, c) => {
   );
 });
 export default app;
-if (import.meta.main) Bun.serve({ port: env.BACKEND_PORT, fetch: app.fetch });

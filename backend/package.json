@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --env-file=../.env --watch src/index.ts",
-    "start": "NODE_ENV=production bun --env-file=../.env src/index.ts",
+    "dev": "bun --env-file=../.env --watch src/server.ts",
+    "start": "NODE_ENV=production bun --env-file=../.env src/server.ts",
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
