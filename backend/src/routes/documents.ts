@@ -68,7 +68,7 @@ documents.post("/", async (c) => {
     if (path) await deleteFileIfExists(path);
     throw e;
   }
-  void ingestDocument(id);
+  setTimeout(() => void ingestDocument(id), 500);
   const row = db
     .query("SELECT * FROM documents WHERE id=?")
     .get(id) as DocumentRecord;

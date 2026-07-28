@@ -46,9 +46,9 @@ export default function WorkspacePage() {
   const selectNode = useCallback((n: GraphNode) => {
     if (n.pageNumber) setActivePage(n.pageNumber);
   }, []);
-  if (doc.isLoading || status.isLoading)
+  if (doc.isLoading)
     return <main className="p-6">Loading workspace…</main>;
-  if (doc.isError || !doc.data || !status.status)
+  if (doc.isError || !doc.data)
     return <main className="p-6 text-red-700">Unable to load workspace.</main>;
   return (
     <motion.main
@@ -72,7 +72,7 @@ export default function WorkspacePage() {
           onQueryChange={search.setQuery}
           onSearch={search.search}
           isSearching={search.isSearching}
-          disabled={status.status.status !== "ready"}
+          disabled={status.status?.status !== "ready"}
         />
         {search.error && (
           <p className="mt-2 text-sm text-red-700">{search.error.message}</p>
@@ -98,7 +98,7 @@ export default function WorkspacePage() {
           mode={workspaceMode}
           onModeChange={setWorkspaceMode}
         />
-        {status.status.status !== "ready" && (
+        {status.status && status.status.status !== "ready" && (
           <div className="mb-3 rounded border bg-white p-3">
             <IngestionStatus status={status.status} />
           </div>
