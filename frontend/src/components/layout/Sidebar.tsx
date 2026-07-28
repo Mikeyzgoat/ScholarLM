@@ -8,19 +8,45 @@ import {
   StickyNote,
 } from "lucide-react";
 import { Link, useParams } from "react-router";
+import { useEffect, useRef } from "react";
 import { listDocuments } from "../../services/documents";
 import sidebarLogo from "../../assets/sidebar-logo.png";
 export function Sidebar({
   collapsed,
   onToggle,
+  onCollapse,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  onCollapse: () => void;
 }) {
   const { documentId } = useParams();
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
+  const sidebar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (collapsed) return;
+    const closeFromOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !sidebar.current?.contains(event.target)
+      )
+        onCollapse();
+    };
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCollapse();
+    };
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [collapsed, onCollapse]);
   return (
-    <aside className="relative hidden w-[72px] shrink-0 lg:block">
+    <aside
+      ref={sidebar}
+      className="relative hidden w-[72px] shrink-0 lg:block"
+    >
       <div
         className={`${collapsed ? "w-[72px] px-3" : "w-56 px-4"} absolute inset-y-0 left-0 z-40 border-r bg-stone-900 py-4 text-stone-200 shadow-[16px_0_40px_rgba(0,0,0,0.16)] transition-[width,padding] duration-300 ease-out will-change-[width]`}
       >

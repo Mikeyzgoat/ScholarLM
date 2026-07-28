@@ -13,9 +13,17 @@ export function AppLayout() {
       return next;
     });
   }
+  function collapseSidebar() {
+    setSidebarCollapsed(true);
+    localStorage.setItem("scholarlm-sidebar-collapsed", "true");
+  }
   return (
     <div className="scholar-shell flex min-h-screen">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={toggleSidebar}
+        onCollapse={collapseSidebar}
+      />
       <div className="min-w-0 flex-1">
         <Topbar />
         <Outlet />
