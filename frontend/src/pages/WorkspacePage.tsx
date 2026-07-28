@@ -13,6 +13,11 @@ import { IngestionStatus } from "../components/documents/IngestionStatus";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { DocumentNotes } from "../components/notes/DocumentNotes";
+import { WorkspaceCanvas } from "../components/notes/WorkspaceCanvas";
+import {
+  WorkspaceModeBar,
+  type WorkspaceMode,
+} from "../components/layout/WorkspaceModeBar";
 import type { GraphNode } from "../lib/types";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
@@ -20,6 +25,7 @@ export default function WorkspacePage() {
   const [activePage, setActivePage] = useState(1);
   const [selectedText, setSelectedText] = useState("");
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
   const doc = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => getDocument(documentId),
@@ -37,7 +43,7 @@ export default function WorkspacePage() {
     return <main className="p-6 text-red-700">Unable to load workspace.</main>;
   return (
     <motion.main
-      className="grid gap-4 p-4 xl:grid-cols-[280px_minmax(500px,1fr)_320px]"
+      className="grid gap-4 p-4 xl:grid-cols-[260px_minmax(720px,1fr)_320px]"
       initial={reduceMotion ? false : "hidden"}
       animate="visible"
       variants={{
@@ -79,20 +85,45 @@ export default function WorkspacePage() {
         }}
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
+        <WorkspaceModeBar
+          mode={workspaceMode}
+          onModeChange={setWorkspaceMode}
+        />
         {status.status.status !== "ready" && (
           <div className="mb-3 rounded border bg-white p-3">
             <IngestionStatus status={status.status} />
           </div>
         )}
-        <PDFViewer
-          fileUrl={getDocumentFileUrl(documentId)}
-          activePage={activePage}
-          onPageChange={setActivePage}
-          onTextSelected={(s) => {
-            setSelectedText(s.text);
-            setSelectedTextPage(s.pageNumber);
-          }}
-        />
+        <div
+          className={
+            workspaceMode === "split"
+              ? "grid gap-3 2xl:grid-cols-2"
+              : "grid grid-cols-1"
+          }
+        >
+          {workspaceMode !== "canvas" && (
+            <PDFViewer
+              fileUrl={getDocumentFileUrl(documentId)}
+              activePage={activePage}
+              onPageChange={setActivePage}
+              onTextSelected={(s) => {
+                setSelectedText(s.text);
+                setSelectedTextPage(s.pageNumber);
+              }}
+            />
+          )}
+          {workspaceMode !== "pdf" && (
+            <WorkspaceCanvas
+              key={documentId}
+              documentId={documentId}
+              documentTitle={doc.data.name}
+              onTextSelected={(text) => {
+                setSelectedText(text);
+                setSelectedTextPage(null);
+              }}
+            />
+          )}
+        </div>
       </motion.div>
       <motion.aside
         className="space-y-4"

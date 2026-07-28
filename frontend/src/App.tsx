@@ -3,6 +3,7 @@ import HomePage from "./pages/HomePage";
 import DefaultPage from "./pages/DefaultPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import NotesPage from "./pages/NotesPage";
+import StandaloneCanvasPage from "./pages/StandaloneCanvasPage";
 import { AppLayout } from "./components/layout/AppLayout";
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/workspace/:documentId" element={<WorkspacePage />} />
       </Route>
       <Route path="/notes/:noteId" element={<NotesPage />} />
+      <Route path="/canvas" element={<StandaloneCanvasPage />} />
       <Route path="*" element={<main className="p-8">Page not found</main>} />
     </Routes>
   );

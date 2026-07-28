@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
 import { AnimatePresence, motion } from "framer-motion";
@@ -8,13 +9,16 @@ export function ExplainPanel({
   selectedText,
   pageNumber,
   documentTitle,
+  liveSelections = true,
 }: {
   selectedText: string;
   pageNumber: number | null;
   documentTitle: string;
+  liveSelections?: boolean;
 }) {
   const state = useExplanation(),
     speech = useSpeech();
+  const lastExplained = useRef("");
   async function explain() {
     const value = await state.explain({
       selectedText,
@@ -23,6 +27,19 @@ export function ExplainPanel({
     });
     if (value) await speech.speak(value);
   }
+  useEffect(() => {
+    if (
+      !liveSelections ||
+      selectedText.trim().length < 3 ||
+      selectedText === lastExplained.current
+    )
+      return;
+    const timer = setTimeout(() => {
+      lastExplained.current = selectedText;
+      void explain();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [selectedText, pageNumber, documentTitle, liveSelections]);
   return (
     <motion.section
       layout

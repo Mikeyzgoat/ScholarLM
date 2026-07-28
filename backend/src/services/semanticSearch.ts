@@ -18,11 +18,13 @@ export async function semanticSearch(input: {
       )
       .all(input.documentId) as ChunkRecord[]
   )
-    .map((c) => ({
+    .map((c) => ({ chunk: c, embedding: parseEmbedding(c.embedding!) }))
+    .filter(({ embedding }) => embedding.length === vector.length)
+    .map(({ chunk: c, embedding }) => ({
       chunkId: c.id,
       pageNumber: c.page_number,
       content: c.content,
-      score: cosineSimilarity(vector, parseEmbedding(c.embedding!)),
+      score: cosineSimilarity(vector, embedding),
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);

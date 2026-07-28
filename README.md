@@ -16,9 +16,28 @@ ScholarLM is a local-first semantic learning workspace for PDFs. It extracts pag
    cp .env.example .env
    ```
 
-2. Set `GEMINI_API_TOKEN` in `.env`. The backend also accepts `GEMINI_API_KEY` for compatibility.
+2. Set `GEMINI_API_TOKEN` in `.env`. The backend also accepts
+   `GEMINI_API_KEY` for compatibility. For multiple independent keys, set
+   `GEMINI_API_TOKENS` to a comma-separated list.
 
-3. Install dependencies:
+3. Install the local AI fallback used when Gemini is unavailable or
+   rate-limited:
+
+   ```sh
+   ollama pull nomic-embed-text
+   ollama pull gemma4:e2b
+   ```
+
+   Ollama serves locally at `http://localhost:11434` by default. Override
+   `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, or `OLLAMA_EMBEDDING_MODEL` in `.env`
+   when needed.
+
+   For concurrent generation on a separate GPU host, run an SGLang
+   OpenAI-compatible server and set `SGLANG_BASE_URL` plus `SGLANG_MODEL`.
+   ScholarLM then tries Gemini, SGLang, and finally local Ollama. SGLang uses
+   Hugging Face/PyTorch weights and does not consume Ollama GGUF blobs.
+
+4. Install dependencies:
 
    ```sh
    cd backend
@@ -27,13 +46,13 @@ ScholarLM is a local-first semantic learning workspace for PDFs. It extracts pag
    bun install
    ```
 
-4. Start the backend from `backend/`:
+5. Start the backend from `backend/`:
 
    ```sh
    bun run dev
    ```
 
-5. In another terminal, start the frontend from `frontend/`:
+6. In another terminal, start the frontend from `frontend/`:
 
    ```sh
    bun run dev
@@ -72,3 +91,14 @@ The expected response is `{"ok":true}`.
 - Recovery drafts: browser localStorage under `scholarlm-note-draft:*`
 
 The database and uploaded PDFs are ignored by Git.
+
+## Workspace modes
+
+- `/canvas` is an independent local-first tldraw canvas that does not require a
+  PDF.
+- A document workspace opens in split mode with the PDF and its persisted
+  tldraw canvas side by side.
+- Select PDF text to explain or save a page-aware highlight.
+- Select a tldraw text shape to explain its content live.
+- Gemini is attempted first. Independent Gemini keys rotate on failure, then
+  the backend falls back to local Ollama generation and embeddings.
