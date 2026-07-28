@@ -92,6 +92,8 @@ export function ExplainPanel({
           isLoading={speech.isLoading}
           isPlaying={speech.isPlaying}
           isPaused={speech.isPaused}
+          isReady={speech.isReady}
+          usingFallback={speech.usingFallback}
           autoRead={speech.autoRead}
           onPause={speech.pause}
           onResume={speech.resume}

@@ -101,24 +101,50 @@ async function ollamaGenerate(input: {
       prompt: input.prompt,
       system: input.system,
       format: input.json ? "json" : undefined,
-      stream: false,
+      think: false,
+      stream: true,
       keep_alive: "10m",
       images: input.imageBase64 ? [input.imageBase64] : undefined,
     }),
   });
-  const payload = (await response.json().catch(() => null)) as {
-    response?: unknown;
-    error?: unknown;
-  } | null;
-  if (!response.ok)
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: unknown;
+    } | null;
     throw new Error(
       typeof payload?.error === "string"
         ? payload.error
         : `Ollama returned ${response.status}`,
     );
-  if (typeof payload?.response !== "string" || !payload.response.trim())
+  }
+  if (!response.body) throw new Error("Ollama returned no response stream");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let streamError: string | null = null;
+  const consumeLine = (line: string) => {
+    if (!line.trim()) return;
+    const part = JSON.parse(line) as {
+      response?: unknown;
+      error?: unknown;
+    };
+    if (typeof part.error === "string") streamError = part.error;
+    if (typeof part.response === "string") content += part.response;
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    lines.forEach(consumeLine);
+    if (done) break;
+  }
+  consumeLine(buffer);
+  if (streamError) throw new Error(streamError);
+  if (!content.trim())
     throw new Error("Ollama returned no content");
-  return payload.response.trim();
+  return content.trim();
 }
 
 interface CanvasAnalysis {
