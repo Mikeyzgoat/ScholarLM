@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, GitFork, Home, StickyNote } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { listDocuments } from "../../services/documents";
 export function Sidebar() {
   const { documentId } = useParams();

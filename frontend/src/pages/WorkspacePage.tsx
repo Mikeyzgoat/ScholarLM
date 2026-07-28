@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { getDocument, getDocumentFileUrl } from "../services/documents";

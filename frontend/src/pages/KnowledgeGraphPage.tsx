@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Search, Sparkles } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { useDocumentStatus } from "../hooks/useDocumentStatus";
 import { useKnowledgeGraph } from "../hooks/useKnowledgeGraph";

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileUp, LayoutDashboard, Save } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Navigate, useParams } from "react-router-dom";
+import { Link } from "react-router";
+import { Navigate, useParams } from "react-router";
 import { getSnapshot, type Editor } from "tldraw";
 import type { NotePage, SaveState } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";

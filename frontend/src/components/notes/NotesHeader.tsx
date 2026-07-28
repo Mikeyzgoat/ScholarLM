@@ -1,5 +1,5 @@
 import { ArrowLeft, FileUp } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import type { SaveState } from "../../lib/types";
 import { SaveStatus } from "./SaveStatus";
 export function NotesHeader({

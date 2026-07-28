@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import type { Editor } from "tldraw";
 import type { CanvasSelection, NotePage } from "../../lib/types";
 import { createNote, listDocumentNotes } from "../../services/notes";

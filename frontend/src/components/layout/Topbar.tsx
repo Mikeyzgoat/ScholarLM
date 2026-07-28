@@ -1,7 +1,7 @@
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileUp, GitFork, StickyNote } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { getDocument } from "../../services/documents";
 export function Topbar() {
   const { documentId } = useParams();

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { UploadBox } from "../components/documents/UploadBox";
 import { DocumentCard } from "../components/documents/DocumentCard";
 import { listDocuments } from "../services/documents";

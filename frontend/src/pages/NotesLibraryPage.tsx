@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import type { NotePage } from "../lib/types";
 import { listDocuments } from "../services/documents";
 import { listDocumentNotes, updateNote } from "../services/notes";
