@@ -169,7 +169,37 @@ export default function NotesLibraryPage() {
               visible: { opacity: 1, y: 0 },
             }}
           >
-            <div className="group flex min-h-44 flex-col rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:-translate-y-0.5 hover:border-orange-400/30 hover:bg-white/[0.055]">
+            <motion.div
+              role="link"
+              tabIndex={renaming?.id === note.id ? -1 : 0}
+              aria-label={`Open ${note.title}`}
+              onClick={(event) => {
+                if (
+                  renaming?.id !== note.id &&
+                  !(event.target as HTMLElement).closest(
+                    "button, a, input",
+                  )
+                )
+                  navigate(`/notes/${note.id}`);
+              }}
+              onKeyDown={(event) => {
+                if (
+                  renaming?.id !== note.id &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  navigate(`/notes/${note.id}`);
+                }
+              }}
+              whileHover={
+                reduceMotion
+                  ? undefined
+                  : { y: -4, scale: 1.012 }
+              }
+              whileTap={reduceMotion ? undefined : { scale: 0.994 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="glass-note-card group flex min-h-44 cursor-pointer flex-col rounded-2xl border border-white/10 bg-white/[0.035] p-5 outline-none backdrop-blur-xl focus-visible:border-orange-300/60 focus-visible:ring-2 focus-visible:ring-orange-400/20"
+            >
               <div className="flex items-center justify-between">
                 <StickyNote size={20} className="text-orange-300" />
                 <button
@@ -237,13 +267,13 @@ export default function NotesLibraryPage() {
                 </span>
                 <Link
                   to={`/notes/${note.id}`}
-                  className="flex items-center gap-1 text-xs text-stone-500 transition hover:text-orange-300"
+                  className="relative z-10 flex min-h-9 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2 text-xs text-stone-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition duration-200 hover:border-orange-300/35 hover:bg-orange-500/10 hover:text-orange-200 hover:shadow-[0_8px_28px_rgba(249,115,22,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/30"
                 >
                   Open
                   <ArrowUpRight size={15} />
                 </Link>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         ))}
       </motion.div>
