@@ -59,6 +59,15 @@ knowledge graph, and stores full tldraw snapshots with local recovery.
 
 Open `http://localhost:3000`. The API defaults to `http://localhost:3001`.
 
+To launch SGLang, Ollama embeddings, and both Bun applications together:
+
+```sh
+./run-dev.sh
+```
+
+The supervisor reuses Ollama or SGLang when they are already running and stops
+only the child processes it started when you press Ctrl+C.
+
 ## Verification
 
 Run strict TypeScript checks:
