@@ -38,12 +38,14 @@ notes.post("/", async (c) => {
       404,
     );
   return c.json(
-    createNote({
-      documentId: b.documentId,
-      title: b.title.trim(),
-      metadata: b.metadata,
-      snapshot: b.snapshot,
-    }),
+    {
+      note: createNote({
+        documentId: b.documentId,
+        title: b.title.trim(),
+        metadata: b.metadata,
+        snapshot: b.snapshot,
+      }),
+    },
     201,
   );
 });

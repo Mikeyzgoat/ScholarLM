@@ -30,7 +30,7 @@ export function createNote(input: {
 }): NotePageRecord {
   const id = createId(),
     now = new Date().toISOString();
-  db.query("INSERT INTO note_pages VALUES (?,?,?,?,?,?,?,?,?)").run(
+  db.query("INSERT INTO note_pages VALUES (?,?,?,?,?,?,?,?)").run(
     id,
     input.documentId,
     input.title,

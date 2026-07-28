@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun --hot index.html",
     "start": "bun index.html",
-    "build": "bun build ./src/main.tsx --outdir ./dist --minify",
+    "build": "bun build.ts",
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {

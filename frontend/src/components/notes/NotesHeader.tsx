@@ -1,4 +1,5 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileUp } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { SaveState } from "../../lib/types";
 import { SaveStatus } from "./SaveStatus";
 export function NotesHeader({
@@ -27,6 +28,13 @@ export function NotesHeader({
         className="min-w-0 flex-1 rounded px-2 py-1 font-semibold focus:outline-2"
       />
       <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+      <Link
+        to="/upload"
+        className="ml-2 flex items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-1.5 text-sm text-orange-300 hover:border-orange-400/40"
+      >
+        <FileUp size={16} />
+        Upload PDF
+      </Link>
     </header>
   );
 }

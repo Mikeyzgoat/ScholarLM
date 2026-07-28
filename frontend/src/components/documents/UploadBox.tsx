@@ -6,7 +6,7 @@ import type { DocumentSummary } from "../../lib/types";
 export function UploadBox({
   onUploaded,
 }: {
-  onUploaded: (document: DocumentSummary) => void;
+  onUploaded: (document: DocumentSummary) => void | Promise<void>;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -27,7 +27,7 @@ export function UploadBox({
     }
     setBusy(true);
     try {
-      onUploaded(await uploadDocument(file));
+      await onUploaded(await uploadDocument(file));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {

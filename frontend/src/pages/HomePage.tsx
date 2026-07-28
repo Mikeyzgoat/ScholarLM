@@ -1,13 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UploadBox } from "../components/documents/UploadBox";
 import { DocumentCard } from "../components/documents/DocumentCard";
 import { listDocuments } from "../services/documents";
+import { createNote, listDocumentNotes } from "../services/notes";
 export default function HomePage() {
   const nav = useNavigate();
   const reduceMotion = useReducedMotion();
+  const [navigationError, setNavigationError] = useState("");
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
+  async function openNotes(documentId: string, documentName: string) {
+    setNavigationError("");
+    const notes = await listDocumentNotes(documentId);
+    const newest = notes[0];
+    if (newest) {
+      nav(`/notes/${newest.id}`);
+      return;
+    }
+    const note = await createNote({
+      documentId,
+      title: `${documentName} notes`,
+      metadata: { page: 1 },
+      snapshot: {},
+    });
+    nav(`/notes/${note.id}`);
+  }
   return (
     <motion.main
       className="mx-auto max-w-4xl p-8"
@@ -24,8 +43,15 @@ export default function HomePage() {
       <p className="mb-8 text-stone-600">
         Upload a PDF to search, explore, and understand it.
       </p>
-      <UploadBox onUploaded={(d) => nav(`/workspace/${d.id}`)} />
+      <UploadBox
+        onUploaded={async (document) => {
+          await openNotes(document.id, document.name);
+        }}
+      />
       <h2 className="mb-3 mt-10 text-lg font-semibold">Recent documents</h2>
+      {navigationError && (
+        <p className="mb-3 text-sm text-red-400">{navigationError}</p>
+      )}
       {q.isLoading ? (
         <p>Loading documents…</p>
       ) : q.isError ? (
@@ -46,7 +72,15 @@ export default function HomePage() {
             <DocumentCard
               key={d.id}
               document={d}
-              onOpen={(id) => nav(`/workspace/${id}`)}
+              onOpen={(id) =>
+                void openNotes(id, d.name).catch((error: unknown) =>
+                  setNavigationError(
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to open notes.",
+                  ),
+                )
+              }
             />
           ))}
         </motion.div>

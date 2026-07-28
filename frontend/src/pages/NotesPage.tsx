@@ -3,12 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Editor } from "tldraw";
-import type { NotePage } from "../lib/types";
+import type { NotePage, SaveState } from "../lib/types";
 import { getNote, updateNote } from "../services/notes";
+import { createNote, listDocumentNotes } from "../services/notes";
 import { chooseNewestNoteSource, getLocalNoteDraft } from "../lib/noteStorage";
 import { useNoteAutosave } from "../hooks/useNoteAutosave";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { NotesHeader } from "../components/notes/NotesHeader";
+import { NotesPagination } from "../components/notes/NotesPagination";
 export default function NotesPage() {
   const { noteId = "" } = useParams();
   const nav = useNavigate();
@@ -19,7 +21,8 @@ export default function NotesPage() {
   });
   const [editor, setEditor] = useState<Editor | null>(null),
     [note, setNote] = useState<NotePage | undefined>(),
-    [title, setTitle] = useState("");
+    [title, setTitle] = useState(""),
+    [titleSaveState, setTitleSaveState] = useState<SaveState | null>(null);
   const recovered = useMemo(
     () => (q.data ? getLocalNoteDraft(q.data.id) : null),
     [q.data],
@@ -44,29 +47,66 @@ export default function NotesPage() {
     editor,
     onServerNoteUpdated: setNote,
   });
+  const pages = useQuery({
+    queryKey: ["notes", note?.documentId],
+    queryFn: () => listDocumentNotes(note!.documentId),
+    enabled: !!note?.documentId,
+  });
+  useEffect(() => {
+    if (!note || !title.trim() || title === note.title) return;
+    setTitleSaveState("unsaved");
+    const timer = setTimeout(async () => {
+      setTitleSaveState("saving");
+      try {
+        const updated = await updateNote({
+          noteId: note.id,
+          title: title.trim(),
+          expectedRevision: note.revision,
+        });
+        setNote(updated);
+        setTitle(updated.title);
+        setTitleSaveState(null);
+      } catch {
+        setTitleSaveState("error");
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [note?.id, note?.revision, note?.title, title]);
   if (q.isLoading) return <main className="p-6">Loading note…</main>;
   if (q.isError || !q.data || !note)
     return <main className="p-6 text-red-700">Unable to load note.</main>;
-  async function rename(value: string) {
-    setTitle(value);
-    if (!value.trim()) return;
-    try {
-      const updated = await updateNote({
-        noteId,
-        title: value,
-        expectedRevision: note!.revision,
-      });
-      setNote(updated);
-    } catch {}
+  const orderedPages = [...(pages.data ?? [])].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  );
+  const pageIndex = orderedPages.findIndex((page) => page.id === note.id);
+  function openPage(index: number) {
+    const target = orderedPages[index];
+    if (target) nav(`/notes/${target.id}`);
+  }
+  async function addPage() {
+    const created = await createNote({
+      documentId: note!.documentId,
+      title: `Page ${orderedPages.length + 1}`,
+      metadata: { page: orderedPages.length + 1 },
+      snapshot: {},
+    });
+    nav(`/notes/${created.id}`);
   }
   return (
     <main className="fixed inset-0 bg-white">
       <NotesHeader
         title={title}
-        saveState={autosave.saveState}
+        saveState={titleSaveState ?? autosave.saveState}
         lastSavedAt={autosave.lastSavedAt}
-        onTitleChange={(value) => void rename(value)}
+        onTitleChange={setTitle}
         onBack={() => nav(`/workspace/${note.documentId}`)}
+      />
+      <NotesPagination
+        page={Math.max(1, pageIndex + 1)}
+        pageCount={orderedPages.length}
+        onPrevious={() => openPage(pageIndex - 1)}
+        onNext={() => openPage(pageIndex + 1)}
+        onCreate={() => void addPage()}
       />
       <AnimatePresence>
         {recovered &&
@@ -82,7 +122,7 @@ export default function NotesPage() {
             </motion.div>
           )}
       </AnimatePresence>
-      <NotesCanvas note={note} onEditorReady={setEditor} />
+      <NotesCanvas key={note.id} note={note} onEditorReady={setEditor} />
     </main>
   );
 }
