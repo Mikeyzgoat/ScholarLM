@@ -66,7 +66,9 @@ To launch SGLang, Ollama embeddings, and both Bun applications together:
 ```
 
 The supervisor reuses Ollama or SGLang when they are already running and stops
-only the child processes it started when you press Ctrl+C.
+only the child processes it started when you press Ctrl+C. If the local
+`.venv-sglang` exists but does not contain SGLang, the supervisor installs the
+`sglang` package into that environment before launching the stack.
 
 ## Verification
 

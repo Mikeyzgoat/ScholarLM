@@ -36,6 +36,43 @@ function start(name: string, command: string[], cwd = root): Bun.Subprocess {
   return child;
 }
 
+async function commandSucceeds(command: string[]): Promise<boolean> {
+  const result = Bun.spawn(command, {
+    cwd: root,
+    env: { ...Bun.env },
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return (await result.exited) === 0;
+}
+
+async function ensureSglang(python: string): Promise<void> {
+  if (await commandSucceeds([python, "-c", "import sglang.launch_server"]))
+    return;
+  const packageName = Bun.env.SGLANG_PACKAGE || "sglang";
+  console.log(
+    `[ScholarLM] SGLang is missing from ${python}. Installing ${packageName}…`,
+  );
+  const installer = Bun.spawn(
+    [python, "-m", "pip", "install", "--upgrade", packageName],
+    {
+      cwd: root,
+      env: { ...Bun.env },
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+  const code = await installer.exited;
+  if (code !== 0)
+    throw new Error(
+      `Could not install ${packageName}. Run '${python} -m pip install ${packageName}' and retry.`,
+    );
+  if (!(await commandSucceeds([python, "-c", "import sglang.launch_server"])))
+    throw new Error(`${packageName} installed, but Python cannot import it.`);
+}
+
 async function stop(exitCode = 0): Promise<never> {
   if (stopping) process.exit(exitCode);
   stopping = true;
@@ -73,6 +110,7 @@ if (await isReachable(`${sglangBaseUrl}/v1/models`)) {
   const python =
     Bun.env.SGLANG_PYTHON ||
     ((await executableExists(venvPython)) ? venvPython : "python3");
+  await ensureSglang(python);
   const model = Bun.env.SGLANG_MODEL || "google/gemma-4-E2B-it";
   const memoryFraction = Bun.env.SGLANG_MEM_FRACTION || "0.82";
   start("SGLang inference", [
