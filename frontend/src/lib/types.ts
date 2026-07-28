@@ -59,6 +59,7 @@ export interface GraphResponse {
 }
 export interface ExplanationResponse {
   explanation: string;
+  answers?: string[];
   recognizedEquation?: string;
   plot?: MathPlot;
   historyId?: string;
@@ -76,6 +77,15 @@ export interface CanvasSelection {
   imageDataUrl?: string;
   existingExplanation?: string;
   generatedOutput?: boolean;
+  anchors?: CanvasSelectionAnchor[];
+}
+export interface CanvasSelectionAnchor {
+  shapeId: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 export interface NotePage {
   id: string;

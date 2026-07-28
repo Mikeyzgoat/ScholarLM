@@ -37,9 +37,14 @@ export function useExplanation() {
           ...input,
           signal: next.signal,
         });
+        const answers = value.explanation
+          .split(/\s*<ANSWER_SPLIT>\s*/i)
+          .map(cleanExplanation)
+          .filter(Boolean);
         const cleaned = {
           ...value,
-          explanation: cleanExplanation(value.explanation),
+          explanation: answers.join("\n\n"),
+          answers: answers.length > 1 ? answers : undefined,
         };
         if (id === generation.current) setExplanation(cleaned.explanation);
         return id === generation.current ? cleaned : null;

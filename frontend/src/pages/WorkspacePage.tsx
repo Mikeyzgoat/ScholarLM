@@ -18,7 +18,7 @@ import {
   WorkspaceModeBar,
   type WorkspaceMode,
 } from "../components/layout/WorkspaceModeBar";
-import type { GraphNode } from "../lib/types";
+import type { CanvasSelectionAnchor, GraphNode } from "../lib/types";
 import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { DocumentQA } from "../components/rag/DocumentQA";
@@ -37,6 +37,8 @@ export default function WorkspacePage() {
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();
   const [existingExplanation, setExistingExplanation] = useState<string>();
+  const [selectionAnchors, setSelectionAnchors] =
+    useState<CanvasSelectionAnchor[]>();
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
   const queuedCanvasExplanations = useRef<
     Array<{
@@ -44,6 +46,8 @@ export default function WorkspacePage() {
       explanation: string;
       pageNumber?: number;
       mode?: "explain" | "regenerate" | "simplify";
+      answers?: string[];
+      anchors?: CanvasSelectionAnchor[];
     }>
   >([]);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
@@ -70,6 +74,8 @@ export default function WorkspacePage() {
       explanation: string;
       pageNumber?: number;
       mode?: "explain" | "regenerate" | "simplify";
+      answers?: string[];
+      anchors?: CanvasSelectionAnchor[];
     }) => {
       if (canvasEditor) addExplanationToCanvas(canvasEditor, input);
       else queuedCanvasExplanations.current.push(input);
@@ -157,6 +163,7 @@ export default function WorkspacePage() {
                 setSelectedTexts(s.text ? [s.text] : undefined);
                 setSelectionImage(undefined);
                 setExistingExplanation(undefined);
+                setSelectionAnchors(undefined);
                 setSelectedTextPage(s.pageNumber);
               }}
               onExplanationGenerated={saveExplanationToCanvas}
@@ -171,6 +178,7 @@ export default function WorkspacePage() {
                 setSelectedTexts(text ? [text] : undefined);
                 setSelectionImage(undefined);
                 setExistingExplanation(undefined);
+                setSelectionAnchors(undefined);
                 setSelectedTextPage(null);
               }}
               onCanvasSelection={(selection) => {
@@ -178,6 +186,7 @@ export default function WorkspacePage() {
                 setSelectedTexts(selection.texts);
                 setSelectionImage(selection.imageDataUrl);
                 setExistingExplanation(selection.existingExplanation);
+                setSelectionAnchors(selection.anchors);
                 setSelectedTextPage(null);
               }}
               onEditorReady={(editor) => {
@@ -203,6 +212,7 @@ export default function WorkspacePage() {
           selectedTexts={selectedTexts}
           selectionImage={selectionImage}
           existingExplanation={existingExplanation}
+          selectionAnchors={selectionAnchors}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
           onPlotGenerated={(plot, equation) => {

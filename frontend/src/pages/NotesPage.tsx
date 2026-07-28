@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Editor } from "tldraw";
-import type { NotePage, SaveState } from "../lib/types";
+import type { CanvasSelectionAnchor, NotePage, SaveState } from "../lib/types";
 import { getNote, updateNote } from "../services/notes";
 import { chooseNewestNoteSource, getLocalNoteDraft } from "../lib/noteStorage";
 import { useNoteAutosave } from "../hooks/useNoteAutosave";
@@ -26,6 +26,8 @@ export default function NotesPage() {
     [selectedTexts, setSelectedTexts] = useState<string[]>(),
     [selectionImage, setSelectionImage] = useState<string>(),
     [existingExplanation, setExistingExplanation] = useState<string>(),
+    [selectionAnchors, setSelectionAnchors] =
+      useState<CanvasSelectionAnchor[]>(),
     [title, setTitle] = useState(""),
     [titleSaveState, setTitleSaveState] = useState<SaveState | null>(null);
   const recovered = useMemo(
@@ -107,12 +109,14 @@ export default function NotesPage() {
           setSelectedTexts(text ? [text] : undefined);
           setSelectionImage(undefined);
           setExistingExplanation(undefined);
+          setSelectionAnchors(undefined);
         }}
         onCanvasSelection={(selection) => {
           setSelectedText(selection.text);
           setSelectedTexts(selection.texts);
           setSelectionImage(selection.imageDataUrl);
           setExistingExplanation(selection.existingExplanation);
+          setSelectionAnchors(selection.anchors);
         }}
       />
       <aside className="absolute bottom-4 right-4 top-28 z-20 w-[min(24rem,calc(100vw-2rem))] overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
@@ -121,6 +125,7 @@ export default function NotesPage() {
           selectedTexts={selectedTexts}
           selectionImage={selectionImage}
           existingExplanation={existingExplanation}
+          selectionAnchors={selectionAnchors}
           pageNumber={null}
           documentTitle={note.title}
           onPlotGenerated={(plot, equation) => {

@@ -3,7 +3,7 @@ import { Download, FileUp, LayoutDashboard, Save } from "lucide-react";
 import { Link } from "react-router";
 import { Navigate, useParams } from "react-router";
 import { getSnapshot, type Editor } from "tldraw";
-import type { NotePage, SaveState } from "../lib/types";
+import type { CanvasSelectionAnchor, NotePage, SaveState } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
@@ -24,6 +24,8 @@ export default function StandaloneCanvasPage() {
   const [selectedTexts, setSelectedTexts] = useState<string[]>();
   const [selectionImage, setSelectionImage] = useState<string>();
   const [existingExplanation, setExistingExplanation] = useState<string>();
+  const [selectionAnchors, setSelectionAnchors] =
+    useState<CanvasSelectionAnchor[]>();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -171,12 +173,14 @@ export default function StandaloneCanvasPage() {
             setSelectedText(text);
             setSelectedTexts(text ? [text] : undefined);
             setExistingExplanation(undefined);
+            setSelectionAnchors(undefined);
           }}
           onCanvasSelection={(selection) => {
             setSelectedText(selection.text);
             setSelectedTexts(selection.texts);
             setSelectionImage(selection.imageDataUrl);
             setExistingExplanation(selection.existingExplanation);
+            setSelectionAnchors(selection.anchors);
           }}
         />
         <aside className="overflow-auto border-l p-3">
@@ -185,6 +189,7 @@ export default function StandaloneCanvasPage() {
             selectedTexts={selectedTexts}
             selectionImage={selectionImage}
             existingExplanation={existingExplanation}
+            selectionAnchors={selectionAnchors}
             pageNumber={null}
             documentTitle="Independent canvas"
             onPlotGenerated={(plot, equation) => {

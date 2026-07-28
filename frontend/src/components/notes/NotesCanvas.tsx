@@ -140,11 +140,47 @@ export function NotesCanvas({
             const value = [...new Set(parts)].join(" ").trim();
             return value ? [value] : [];
           });
+          const anchors = inputShapes.flatMap((shape) => {
+            const bounds = editor.getShapePageBounds(shape);
+            if (!bounds) return [];
+            const props = shape.props as Record<string, unknown>;
+            const parts: string[] = [];
+            if (typeof props.text === "string" && props.text.trim())
+              parts.push(props.text.trim());
+            if (props.richText) collectText(props.richText, parts);
+            const anchorText = [...new Set(parts)].join(" ").trim();
+            return anchorText
+              ? [
+                  {
+                    shapeId: shape.id,
+                    text: anchorText,
+                    x: bounds.x,
+                    y: bounds.y,
+                    width: bounds.w,
+                    height: bounds.h,
+                  },
+                ]
+              : [];
+          });
           const text = texts
             .map((value, index) =>
               texts.length > 1 ? `Selection ${index + 1}: ${value}` : value,
             )
             .join("\n\n");
+          const selectedBounds = editor.getSelectionPageBounds();
+          const relevantAnchors =
+            anchors.length || !selectedBounds
+              ? anchors
+              : [
+                  {
+                    shapeId: inputShapes[0].id,
+                    text: text || "Handwritten equation",
+                    x: selectedBounds.x,
+                    y: selectedBounds.y,
+                    width: selectedBounds.w,
+                    height: selectedBounds.h,
+                  },
+                ];
           const signature = selectedShapes
             .map((shape) => shape.id)
             .sort()
@@ -197,7 +233,8 @@ export function NotesCanvas({
           const containsDrawing = inputShapes.some((shape) =>
             ["draw", "line", "arrow"].includes(shape.type),
           );
-          if (!containsDrawing) onCanvasSelection?.({ text, texts });
+          if (!containsDrawing)
+            onCanvasSelection?.({ text, texts, anchors: relevantAnchors });
           else
             void editor
               .toImageDataUrl(inputShapes, {
@@ -211,6 +248,7 @@ export function NotesCanvas({
                 onCanvasSelection?.({
                   text: text || "Handwritten equation",
                   texts,
+                  anchors: relevantAnchors,
                   imageDataUrl: url,
                 });
               })

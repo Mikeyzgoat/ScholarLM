@@ -5,13 +5,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { SelectionPopover } from "../pdf/SelectionPopover";
 import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
-import type { MathPlot } from "../../lib/types";
+import type { CanvasSelectionAnchor, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
 import { ChartSpline } from "lucide-react";
 export function ExplainPanel({
   selectedText,
   selectedTexts,
   existingExplanation,
+  selectionAnchors,
   selectionImage,
   pageNumber,
   documentTitle,
@@ -21,6 +22,7 @@ export function ExplainPanel({
   selectedText: string;
   selectedTexts?: string[];
   existingExplanation?: string;
+  selectionAnchors?: CanvasSelectionAnchor[];
   selectionImage?: string;
   pageNumber: number | null;
   documentTitle: string;
@@ -29,6 +31,8 @@ export function ExplainPanel({
     selectedText: string;
     explanation: string;
     mode: "explain" | "regenerate" | "simplify";
+    answers?: string[];
+    anchors?: CanvasSelectionAnchor[];
   }) => void;
 }) {
   const state = useExplanation(),
@@ -55,6 +59,8 @@ export function ExplainPanel({
         selectedText,
         explanation: value.explanation,
         mode,
+        answers: value.answers,
+        anchors: selectionAnchors,
       });
       await speech.speak(value.explanation, selectedText);
     }
