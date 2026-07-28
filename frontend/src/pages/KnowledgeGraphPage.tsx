@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Search, Sparkles } from "lucide-react";
+import { ArrowUpRight, FilePlus2, Search, Sparkles } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { useDocumentStatus } from "../hooks/useDocumentStatus";
-import { useKnowledgeGraph } from "../hooks/useKnowledgeGraph";
+import {
+  useGlobalKnowledgeGraph,
+  useKnowledgeGraph,
+} from "../hooks/useKnowledgeGraph";
 import type { GraphNode } from "../lib/types";
 import { getDocument } from "../services/documents";
 
@@ -30,6 +33,7 @@ function fuzzyScore(query: string, value: string): number {
 
 export default function KnowledgeGraphPage() {
   const { documentId = "" } = useParams();
+  const isGlobal = !documentId;
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<GraphNode | null>(null);
@@ -38,8 +42,13 @@ export default function KnowledgeGraphPage() {
     queryFn: () => getDocument(documentId),
     enabled: !!documentId,
   });
-  const status = useDocumentStatus(documentId);
-  const graph = useKnowledgeGraph(documentId, status.status?.status);
+  const status = useDocumentStatus(documentId || undefined);
+  const documentGraph = useKnowledgeGraph(
+    documentId || undefined,
+    status.status?.status,
+  );
+  const globalGraph = useGlobalKnowledgeGraph();
+  const graph = isGlobal ? globalGraph : documentGraph;
   const matches = useMemo(() => {
     if (!graph.graph?.nodes) return [];
     return graph.graph.nodes
@@ -66,11 +75,12 @@ export default function KnowledgeGraphPage() {
           </p>
         </div>
         <h1 className="truncate text-xl font-semibold">
-          {document.data?.name ?? "Knowledge graph"}
+          {isGlobal ? "Knowledge atlas" : document.data?.name ?? "Knowledge graph"}
         </h1>
         <p className="mt-2 text-sm leading-6 text-stone-500">
-          Search concepts fuzzily, follow their connections, and jump back to
-          the source.
+          {isGlobal
+            ? "Every PDF becomes a source bead connected to your library."
+            : "Search concepts fuzzily, follow their connections, and jump back to the source."}
         </p>
         <label className="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3">
           <Search size={16} className="text-stone-500" />
@@ -124,10 +134,28 @@ export default function KnowledgeGraphPage() {
                 <ArrowUpRight size={14} />
               </button>
             )}
+            {selected.kind === "source" && selected.documentId && (
+              <button
+                type="button"
+                onClick={() => navigate(`/graph/${selected.documentId}`)}
+                className="mt-3 flex items-center gap-2 text-xs text-orange-300"
+              >
+                Explore source graph
+                <ArrowUpRight size={14} />
+              </button>
+            )}
           </section>
         )}
       </aside>
       <section className="relative min-w-0 bg-[radial-gradient(circle_at_50%_45%,rgba(249,115,22,0.08),transparent_42%)]">
+        <button
+          type="button"
+          onClick={() => navigate("/upload?returnTo=graph")}
+          className="absolute right-5 top-5 z-20 flex items-center gap-2 rounded-xl border border-orange-300/25 bg-neutral-900/65 px-4 py-2.5 text-sm font-medium text-orange-100 shadow-[0_8px_30px_rgba(249,115,22,0.12)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-orange-300/50 hover:bg-orange-500/15"
+        >
+          <FilePlus2 size={16} />
+          Add source
+        </button>
         {graph.error && (
           <p className="absolute left-4 top-20 z-20 text-sm text-red-400">
             {graph.error.message}

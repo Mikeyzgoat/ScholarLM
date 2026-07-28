@@ -34,7 +34,18 @@ export async function buildKnowledgeGraph(documentId: string): Promise<void> {
       content: c.content.slice(0, 800),
       pageNumber: c.page_number,
     }));
-  const graph = await extractConceptGraph({ documentTitle: doc.name, chunks });
+  let graph: Awaited<ReturnType<typeof extractConceptGraph>> = {
+    concepts: [],
+    edges: [],
+  };
+  try {
+    graph = await extractConceptGraph({ documentTitle: doc.name, chunks });
+  } catch (error) {
+    console.warn(
+      `[graph] Concept extraction failed for ${documentId}; keeping the source bead available.`,
+      error,
+    );
+  }
   const normalized = new Map<
     string,
     {
@@ -84,15 +95,90 @@ export async function buildKnowledgeGraph(documentId: string): Promise<void> {
   transaction();
 }
 export function getKnowledgeGraph(documentId: string): GraphResponse {
-  const nodes = db
+  const document = db
+    .query("SELECT * FROM documents WHERE id=?")
+    .get(documentId) as DocumentRecord | null;
+  if (!document) return { nodes: [], edges: [] };
+  const concepts = db
     .query(
       "SELECT id,label,description,page_number pageNumber FROM concepts WHERE document_id=?",
     )
     .all(documentId) as GraphResponse["nodes"];
-  const edges = db
+  const conceptEdges = db
     .query(
       "SELECT id,source_concept_id source,target_concept_id target,relationship FROM concept_edges WHERE document_id=?",
     )
     .all(documentId) as GraphResponse["edges"];
-  return { nodes, edges };
+  const sourceId = `source:${documentId}`;
+  const connected = new Set(conceptEdges.flatMap((edge) => [edge.source, edge.target]));
+  return {
+    nodes: [
+      {
+        id: sourceId,
+        label: document.name,
+        description: "Uploaded PDF source",
+        pageNumber: null,
+        kind: "source",
+        documentId,
+      },
+      ...concepts.map((node) => ({
+        ...node,
+        kind: "concept" as const,
+        documentId,
+      })),
+    ],
+    edges: [
+      ...conceptEdges,
+      ...concepts
+        .filter((node) => !connected.has(node.id))
+        .map((node) => ({
+          id: `source-link:${node.id}`,
+          source: sourceId,
+          target: node.id,
+          relationship: "contains",
+        })),
+    ],
+  };
+}
+
+export function getGlobalKnowledgeGraph(): GraphResponse {
+  const documents = db
+    .query(
+      "SELECT id,name,original_name,status FROM documents ORDER BY created_at",
+    )
+    .all() as Array<{
+    id: string;
+    name: string;
+    original_name: string;
+    status: string;
+  }>;
+  const hubId = "scholarlm:hub";
+  return {
+    nodes: [
+      {
+        id: hubId,
+        label: "ScholarLM",
+        description: "Your connected knowledge library",
+        pageNumber: null,
+        kind: "hub",
+      },
+      ...documents.map((document) => ({
+        id: `source:${document.id}`,
+        label: document.name,
+        description:
+          document.status === "ready"
+            ? `Source · ${document.original_name}`
+            : `Source · ${document.original_name} · ${document.status}`,
+        pageNumber: null,
+        kind: "source" as const,
+        documentId: document.id,
+      })),
+    ],
+    edges: documents.map((document) => ({
+      id: `library-link:${document.id}`,
+      source: hubId,
+      target: `source:${document.id}`,
+      relationship: "source",
+    })),
+  };
 }

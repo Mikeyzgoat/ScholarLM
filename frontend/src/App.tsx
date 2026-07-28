@@ -14,6 +14,7 @@ export default function App() {
         <Route path="/" element={<DefaultPage />} />
         <Route path="/upload" element={<HomePage />} />
         <Route path="/workspace/:documentId" element={<WorkspacePage />} />
+        <Route path="/graph" element={<KnowledgeGraphPage />} />
         <Route path="/graph/:documentId" element={<KnowledgeGraphPage />} />
         <Route path="/notes" element={<NotesLibraryPage />} />
       </Route>

@@ -1,6 +1,6 @@
 import "./browserCompat";
 
-const resetKey = "scholarlm-clean-test-reset-2026-07-28";
+const resetKey = "scholarlm-clean-test-reset-2026-07-28-graph";
 
 if (localStorage.getItem(resetKey) !== "done") {
   for (let index = localStorage.length - 1; index >= 0; index -= 1) {

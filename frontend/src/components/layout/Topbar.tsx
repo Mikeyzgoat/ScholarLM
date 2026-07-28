@@ -28,9 +28,18 @@ export function Topbar() {
           </Link>
         </>
       )}
+      {!q.data && (
+        <Link
+          to="/graph"
+          className="ml-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-white/5 hover:text-orange-300"
+        >
+          <GitFork size={16} />
+          Graph
+        </Link>
+      )}
       <Link
         to="/notes"
-        className={`${q.data ? "ml-2" : "ml-auto"} flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-white/5 hover:text-orange-300`}
+        className="ml-2 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-white/5 hover:text-orange-300"
       >
         <StickyNote size={16} />
         Notes

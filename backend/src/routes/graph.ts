@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { db } from "../db/database";
-import { getKnowledgeGraph } from "../services/knowledgeGraph";
+import {
+  getGlobalKnowledgeGraph,
+  getKnowledgeGraph,
+} from "../services/knowledgeGraph";
 const graph = new Hono();
+graph.get("/", (c) => c.json(getGlobalKnowledgeGraph()));
 graph.get("/:documentId", (c) => {
   const id = c.req.param("documentId");
   if (!id)

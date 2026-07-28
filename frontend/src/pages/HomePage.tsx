@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { UploadBox } from "../components/documents/UploadBox";
 import { DocumentCard } from "../components/documents/DocumentCard";
 import { listDocuments } from "../services/documents";
 export default function HomePage() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const reduceMotion = useReducedMotion();
   const [navigationError, setNavigationError] = useState("");
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
@@ -32,6 +33,10 @@ export default function HomePage() {
       </p>
       <UploadBox
         onUploaded={(document) => {
+          if (searchParams.get("returnTo") === "graph") {
+            nav("/graph");
+            return;
+          }
           openDocument(document.id);
         }}
       />

@@ -25,15 +25,13 @@ export function Sidebar() {
         <StickyNote size={18} />
         Notes
       </Link>
-      {(documentId || q.data?.[0]?.id) && (
-        <Link
-          to={`/graph/${documentId ?? q.data![0].id}`}
-          className="mt-1 flex gap-2 rounded p-2 hover:bg-stone-800"
-        >
-          <GitFork size={18} />
-          Knowledge graph
-        </Link>
-      )}
+      <Link
+        to="/graph"
+        className="mt-1 flex gap-2 rounded p-2 hover:bg-stone-800"
+      >
+        <GitFork size={18} />
+        Knowledge graph
+      </Link>
       <p className="mb-2 mt-7 text-xs uppercase text-stone-500">Recent</p>
       {q.data?.slice(0, 6).map((d) => (
         <Link

@@ -5,3 +5,7 @@ export async function getDocumentGraph(
 ): Promise<GraphResponse> {
   return apiFetch(`/graph/${documentId}`);
 }
+
+export async function getGlobalGraph(): Promise<GraphResponse> {
+  return apiFetch("/graph");
+}

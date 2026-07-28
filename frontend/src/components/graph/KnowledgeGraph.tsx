@@ -34,23 +34,36 @@ export function KnowledgeGraph({
     graph.nodes.forEach((n, i) =>
       g.addNode(n.id, {
         label: n.label,
-        x: Math.cos(i) * 10,
-        y: Math.sin(i) * 10,
-        size: 7,
-        color: n.pageNumber ? "#0f766e" : "#78716c",
+        x: n.kind === "hub" ? 0 : Math.cos(i) * 10,
+        y: n.kind === "hub" ? 0 : Math.sin(i) * 10,
+        size: n.kind === "hub" ? 15 : n.kind === "source" ? 10 : 7,
+        color:
+          n.kind === "hub"
+            ? "#f97316"
+            : n.kind === "source"
+              ? "#fb923c"
+              : "#a8a29e",
+        forceLabel: n.kind === "hub",
       }),
     );
     graph.edges.forEach((e) => {
       if (g.hasNode(e.source) && g.hasNode(e.target))
         g.addEdgeWithKey(e.id, e.source, e.target, {
           label: e.relationship,
-          color: "#a8a29e",
-          size: 1,
+          color: "#78350f",
+          size: 1.4,
         });
     });
     model.current = g;
     layout();
-    const sigma = new Sigma(g, container.current, { renderEdgeLabels: false });
+    const sigma = new Sigma(g, container.current, {
+      renderEdgeLabels: false,
+      labelColor: { color: "#d6d3d1" },
+      labelFont: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      labelSize: 12,
+      defaultEdgeColor: "#78350f",
+      stagePadding: 60,
+    });
     renderer.current = sigma;
     sigma.on("clickNode", ({ node }) => {
       const found = graph.nodes.find((n) => n.id === node);
@@ -68,15 +81,23 @@ export function KnowledgeGraph({
     if (!g || !sigma || !focusedNodeId || !g.hasNode(focusedNodeId)) return;
     graph?.nodes.forEach((node) => {
       if (!g.hasNode(node.id)) return;
-      g.setNodeAttribute(node.id, "size", node.id === focusedNodeId ? 13 : 7);
+      const normalSize =
+        node.kind === "hub" ? 15 : node.kind === "source" ? 10 : 7;
+      g.setNodeAttribute(
+        node.id,
+        "size",
+        node.id === focusedNodeId ? normalSize + 5 : normalSize,
+      );
       g.setNodeAttribute(
         node.id,
         "color",
         node.id === focusedNodeId
-          ? "#f97316"
-          : node.pageNumber
+          ? "#fdba74"
+          : node.kind === "hub"
+            ? "#f97316"
+            : node.kind === "source" || node.pageNumber
             ? "#fb923c"
-            : "#78716c",
+              : "#a8a29e",
       );
     });
     const { x, y } = g.getNodeAttributes(focusedNodeId);
@@ -85,9 +106,12 @@ export function KnowledgeGraph({
   }, [focusedNodeId, graph]);
   if (isLoading) return <p className="text-sm">Loading graph…</p>;
   if (!graph?.nodes.length)
-    return <p className="text-sm text-stone-500">No concepts were found.</p>;
+    return <p className="text-sm text-stone-500">No graph nodes were found.</p>;
   return (
-    <div className={`relative ${className ?? "h-72"}`}>
+    <div
+      className={`relative overflow-hidden bg-[radial-gradient(circle_at_50%_48%,rgba(249,115,22,0.12),transparent_32%)] ${className ?? "h-72"}`}
+    >
+      <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(circle,rgba(251,146,60,0.7)_1px,transparent_1px)] [background-size:24px_24px]" />
       <GraphControls
         onZoomIn={() => renderer.current?.getCamera().animatedZoom()}
         onZoomOut={() => renderer.current?.getCamera().animatedUnzoom()}
