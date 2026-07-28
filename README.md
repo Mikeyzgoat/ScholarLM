@@ -49,14 +49,13 @@ knowledge graph, and stores full tldraw snapshots with local recovery.
 
 Open `http://localhost:3000`. The API defaults to `http://localhost:3001`.
 
-To launch Ollama and both Bun applications together:
+Run Ollama in its own terminal:
 
 ```sh
-./run-dev.sh
+ollama serve
 ```
 
-The supervisor reuses Ollama when it is already running and stops only the
-processes it started when you press Ctrl+C.
+Run the backend and frontend in separate terminals using the commands above.
 
 ## Verification
 
