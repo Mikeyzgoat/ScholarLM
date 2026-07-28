@@ -64,13 +64,28 @@ export default function StandaloneCanvasPage() {
   function connectEditor(editor: Editor) {
     setEditor(editor);
     unsubscribe.current?.();
-    unsubscribe.current = editor.store.listen(
-      () => {
-        setSaveState("unsaved");
-        queueMicrotask(() => saveCanvas(editor));
-      },
+    const saveAfterTransaction = () => {
+      setSaveState("unsaved");
+      queueMicrotask(() => saveCanvas(editor));
+    };
+    const unsubscribeDocument = editor.store.listen(
+      saveAfterTransaction,
       { scope: "document" },
     );
+    let currentPageId = editor.getCurrentPageId();
+    const unsubscribePage = editor.store.listen(
+      () => {
+        const nextPageId = editor.getCurrentPageId();
+        if (nextPageId === currentPageId) return;
+        currentPageId = nextPageId;
+        saveAfterTransaction();
+      },
+      { scope: "session" },
+    );
+    unsubscribe.current = () => {
+      unsubscribeDocument();
+      unsubscribePage();
+    };
   }
 
   function downloadBackup() {

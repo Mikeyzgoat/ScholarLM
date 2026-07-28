@@ -97,27 +97,37 @@ export function useNoteAutosave({
   }, [note?.id, note?.revision]);
   useEffect(() => {
     if (!note || !editor) return;
-    const unsubscribe = editor.store.listen(
+    const scheduleSave = () => {
+      if (applying.current) return;
+      dirty.current = true;
+      const snapshot = getSnapshot(editor.store);
+      saveLocalNoteDraft({
+        noteId: note.id,
+        snapshot,
+        metadata: note.metadata,
+        revision: revision.current,
+        updatedAt: new Date().toISOString(),
+      });
+      setSaveState("unsaved");
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => void flush(), NOTE_AUTOSAVE_DELAY);
+    };
+    const unsubscribeDocument = editor.store.listen(scheduleSave, {
+      scope: "document",
+    });
+    let currentPageId = editor.getCurrentPageId();
+    const unsubscribePage = editor.store.listen(
       () => {
-        if (applying.current) return;
-        dirty.current = true;
-        const snapshot = getSnapshot(editor.store),
-          updatedAt = new Date().toISOString();
-        saveLocalNoteDraft({
-          noteId: note.id,
-          snapshot,
-          metadata: note.metadata,
-          revision: revision.current,
-          updatedAt,
-        });
-        setSaveState("unsaved");
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => void flush(), NOTE_AUTOSAVE_DELAY);
+        const nextPageId = editor.getCurrentPageId();
+        if (nextPageId === currentPageId) return;
+        currentPageId = nextPageId;
+        scheduleSave();
       },
-      { scope: "document" },
+      { scope: "session" },
     );
     return () => {
-      unsubscribe();
+      unsubscribeDocument();
+      unsubscribePage();
       if (timer.current) void flush();
     };
   }, [editor, note?.id]);
