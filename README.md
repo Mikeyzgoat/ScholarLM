@@ -27,9 +27,14 @@ knowledge graph, and stores full tldraw snapshots with local recovery.
 
    Ollama serves embeddings locally at `http://localhost:11434` by default.
 
-3. Run a local Gemma model with SGLang and set `SGLANG_BASE_URL` and
+3. Run Gemma 4 E2B locally with SGLang and set `SGLANG_BASE_URL` and
    `SGLANG_MODEL` in `.env`. Generation streams through SGLang with thinking
    disabled. Gemini is not used.
+
+   ```env
+   SGLANG_BASE_URL=http://127.0.0.1:30000
+   SGLANG_MODEL=google/gemma-4-E2B-it
+   ```
 
 4. Install dependencies:
 

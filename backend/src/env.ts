@@ -20,5 +20,5 @@ export const env: {
     Bun.env.SGLANG_BASE_URL?.trim().replace(/\/$/, "") ||
     "http://localhost:30000",
   SGLANG_MODEL:
-    Bun.env.SGLANG_MODEL?.trim() || "google/gemma-3-4b-it",
+    Bun.env.SGLANG_MODEL?.trim() || "google/gemma-4-E2B-it",
 };
