@@ -13,7 +13,7 @@ import { resumePendingIngestions } from "./services/ingestion";
 initializeDatabase();
 await ensureUploadDirectory();
 void resumePendingIngestions();
-const app = new Hono();
+const app = new Hono({ strict: false });
 app.use("*", cors({ origin: env.FRONTEND_ORIGIN }));
 app.get("/health", (c) => c.json({ ok: true }));
 app.route("/documents", documents);
