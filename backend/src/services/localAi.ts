@@ -5,6 +5,7 @@ async function ollamaGenerate(input: {
   system?: string;
   json?: boolean;
   imageDataUrl?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const image = input.imageDataUrl?.replace(/^data:image\/[^;]+;base64,/, "");
   const response = await fetch(`${env.OLLAMA_BASE_URL}/api/chat`, {
@@ -27,10 +28,9 @@ async function ollamaGenerate(input: {
       options: {
         temperature: 0.2,
         num_ctx: 4096,
-        num_predict: input.json ? 500 : 300,
       },
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: input.signal,
   });
   return readOllamaStream(response);
 }
@@ -129,6 +129,7 @@ export async function explainCanvasSelection(input: {
   documentTitle?: string;
   pageNumber?: number;
   graphRequested?: boolean;
+  signal?: AbortSignal;
 }): Promise<CanvasAnalysis> {
   const prompt = `Analyze the selected mathematics${input.imageDataUrl ? " in the image" : ""}.
 Recognize the equation accurately, solve it step by step, and explain the reasoning as a teacher.
@@ -146,6 +147,7 @@ ${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
       system,
       json: true,
       imageDataUrl: input.imageDataUrl,
+      signal: input.signal,
     }),
   );
 }
@@ -162,7 +164,7 @@ export async function generateEmbeddings(
       input: texts,
       keep_alive: "10m",
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(120_000),
   });
   const payload = (await response.json().catch(() => null)) as {
     embeddings?: unknown;
@@ -196,6 +198,7 @@ export async function explainSelectedText(input: {
   selectedText: string;
   documentTitle?: string;
   pageNumber?: number;
+  signal?: AbortSignal;
 }): Promise<string> {
   const context = [
     input.documentTitle && `Document: ${input.documentTitle}`,
@@ -206,7 +209,7 @@ export async function explainSelectedText(input: {
   const prompt = `${context}\n\nSELECTED PASSAGE:\n${input.selectedText}`;
   const system =
     "Explain only the selected passage. Do not answer unrelated questions. Use clear educational language, preserve important technical terminology, use short paragraphs, and return plain text.";
-  return ollamaGenerate({ prompt, system });
+  return ollamaGenerate({ prompt, system, signal: input.signal });
 }
 
 interface ConceptGraph {

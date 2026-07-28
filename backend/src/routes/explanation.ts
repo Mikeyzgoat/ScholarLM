@@ -47,6 +47,7 @@ explanation.post("/", async (c) => {
   const context = {
     documentTitle: b.documentTitle as string | undefined,
     pageNumber: b.pageNumber as number | undefined,
+    signal: c.req.raw.signal,
   };
   try {
     if (hasImage || b.graphRequested === true)
@@ -67,11 +68,18 @@ explanation.post("/", async (c) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Local inference failed";
+    const timedOut =
+      (error instanceof DOMException && error.name === "TimeoutError") ||
+      message.toLowerCase().includes("timed out");
     return c.json(
       {
         error: {
-          message: `${message} Make sure Ollama is running and try again.`,
-          code: "LOCAL_INFERENCE_UNAVAILABLE",
+          message: timedOut
+            ? "Ollama is running, but the local model took too long to respond. Try a shorter selection."
+            : `${message} Make sure Ollama is running and try again.`,
+          code: timedOut
+            ? "LOCAL_INFERENCE_TIMEOUT"
+            : "LOCAL_INFERENCE_UNAVAILABLE",
         },
       },
       503,
