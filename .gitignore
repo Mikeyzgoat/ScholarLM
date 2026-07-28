@@ -32,3 +32,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+node_modules/
+.env
+backend/data/scholarlm.sqlite*
+backend/data/uploads/*.pdf
+frontend/dist/

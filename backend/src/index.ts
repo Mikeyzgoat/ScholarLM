@@ -1,0 +1,14 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { env } from "./env";
+import { initializeDatabase } from "./db/database";
+import { ensureUploadDirectory } from "./utils/files";
+initializeDatabase();
+await ensureUploadDirectory();
+const app=new Hono();
+app.use("*",cors({origin:env.FRONTEND_ORIGIN}));
+app.get("/health",c=>c.json({ok:true}));
+app.notFound(c=>c.json({error:{message:"Route not found",code:"NOT_FOUND"}},404));
+app.onError((error,c)=>{console.error(error);return c.json({error:{message:"Internal server error",code:"INTERNAL_ERROR"}},500)});
+export default app;
+if(import.meta.main) Bun.serve({port:env.BACKEND_PORT,fetch:app.fetch});
