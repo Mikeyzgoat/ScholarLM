@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Files, GitFork, StickyNote } from "lucide-react";
 import { Link } from "react-router";
 import { getDocument } from "../../services/documents";
+import { ThemeSelector } from "./ThemeSelector";
 export function Topbar() {
   const { documentId } = useParams();
   const q = useQuery({
@@ -51,6 +52,9 @@ export function Topbar() {
         <Files size={16} />
         Documents
       </Link>
+      <div className="ml-2">
+        <ThemeSelector compact />
+      </div>
     </header>
   );
 }

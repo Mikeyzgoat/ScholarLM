@@ -67,7 +67,7 @@ export function Sidebar({
           <img
             src={sidebarLogo}
             alt=""
-            className="h-10 w-10 rounded-full object-cover shadow-[0_0_18px_rgba(249,115,22,0.28)]"
+            className="brand-mark h-10 w-10 rounded-full object-cover shadow-[0_0_18px_rgba(249,115,22,0.28)]"
           />
           {!collapsed && (
             <span>

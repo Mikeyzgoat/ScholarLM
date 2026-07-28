@@ -5,6 +5,7 @@ import forceAtlas2 from "graphology-layout-forceatlas2";
 import type { GraphNode, GraphResponse } from "../../lib/types";
 import { GraphControls } from "./GraphControls";
 import graphHub from "../../assets/graph-hub.png";
+import { useTheme } from "../../lib/theme";
 export function KnowledgeGraph({
   graph,
   isLoading,
@@ -18,6 +19,8 @@ export function KnowledgeGraph({
   focusedNodeId?: string | null;
   className?: string;
 }) {
+  const { resolvedTheme } = useTheme();
+  const light = resolvedTheme === "light";
   const container = useRef<HTMLDivElement>(null),
     renderer = useRef<Sigma | null>(null),
     model = useRef<Graph | null>(null),
@@ -64,12 +67,20 @@ export function KnowledgeGraph({
                 : 7,
         color:
           n.kind === "hub"
-            ? "#f97316"
+            ? light
+              ? "#149da5"
+              : "#f97316"
             : n.kind === "source"
-              ? "#fb923c"
+              ? light
+                ? "#2378b5"
+                : "#fb923c"
               : n.kind === "note"
-                ? "#c084fc"
-                : "#a8a29e",
+                ? light
+                  ? "#31b7ad"
+                  : "#c084fc"
+                : light
+                  ? "#64748b"
+                  : "#a8a29e",
         forceLabel: n.kind === "hub",
         fixed: n.kind === "hub",
       }),
@@ -78,17 +89,17 @@ export function KnowledgeGraph({
       if (g.hasNode(e.source) && g.hasNode(e.target))
         g.addEdgeWithKey(e.id, e.source, e.target, {
           label: e.relationship,
-          color: "#78350f",
+          color: light ? "#a7d8dc" : "#78350f",
           size: 1.4,
         });
     });
     model.current = g;
     const sigma = new Sigma(g, container.current, {
       renderEdgeLabels: false,
-      labelColor: { color: "#d6d3d1" },
+      labelColor: { color: light ? "#26333c" : "#d6d3d1" },
       labelFont: "ui-monospace, SFMono-Regular, Menlo, monospace",
       labelSize: 12,
-      defaultEdgeColor: "#78350f",
+      defaultEdgeColor: light ? "#a7d8dc" : "#78350f",
       stagePadding: 60,
     });
     renderer.current = sigma;
@@ -132,7 +143,7 @@ export function KnowledgeGraph({
       renderer.current = null;
       model.current = null;
     };
-  }, [graph, onNodeSelect, runPhysics]);
+  }, [graph, onNodeSelect, runPhysics, light]);
   useEffect(() => {
     const g = model.current;
     const sigma = renderer.current;
@@ -156,33 +167,53 @@ export function KnowledgeGraph({
         node.id,
         "color",
         node.id === focusedNodeId
-          ? "#fdba74"
+          ? light
+            ? "#0e7490"
+            : "#fdba74"
           : node.kind === "hub"
-            ? "#f97316"
+            ? light
+              ? "#149da5"
+              : "#f97316"
             : node.kind === "source" || node.pageNumber
-            ? "#fb923c"
+              ? light
+                ? "#2378b5"
+                : "#fb923c"
               : node.kind === "note"
-                ? "#c084fc"
-                : "#a8a29e",
+                ? light
+                  ? "#31b7ad"
+                  : "#c084fc"
+                : light
+                  ? "#64748b"
+                  : "#a8a29e",
       );
     });
     const { x, y } = g.getNodeAttributes(focusedNodeId);
     sigma.getCamera().animate({ x, y, ratio: 0.18 }, { duration: 420 });
     sigma.refresh();
-  }, [focusedNodeId, graph]);
+  }, [focusedNodeId, graph, light]);
   if (isLoading) return <p className="text-sm">Loading graph…</p>;
   if (!graph?.nodes.length)
     return <p className="text-sm text-stone-500">No graph nodes were found.</p>;
   return (
     <div
-      className={`relative overflow-hidden bg-[radial-gradient(circle_at_50%_48%,rgba(249,115,22,0.12),transparent_32%)] ${className ?? "h-72"}`}
+      className={`relative overflow-hidden ${
+        light
+          ? "bg-[radial-gradient(circle_at_50%_48%,rgba(20,157,165,0.13),transparent_34%)]"
+          : "bg-[radial-gradient(circle_at_50%_48%,rgba(249,115,22,0.12),transparent_32%)]"
+      } ${className ?? "h-72"}`}
     >
-      <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(circle,rgba(251,146,60,0.7)_1px,transparent_1px)] [background-size:24px_24px]" />
+      <div
+        className={`pointer-events-none absolute inset-0 opacity-[0.12] [background-size:24px_24px] ${
+          light
+            ? "[background-image:radial-gradient(circle,rgba(20,157,165,0.65)_1px,transparent_1px)]"
+            : "[background-image:radial-gradient(circle,rgba(251,146,60,0.7)_1px,transparent_1px)]"
+        }`}
+      />
       {graph.nodes.some((node) => node.kind === "hub") && (
         <img
           src={graphHub}
           alt=""
-          className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover shadow-[0_0_34px_rgba(249,115,22,0.42)] motion-safe:animate-pulse"
+          className="theme-graph-hub pointer-events-none absolute left-1/2 top-1/2 z-10 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover shadow-[0_0_34px_rgba(249,115,22,0.42)] motion-safe:animate-pulse"
         />
       )}
       <GraphControls

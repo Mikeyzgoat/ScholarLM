@@ -36,6 +36,7 @@ export default function WorkspacePage() {
   const [selectedTexts, setSelectedTexts] = useState<string[]>();
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();
+  const [existingExplanation, setExistingExplanation] = useState<string>();
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
   const queuedCanvasExplanations = useRef<
     Array<{
@@ -155,6 +156,7 @@ export default function WorkspacePage() {
                 setSelectedText(s.text);
                 setSelectedTexts(s.text ? [s.text] : undefined);
                 setSelectionImage(undefined);
+                setExistingExplanation(undefined);
                 setSelectedTextPage(s.pageNumber);
               }}
               onExplanationGenerated={saveExplanationToCanvas}
@@ -168,12 +170,14 @@ export default function WorkspacePage() {
                 setSelectedText(text);
                 setSelectedTexts(text ? [text] : undefined);
                 setSelectionImage(undefined);
+                setExistingExplanation(undefined);
                 setSelectedTextPage(null);
               }}
               onCanvasSelection={(selection) => {
                 setSelectedText(selection.text);
                 setSelectedTexts(selection.texts);
                 setSelectionImage(selection.imageDataUrl);
+                setExistingExplanation(selection.existingExplanation);
                 setSelectedTextPage(null);
               }}
               onEditorReady={(editor) => {
@@ -198,6 +202,7 @@ export default function WorkspacePage() {
           selectedText={selectedText}
           selectedTexts={selectedTexts}
           selectionImage={selectionImage}
+          existingExplanation={existingExplanation}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
           onPlotGenerated={(plot, equation) => {

@@ -2,6 +2,7 @@ import { ArrowLeft, FileUp } from "lucide-react";
 import { Link } from "react-router";
 import type { SaveState } from "../../lib/types";
 import { SaveStatus } from "./SaveStatus";
+import { ThemeSelector } from "../layout/ThemeSelector";
 export function NotesHeader({
   title,
   saveState,
@@ -28,6 +29,7 @@ export function NotesHeader({
         className="min-w-0 flex-1 rounded px-2 py-1 font-semibold focus:outline-2"
       />
       <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+      <ThemeSelector compact />
       <Link
         to="/upload"
         className="ml-2 flex items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-1.5 text-sm text-orange-300 hover:border-orange-400/40"

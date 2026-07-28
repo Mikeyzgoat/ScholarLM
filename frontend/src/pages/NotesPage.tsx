@@ -25,6 +25,7 @@ export default function NotesPage() {
     [selectedText, setSelectedText] = useState(""),
     [selectedTexts, setSelectedTexts] = useState<string[]>(),
     [selectionImage, setSelectionImage] = useState<string>(),
+    [existingExplanation, setExistingExplanation] = useState<string>(),
     [title, setTitle] = useState(""),
     [titleSaveState, setTitleSaveState] = useState<SaveState | null>(null);
   const recovered = useMemo(
@@ -105,11 +106,13 @@ export default function NotesPage() {
           setSelectedText(text);
           setSelectedTexts(text ? [text] : undefined);
           setSelectionImage(undefined);
+          setExistingExplanation(undefined);
         }}
         onCanvasSelection={(selection) => {
           setSelectedText(selection.text);
           setSelectedTexts(selection.texts);
           setSelectionImage(selection.imageDataUrl);
+          setExistingExplanation(selection.existingExplanation);
         }}
       />
       <aside className="absolute bottom-4 right-4 top-28 z-20 w-80 overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
@@ -117,6 +120,7 @@ export default function NotesPage() {
           selectedText={selectedText}
           selectedTexts={selectedTexts}
           selectionImage={selectionImage}
+          existingExplanation={existingExplanation}
           pageNumber={null}
           documentTitle={note.title}
           onPlotGenerated={(plot, equation) => {

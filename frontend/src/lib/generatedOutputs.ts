@@ -82,6 +82,12 @@ export function findLatestGeneratedOutput(
   );
 }
 
+export function findGeneratedOutputById(
+  id: string,
+): GeneratedOutputRecord | null {
+  return readRecords()[id] ?? null;
+}
+
 export function isGeneratedExplanationShape(shape: {
   type: string;
   meta?: unknown;

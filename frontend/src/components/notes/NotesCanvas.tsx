@@ -3,7 +3,11 @@ import { Tldraw, loadSnapshot, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import type { NotePage } from "../../lib/types";
 import type { CanvasSelection } from "../../lib/types";
-import { isGeneratedExplanationShape } from "../../lib/generatedOutputs";
+import {
+  findGeneratedOutputById,
+  isGeneratedExplanationShape,
+} from "../../lib/generatedOutputs";
+import { useTheme } from "../../lib/theme";
 export function NotesCanvas({
   note,
   onEditorReady,
@@ -17,6 +21,7 @@ export function NotesCanvas({
   onTextSelected?: (text: string) => void;
   onCanvasSelection?: (selection: CanvasSelection) => void;
 }) {
+  const { resolvedTheme } = useTheme();
   const selectionCleanup = useRef<(() => void) | null>(null);
   const lastSelection = useRef("");
   const root = useRef<HTMLDivElement>(null);
@@ -106,6 +111,9 @@ export function NotesCanvas({
         () => {
           if (!onTextSelected && !onCanvasSelection) return;
           const selectedShapes = editor.getSelectedShapes();
+          const generatedShapes = selectedShapes.filter(
+            isGeneratedExplanationShape,
+          );
           const inputShapes = selectedShapes.filter(
             (shape) => !isGeneratedExplanationShape(shape),
           );
@@ -150,8 +158,39 @@ export function NotesCanvas({
           if (signature === lastSelection.current) return;
           lastSelection.current = signature;
           if (!inputShapes.length) {
-            onTextSelected?.("");
-            onCanvasSelection?.({ text: "" });
+            if (generatedShapes.length === 1) {
+              if (
+                generatedShapes[0].type === "text" &&
+                generatedShapes[0].props.color !== "black"
+              )
+                editor.updateShape({
+                  id: generatedShapes[0].id,
+                  type: "text",
+                  props: { color: "black" },
+                });
+              const meta = generatedShapes[0].meta as Record<string, unknown>;
+              const mapped =
+                typeof meta.scholarLmOutputId === "string"
+                  ? findGeneratedOutputById(meta.scholarLmOutputId)
+                  : null;
+              const sourceText =
+                typeof meta.scholarLmSourceText === "string"
+                  ? meta.scholarLmSourceText
+                  : mapped?.sourceText ?? "";
+              const existingExplanation =
+                typeof meta.scholarLmExplanation === "string"
+                  ? meta.scholarLmExplanation
+                  : mapped?.text ?? "";
+              onTextSelected?.(sourceText);
+              onCanvasSelection?.({
+                text: sourceText,
+                existingExplanation,
+                generatedOutput: true,
+              });
+            } else {
+              onTextSelected?.("");
+              onCanvasSelection?.({ text: "" });
+            }
             return;
           }
           if (text) onTextSelected?.(text);
@@ -191,7 +230,7 @@ export function NotesCanvas({
         embedded ? "relative h-full min-h-[576px]" : "absolute inset-0 top-14"
       }
     >
-      <Tldraw colorScheme="dark" onMount={mount} />
+      <Tldraw colorScheme={resolvedTheme} onMount={mount} />
     </div>
   );
 }

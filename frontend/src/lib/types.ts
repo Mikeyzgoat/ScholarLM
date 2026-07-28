@@ -74,6 +74,8 @@ export interface CanvasSelection {
   text: string;
   texts?: string[];
   imageDataUrl?: string;
+  existingExplanation?: string;
+  generatedOutput?: boolean;
 }
 export interface NotePage {
   id: string;

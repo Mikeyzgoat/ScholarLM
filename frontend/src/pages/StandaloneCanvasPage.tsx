@@ -15,6 +15,7 @@ import {
   updateLocalCanvasTitle,
 } from "../lib/localCanvases";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import { ThemeSelector } from "../components/layout/ThemeSelector";
 
 export default function StandaloneCanvasPage() {
   const { canvasId = "" } = useParams();
@@ -22,6 +23,7 @@ export default function StandaloneCanvasPage() {
   const [selectedText, setSelectedText] = useState("");
   const [selectedTexts, setSelectedTexts] = useState<string[]>();
   const [selectionImage, setSelectionImage] = useState<string>();
+  const [existingExplanation, setExistingExplanation] = useState<string>();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -125,6 +127,7 @@ export default function StandaloneCanvasPage() {
         <span className="text-xs">
           <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
         </span>
+        <ThemeSelector compact />
         <button
           type="button"
           disabled={!editor || saveState === "saving"}
@@ -167,11 +170,13 @@ export default function StandaloneCanvasPage() {
           onTextSelected={(text) => {
             setSelectedText(text);
             setSelectedTexts(text ? [text] : undefined);
+            setExistingExplanation(undefined);
           }}
           onCanvasSelection={(selection) => {
             setSelectedText(selection.text);
             setSelectedTexts(selection.texts);
             setSelectionImage(selection.imageDataUrl);
+            setExistingExplanation(selection.existingExplanation);
           }}
         />
         <aside className="overflow-auto border-l p-3">
@@ -179,6 +184,7 @@ export default function StandaloneCanvasPage() {
             selectedText={selectedText}
             selectedTexts={selectedTexts}
             selectionImage={selectionImage}
+            existingExplanation={existingExplanation}
             pageNumber={null}
             documentTitle="Independent canvas"
             onPlotGenerated={(plot, equation) => {

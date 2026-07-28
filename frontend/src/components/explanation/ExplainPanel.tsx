@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
 import { AnimatePresence, motion } from "framer-motion";
@@ -7,9 +7,11 @@ import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
 import type { MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
+import { ChartSpline } from "lucide-react";
 export function ExplainPanel({
   selectedText,
   selectedTexts,
+  existingExplanation,
   selectionImage,
   pageNumber,
   documentTitle,
@@ -18,6 +20,7 @@ export function ExplainPanel({
 }: {
   selectedText: string;
   selectedTexts?: string[];
+  existingExplanation?: string;
   selectionImage?: string;
   pageNumber: number | null;
   documentTitle: string;
@@ -30,16 +33,16 @@ export function ExplainPanel({
 }) {
   const state = useExplanation(),
     speech = useSpeech();
-  const [graphRequested, setGraphRequested] = useState(false);
   async function explain(
     mode: "explain" | "regenerate" | "simplify" = "explain",
+    requestGraph = false,
   ) {
     const value = await state.explain({
       selectedText,
       selectedTexts:
         selectedTexts && selectedTexts.length > 1 ? selectedTexts : undefined,
       imageDataUrl: selectionImage,
-      graphRequested,
+      graphRequested: requestGraph,
       documentTitle,
       pageNumber: pageNumber ?? undefined,
       mode,
@@ -62,13 +65,12 @@ export function ExplainPanel({
       state.clear();
       return;
     }
-    const existing = findLatestGeneratedOutput(
-      selectedText,
-      pageNumber ?? undefined,
-    );
-    if (existing) state.load(existing.text);
+    const existing =
+      existingExplanation ||
+      findLatestGeneratedOutput(selectedText, pageNumber ?? undefined)?.text;
+    if (existing) state.load(existing);
     else state.clear();
-  }, [selectedText, selectionImage, pageNumber]);
+  }, [selectedText, selectionImage, pageNumber, existingExplanation]);
   return (
     <motion.section
       layout
@@ -77,16 +79,6 @@ export function ExplainPanel({
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">Explanation</h2>
-        {selectedText && (
-          <label className="flex items-center gap-2 text-xs text-stone-400">
-            <input
-              type="checkbox"
-              checked={graphRequested}
-              onChange={(event) => setGraphRequested(event.target.checked)}
-            />
-            Add graph
-          </label>
-        )}
       </div>
       <AnimatePresence mode="popLayout">
         {selectedText && !state.explanation && (
@@ -99,6 +91,7 @@ export function ExplainPanel({
             <SelectionPopover
               selectedText={selectedText}
               onExplain={() => void explain("explain")}
+              onExplainWithGraph={() => void explain("explain", true)}
               onDismiss={state.clear}
             />
             {selectedTexts && selectedTexts.length > 1 && (
@@ -140,14 +133,15 @@ export function ExplainPanel({
               Simplify
             </button>
           </div>
-          {selectedText && graphRequested && (
+          {selectedText && (
             <button
               type="button"
-              className="w-full rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/15"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/15"
               disabled={state.isExplaining}
-              onClick={() => void explain("regenerate")}
+              onClick={() => void explain("regenerate", true)}
             >
-              {state.isExplaining ? "Generating graph…" : "Explain + add graph"}
+              <ChartSpline size={15} />
+              {state.isExplaining ? "Generating graph…" : "Add graph to canvas"}
             </button>
           )}
           <AudioControls

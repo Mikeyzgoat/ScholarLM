@@ -29,7 +29,7 @@ export function drawMathPlot(
     y1: number,
     x2: number,
     y2: number,
-    color: "orange" | "grey",
+    color: "orange" | "blue" | "grey",
     thickness: number,
   ) => {
     const length = Math.hypot(x2 - x1, y2 - y1);
@@ -53,12 +53,14 @@ export function drawMathPlot(
   const yAxisX =
     originX + ((Math.min(Math.max(0, minX), maxX) - minX) / xRange) * width;
   editor.run(() => {
+    const plotColor =
+      document.documentElement.dataset.theme === "light" ? "blue" : "orange";
     segment(originX, xAxisY, originX + width, xAxisY, "grey", 2);
     segment(yAxisX, originY, yAxisX, originY + height, "grey", 2);
     for (let index = 1; index < plot.points.length; index += 1) {
       const previous = mapPoint(plot.points[index - 1]);
       const current = mapPoint(plot.points[index]);
-      segment(previous.x, previous.y, current.x, current.y, "orange", 4);
+      segment(previous.x, previous.y, current.x, current.y, plotColor, 4);
     }
     editor.createShape({
       type: "text",
@@ -68,7 +70,7 @@ export function drawMathPlot(
         richText: toRichText(
           `${plot.title}${equation ? `  •  ${equation}` : ""}`,
         ),
-        color: "orange",
+        color: "black",
         size: "m",
       },
     });

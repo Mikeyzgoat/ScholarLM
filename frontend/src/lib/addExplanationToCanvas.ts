@@ -42,13 +42,15 @@ export function addExplanationToCanvas(
     scholarLmOutputKind: "explanation",
     scholarLmOutputId: output.id,
     scholarLmSourceKey: sourceKey,
+    scholarLmSourceText: input.selectedText,
+    scholarLmExplanation: input.explanation,
   };
   if (existing?.type === "text") {
     editor.updateShape({
       id: existing.id,
       type: "text",
       meta,
-      props: { richText },
+      props: { richText, color: "black" },
     });
     return;
   }
@@ -88,7 +90,7 @@ export function addExplanationToCanvas(
     meta,
     props: {
       richText,
-      color: "orange",
+      color: "black",
       font: "sans",
       size: "m",
       autoSize: false,
