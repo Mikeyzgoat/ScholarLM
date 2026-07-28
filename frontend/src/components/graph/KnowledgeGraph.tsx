@@ -4,6 +4,7 @@ import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import type { GraphNode, GraphResponse } from "../../lib/types";
 import { GraphControls } from "./GraphControls";
+import graphHub from "../../assets/graph-hub.png";
 export function KnowledgeGraph({
   graph,
   isLoading,
@@ -44,6 +45,7 @@ export function KnowledgeGraph({
               ? "#fb923c"
               : "#a8a29e",
         forceLabel: n.kind === "hub",
+        fixed: n.kind === "hub",
       }),
     );
     graph.edges.forEach((e) => {
@@ -112,6 +114,13 @@ export function KnowledgeGraph({
       className={`relative overflow-hidden bg-[radial-gradient(circle_at_50%_48%,rgba(249,115,22,0.12),transparent_32%)] ${className ?? "h-72"}`}
     >
       <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(circle,rgba(251,146,60,0.7)_1px,transparent_1px)] [background-size:24px_24px]" />
+      {graph.nodes.some((node) => node.kind === "hub") && (
+        <img
+          src={graphHub}
+          alt=""
+          className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover shadow-[0_0_34px_rgba(249,115,22,0.42)] motion-safe:animate-pulse"
+        />
+      )}
       <GraphControls
         onZoomIn={() => renderer.current?.getCamera().animatedZoom()}
         onZoomOut={() => renderer.current?.getCamera().animatedUnzoom()}

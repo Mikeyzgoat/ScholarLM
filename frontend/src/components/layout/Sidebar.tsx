@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, GitFork, Home, StickyNote } from "lucide-react";
+import { GitFork, Home, StickyNote } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { listDocuments } from "../../services/documents";
+import sidebarLogo from "../../assets/sidebar-logo.png";
 export function Sidebar() {
   const { documentId } = useParams();
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
@@ -9,10 +10,16 @@ export function Sidebar() {
     <aside className="hidden w-56 shrink-0 border-r bg-stone-900 p-4 text-stone-200 lg:block">
       <Link
         to="/"
-        className="mb-8 flex items-center gap-2 font-semibold text-white"
+        className="mb-8 flex items-center gap-2.5 font-semibold text-white"
       >
-        <BookOpen />
-        ScholarLM
+        <img
+          src={sidebarLogo}
+          alt=""
+          className="h-10 w-10 rounded-full object-cover shadow-[0_0_18px_rgba(249,115,22,0.28)]"
+        />
+        <span>
+          Scholar<span className="text-orange-500">LM</span>
+        </span>
       </Link>
       <Link to="/" className="flex gap-2 rounded p-2 hover:bg-stone-800">
         <Home size={18} />

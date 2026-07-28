@@ -2,6 +2,9 @@
 
 :root {
   color-scheme: dark;
+  font-family:
+    "Google Sans Flex", "Google Sans", "Product Sans", Inter, ui-sans-serif,
+    system-ui, sans-serif;
   --scholar-bg: #070707;
   --scholar-panel: rgba(20, 20, 20, 0.72);
   --scholar-panel-strong: rgba(13, 13, 13, 0.9);
@@ -22,7 +25,7 @@ body {
   position: relative;
   min-height: 100%;
   overflow-x: hidden;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: inherit;
   color: var(--scholar-text);
   background:
     radial-gradient(
