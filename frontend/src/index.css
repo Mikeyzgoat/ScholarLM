@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Google Sans Flex";
+  src: url("./assets/fonts/google-sans-flex-400.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans Flex";
+  src: url("./assets/fonts/google-sans-flex-500.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans Flex";
+  src: url("./assets/fonts/google-sans-flex-600.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Google Sans Flex";
+  src: url("./assets/fonts/google-sans-flex-700.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   font-family:
@@ -182,12 +214,22 @@ input::placeholder {
 }
 
 #root .tl-container {
-  --tl-font-draw: "Google Sans Flex", "Google Sans", sans-serif;
-  --tl-font-sans: "Google Sans Flex", "Google Sans", sans-serif;
-  --tl-font-serif: "Google Sans Flex", "Google Sans", sans-serif;
-  --tl-font-mono: "Google Sans Flex", "Google Sans", sans-serif;
+  --tl-font-draw: "Google Sans Flex", "Google Sans", sans-serif !important;
+  --tl-font-sans: "Google Sans Flex", "Google Sans", sans-serif !important;
+  --tl-font-serif: "Google Sans Flex", "Google Sans", sans-serif !important;
+  --tl-font-mono: "Google Sans Flex", "Google Sans", sans-serif !important;
   font-family:
-    "Google Sans Flex", "Google Sans", "Product Sans", sans-serif;
+    "Google Sans Flex", "Google Sans", "Product Sans", sans-serif !important;
+}
+
+#root .tl-container [contenteditable="true"],
+#root .tl-container textarea,
+#root .tl-container input,
+#root .tl-container [class*="tl-text"],
+#root .tl-container [class*="tl-note"],
+#root .tl-container [class*="tlui-"] {
+  font-family:
+    "Google Sans Flex", "Google Sans", "Product Sans", sans-serif !important;
 }
 
 @supports not (backdrop-filter: blur(1px)) {

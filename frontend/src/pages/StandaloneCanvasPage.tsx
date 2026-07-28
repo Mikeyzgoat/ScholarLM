@@ -67,7 +67,7 @@ export default function StandaloneCanvasPage() {
     unsubscribe.current = editor.store.listen(
       () => {
         setSaveState("unsaved");
-        saveCanvas(editor);
+        queueMicrotask(() => saveCanvas(editor));
       },
       { scope: "document" },
     );

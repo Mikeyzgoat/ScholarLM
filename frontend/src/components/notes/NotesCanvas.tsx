@@ -3,6 +3,7 @@ import { Tldraw, loadSnapshot, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import type { NotePage } from "../../lib/types";
 import type { CanvasSelection } from "../../lib/types";
+import { isGeneratedExplanationShape } from "../../lib/generatedOutputs";
 export function NotesCanvas({
   note,
   onEditorReady,
@@ -42,6 +43,9 @@ export function NotesCanvas({
         () => {
           if (!onTextSelected && !onCanvasSelection) return;
           const selectedShapes = editor.getSelectedShapes();
+          const inputShapes = selectedShapes.filter(
+            (shape) => !isGeneratedExplanationShape(shape),
+          );
           const parts: string[] = [];
           const collectText = (value: unknown): void => {
             if (Array.isArray(value)) {
@@ -57,7 +61,7 @@ export function NotesCanvas({
                 .forEach(([, child]) => collectText(child));
             }
           };
-          selectedShapes.forEach((shape) => {
+          inputShapes.forEach((shape) => {
             const props = shape.props as Record<string, unknown>;
             if (typeof props.text === "string" && props.text.trim())
               parts.push(props.text.trim());
@@ -76,14 +80,19 @@ export function NotesCanvas({
           }
           if (signature === lastSelection.current) return;
           lastSelection.current = signature;
+          if (!inputShapes.length) {
+            onTextSelected?.("");
+            onCanvasSelection?.({ text: "" });
+            return;
+          }
           if (text) onTextSelected?.(text);
-          const containsDrawing = selectedShapes.some((shape) =>
+          const containsDrawing = inputShapes.some((shape) =>
             ["draw", "line", "arrow"].includes(shape.type),
           );
           if (!containsDrawing) onCanvasSelection?.({ text });
           else
             void editor
-              .toImageDataUrl(selectedShapes, {
+              .toImageDataUrl(inputShapes, {
                 format: "png",
                 background: true,
                 padding: 32,

@@ -27,11 +27,12 @@ export async function streamSpeech(
   text: string,
   onChunk: (audio: Blob, text: string) => void,
   signal?: AbortSignal,
+  sourceText?: string,
 ): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/tts?stream=1`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, sourceText }),
     signal,
   });
   if (!response.ok || !response.body) {

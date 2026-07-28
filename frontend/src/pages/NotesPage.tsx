@@ -5,12 +5,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { Editor } from "tldraw";
 import type { NotePage, SaveState } from "../lib/types";
 import { getNote, updateNote } from "../services/notes";
-import { createNote, listDocumentNotes } from "../services/notes";
 import { chooseNewestNoteSource, getLocalNoteDraft } from "../lib/noteStorage";
 import { useNoteAutosave } from "../hooks/useNoteAutosave";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { NotesHeader } from "../components/notes/NotesHeader";
-import { NotesPagination } from "../components/notes/NotesPagination";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
@@ -52,11 +50,6 @@ export default function NotesPage() {
     editor,
     onServerNoteUpdated: setNote,
   });
-  const pages = useQuery({
-    queryKey: ["notes", note?.documentId],
-    queryFn: () => listDocumentNotes(note!.documentId),
-    enabled: !!note?.documentId,
-  });
   useEffect(() => {
     if (!note || !title.trim() || title === note.title) return;
     setTitleSaveState("unsaved");
@@ -80,23 +73,6 @@ export default function NotesPage() {
   if (q.isLoading) return <main className="p-6">Loading note…</main>;
   if (q.isError || !q.data || !note)
     return <main className="p-6 text-red-700">Unable to load note.</main>;
-  const orderedPages = [...(pages.data ?? [])].sort((a, b) =>
-    a.createdAt.localeCompare(b.createdAt),
-  );
-  const pageIndex = orderedPages.findIndex((page) => page.id === note.id);
-  function openPage(index: number) {
-    const target = orderedPages[index];
-    if (target) nav(`/notes/${target.id}`);
-  }
-  async function addPage() {
-    const created = await createNote({
-      documentId: note!.documentId,
-      title: `Page ${orderedPages.length + 1}`,
-      metadata: { page: orderedPages.length + 1 },
-      snapshot: {},
-    });
-    nav(`/notes/${created.id}`);
-  }
   return (
     <main className="fixed inset-0 bg-white">
       <NotesHeader
@@ -105,13 +81,6 @@ export default function NotesPage() {
         lastSavedAt={autosave.lastSavedAt}
         onTitleChange={setTitle}
         onBack={() => nav(`/workspace/${note.documentId}`)}
-      />
-      <NotesPagination
-        page={Math.max(1, pageIndex + 1)}
-        pageCount={orderedPages.length}
-        onPrevious={() => openPage(pageIndex - 1)}
-        onNext={() => openPage(pageIndex + 1)}
-        onCreate={() => void addPage()}
       />
       <AnimatePresence>
         {recovered &&

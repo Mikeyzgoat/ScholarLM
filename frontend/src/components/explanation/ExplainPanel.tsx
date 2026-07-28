@@ -46,7 +46,7 @@ export function ExplainPanel({
         selectedText,
         explanation: value.explanation,
       });
-      await speech.speak(value.explanation);
+      await speech.speak(value.explanation, selectedText);
     }
   }
   useEffect(() => {

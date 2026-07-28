@@ -9,6 +9,8 @@ CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
 CREATE TABLE IF NOT EXISTS concepts (id TEXT PRIMARY KEY,document_id TEXT NOT NULL,label TEXT NOT NULL,description TEXT,page_number INTEGER,created_at TEXT NOT NULL,FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS concept_edges (id TEXT PRIMARY KEY,document_id TEXT NOT NULL,source_concept_id TEXT NOT NULL,target_concept_id TEXT NOT NULL,relationship TEXT NOT NULL,created_at TEXT NOT NULL,FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,FOREIGN KEY (source_concept_id) REFERENCES concepts(id) ON DELETE CASCADE,FOREIGN KEY (target_concept_id) REFERENCES concepts(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS note_pages (id TEXT PRIMARY KEY,document_id TEXT NOT NULL,title TEXT NOT NULL,metadata TEXT NOT NULL,snapshot TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS speech_cache (text_hash TEXT PRIMARY KEY,source_text TEXT,text TEXT NOT NULL,audio BLOB NOT NULL,byte_size INTEGER NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS generated_output_audio (source_hash TEXT NOT NULL,text_hash TEXT NOT NULL,source_text TEXT NOT NULL,output_text TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,PRIMARY KEY(source_hash,text_hash),FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
 `);
   const columns = db.query("PRAGMA table_info(documents)").all() as Array<{
     name: string;
@@ -18,4 +20,9 @@ CREATE TABLE IF NOT EXISTS note_pages (id TEXT PRIMARY KEY,document_id TEXT NOT 
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_content_hash ON documents(content_hash) WHERE content_hash IS NOT NULL;",
   );
+  const speechColumns = db.query("PRAGMA table_info(speech_cache)").all() as Array<{
+    name: string;
+  }>;
+  if (!speechColumns.some((column) => column.name === "source_text"))
+    db.exec("ALTER TABLE speech_cache ADD COLUMN source_text TEXT;");
 }

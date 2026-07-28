@@ -159,7 +159,7 @@ export function useSpeech() {
     [clearAudio, stop],
   );
 
-  const speak = async (text: string) => {
+  const speak = async (text: string, sourceText?: string) => {
     stop();
     clearAudio();
     latestText.current = text;
@@ -178,6 +178,7 @@ export function useSpeech() {
           if (!next.signal.aborted && blob.size) chunks.push(blob);
         },
         next.signal,
+        sourceText,
       );
       if (!chunks.length) throw new Error("Kokoro returned no audio chunks");
       const combined = await combineWavChunks(chunks);

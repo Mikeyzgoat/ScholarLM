@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import Graph from "graphology";
 import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
@@ -20,15 +20,32 @@ export function KnowledgeGraph({
 }) {
   const container = useRef<HTMLDivElement>(null),
     renderer = useRef<Sigma | null>(null),
-    model = useRef<Graph | null>(null);
-  function layout() {
-    if (model.current?.order)
-      forceAtlas2.assign(model.current, {
-        iterations: 80,
-        settings: forceAtlas2.inferSettings(model.current),
+    model = useRef<Graph | null>(null),
+    physicsFrame = useRef(0);
+  const runPhysics = useCallback((steps = 72) => {
+    cancelAnimationFrame(physicsFrame.current);
+    let remaining = steps;
+    const tick = () => {
+      const activeGraph = model.current;
+      const activeRenderer = renderer.current;
+      if (!activeGraph?.order || !activeRenderer || remaining <= 0) return;
+      forceAtlas2.assign(activeGraph, {
+        iterations: Math.min(2, remaining),
+        settings: {
+          ...forceAtlas2.inferSettings(activeGraph),
+          gravity: 0.9,
+          scalingRatio: 2.4,
+          slowDown: 5,
+        },
       });
-    renderer.current?.refresh();
-  }
+      remaining -= 2;
+      activeRenderer.refresh();
+      if (remaining > 0)
+        physicsFrame.current = requestAnimationFrame(tick);
+    };
+    physicsFrame.current = requestAnimationFrame(tick);
+  }, []);
+  const layout = useCallback(() => runPhysics(90), [runPhysics]);
   useEffect(() => {
     if (!container.current || !graph?.nodes.length) return;
     const g = new Graph({ multi: true });
@@ -66,7 +83,6 @@ export function KnowledgeGraph({
         });
     });
     model.current = g;
-    layout();
     const sigma = new Sigma(g, container.current, {
       renderEdgeLabels: false,
       labelColor: { color: "#d6d3d1" },
@@ -76,16 +92,41 @@ export function KnowledgeGraph({
       stagePadding: 60,
     });
     renderer.current = sigma;
+    runPhysics();
+    let draggedNode: string | null = null;
     sigma.on("clickNode", ({ node }) => {
       const found = graph.nodes.find((n) => n.id === node);
       if (found) onNodeSelect(found);
     });
+    sigma.on("downNode", ({ node, event }) => {
+      if (g.getNodeAttribute(node, "fixed")) return;
+      draggedNode = node;
+      g.setNodeAttribute(node, "highlighted", true);
+      g.setNodeAttribute(node, "fixed", true);
+      event.preventSigmaDefault();
+    });
+    sigma.getMouseCaptor().on("mousemovebody", (event) => {
+      if (!draggedNode) return;
+      const position = sigma.viewportToGraph({ x: event.x, y: event.y });
+      g.mergeNodeAttributes(draggedNode, position);
+      event.preventSigmaDefault();
+      event.original.preventDefault();
+      sigma.refresh();
+    });
+    sigma.getMouseCaptor().on("mouseup", () => {
+      if (!draggedNode) return;
+      g.setNodeAttribute(draggedNode, "highlighted", false);
+      g.setNodeAttribute(draggedNode, "fixed", false);
+      draggedNode = null;
+      runPhysics(24);
+    });
     return () => {
+      cancelAnimationFrame(physicsFrame.current);
       sigma.kill();
       renderer.current = null;
       model.current = null;
     };
-  }, [graph, onNodeSelect]);
+  }, [graph, onNodeSelect, runPhysics]);
   useEffect(() => {
     const g = model.current;
     const sigma = renderer.current;

@@ -11,6 +11,7 @@ import { useSpeech } from "../../hooks/useSpeech";
 import { AudioControls } from "../explanation/AudioControls";
 import { HighlightedSpeechText } from "../explanation/ExplanationContent";
 import { AnimatePresence, motion } from "framer-motion";
+import { registerGeneratedOutput } from "../../lib/generatedOutputs";
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface PageHighlight {
@@ -150,8 +151,18 @@ export function PDFViewer({
     localStorage.setItem(storageKey, JSON.stringify(next));
   }
 
-  function captureSelection() {
+  function captureSelection(event: React.MouseEvent<HTMLDivElement>) {
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-scholar-generated-output]")
+    )
+      return;
     const selection = getSelection();
+    const selectionElement =
+      selection?.anchorNode instanceof Element
+        ? selection.anchorNode
+        : selection?.anchorNode?.parentElement;
+    if (selectionElement?.closest("[data-scholar-generated-output]")) return;
     const text = selection?.toString().trim();
     const page = pageContainer.current?.querySelector(".react-pdf__Page");
     if (!selection || !text || !page || selection.rangeCount === 0) return;
@@ -174,6 +185,11 @@ export function PDFViewer({
   }
 
   function persistExplanation(value: CachedExplanation) {
+    registerGeneratedOutput({
+      text: value.text,
+      sourceText: value.selection.text,
+      pageNumber: value.selection.pageNumber,
+    });
     const next = [
       value,
       ...cachedExplanations.filter(
@@ -205,7 +221,7 @@ export function PDFViewer({
         error: "",
         loading: false,
       });
-      await speech.speak(cached.text);
+      await speech.speak(cached.text, selection.text);
       return;
     }
     setInlineExplanation({
@@ -238,7 +254,7 @@ export function PDFViewer({
         explanation,
         pageNumber: selection.pageNumber,
       });
-      await speech.speak(explanation);
+      await speech.speak(explanation, selection.text);
     } catch (error) {
       if (generation !== explanationGeneration.current) return;
       setInlineExplanation({
@@ -323,6 +339,8 @@ export function PDFViewer({
           <AnimatePresence>
             {inlineExplanation?.selection.pageNumber === activePage && (
             <motion.aside
+              data-scholar-generated-output="explanation"
+              onMouseUp={(event) => event.stopPropagation()}
               initial={{ opacity: 0, y: -8, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -6, scale: 0.98 }}
