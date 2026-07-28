@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, GitFork, Home, PencilRuler } from "lucide-react";
+import { BookOpen, GitFork, Home, StickyNote } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { listDocuments } from "../../services/documents";
 export function Sidebar() {
@@ -19,11 +19,11 @@ export function Sidebar() {
         Home
       </Link>
       <Link
-        to="/canvas"
+        to="/notes"
         className="mt-1 flex gap-2 rounded p-2 hover:bg-stone-800"
       >
-        <PencilRuler size={18} />
-        Canvas
+        <StickyNote size={18} />
+        Notes
       </Link>
       {(documentId || q.data?.[0]?.id) && (
         <Link
