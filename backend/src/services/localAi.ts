@@ -22,9 +22,15 @@ async function ollamaGenerate(input: {
       ],
       stream: true,
       think: false,
+      keep_alive: "10m",
       format: input.json ? "json" : undefined,
-      options: { temperature: 0.2 },
+      options: {
+        temperature: 0.2,
+        num_ctx: 4096,
+        num_predict: input.json ? 500 : 300,
+      },
     }),
+    signal: AbortSignal.timeout(60_000),
   });
   return readOllamaStream(response);
 }
@@ -144,14 +150,19 @@ ${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
   );
 }
 
-async function ollamaEmbedding(text: string): Promise<number[]> {
+export async function generateEmbeddings(
+  texts: string[],
+): Promise<number[][]> {
+  if (!texts.length) return [];
   const response = await fetch(`${env.OLLAMA_BASE_URL}/api/embed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: env.OLLAMA_EMBEDDING_MODEL,
-      input: text,
+      input: texts,
+      keep_alive: "10m",
     }),
+    signal: AbortSignal.timeout(60_000),
   });
   const payload = (await response.json().catch(() => null)) as {
     embeddings?: unknown;
@@ -163,19 +174,22 @@ async function ollamaEmbedding(text: string): Promise<number[]> {
         ? payload.error
         : `Ollama returned ${response.status}`,
     );
-  const embedding = Array.isArray(payload?.embeddings)
-    ? payload.embeddings[0]
-    : null;
+  const embeddings = payload?.embeddings;
   if (
-    !Array.isArray(embedding) ||
-    !embedding.every((value) => typeof value === "number")
+    !Array.isArray(embeddings) ||
+    embeddings.length !== texts.length ||
+    !embeddings.every(
+      (embedding) =>
+        Array.isArray(embedding) &&
+        embedding.every((value) => typeof value === "number"),
+    )
   )
-    throw new Error("Ollama returned no embedding");
-  return embedding;
+    throw new Error("Ollama returned invalid embeddings");
+  return embeddings as number[][];
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  return ollamaEmbedding(text);
+  return (await generateEmbeddings([text]))[0];
 }
 
 export async function explainSelectedText(input: {

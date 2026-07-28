@@ -13,7 +13,6 @@ export interface DocumentRecord {
   file_path: string;
   mime_type: string;
   size_bytes: number;
-  content_hash: string | null;
   page_count: number | null;
   status: DocumentStatus;
   error_message: string | null;

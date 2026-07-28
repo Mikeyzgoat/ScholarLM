@@ -4,7 +4,6 @@ import { createId } from "../utils/ids";
 import { deleteFileIfExists, saveUploadedPdf } from "../utils/files";
 import type { DocumentRecord } from "../types";
 import { ingestDocument } from "../services/ingestion";
-import { createHash } from "node:crypto";
 const documents = new Hono();
 const summary = (d: DocumentRecord) => ({
   id: d.id,
@@ -47,24 +46,13 @@ documents.post("/", async (c) => {
       },
       400,
     );
-  const contentHash = createHash("sha256")
-    .update(Buffer.from(await file.arrayBuffer()))
-    .digest("hex");
-  const duplicate = db
-    .query("SELECT * FROM documents WHERE content_hash=?")
-    .get(contentHash) as DocumentRecord | null;
-  if (duplicate)
-    return c.json(
-      { document: { ...summary(duplicate), duplicate: true } },
-      200,
-    );
   const id = createId(),
     now = new Date().toISOString();
   let path = "";
   try {
     path = await saveUploadedPdf(file, id);
     db.query(
-      "INSERT INTO documents (id,name,original_name,file_path,mime_type,size_bytes,content_hash,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO documents (id,name,original_name,file_path,mime_type,size_bytes,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
     ).run(
       id,
       file.name.replace(/\.pdf$/i, ""),
@@ -72,7 +60,6 @@ documents.post("/", async (c) => {
       path,
       file.type || "application/pdf",
       file.size,
-      contentHash,
       "uploaded",
       now,
       now,

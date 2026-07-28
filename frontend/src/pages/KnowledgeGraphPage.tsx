@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Search, Sparkles } from "lucide-react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { useDocumentStatus } from "../hooks/useDocumentStatus";
 import { useKnowledgeGraph } from "../hooks/useKnowledgeGraph";
@@ -31,7 +31,6 @@ function fuzzyScore(query: string, value: string): number {
 export default function KnowledgeGraphPage() {
   const { documentId = "" } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const document = useQuery({
@@ -129,11 +128,6 @@ export default function KnowledgeGraphPage() {
         )}
       </aside>
       <section className="relative min-w-0 bg-[radial-gradient(circle_at_50%_45%,rgba(249,115,22,0.08),transparent_42%)]">
-        {searchParams.get("duplicate") === "1" && (
-          <div className="absolute left-4 top-4 z-20 rounded-xl border border-orange-400/20 bg-neutral-950/90 px-4 py-3 text-sm text-orange-200 shadow-xl backdrop-blur-xl">
-            This PDF was already indexed. Reused the existing embeddings.
-          </div>
-        )}
         {graph.error && (
           <p className="absolute left-4 top-20 z-20 text-sm text-red-400">
             {graph.error.message}

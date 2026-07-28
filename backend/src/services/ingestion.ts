@@ -79,3 +79,12 @@ export async function ingestDocument(documentId: string): Promise<void> {
     );
   }
 }
+
+export async function resumePendingIngestions(): Promise<void> {
+  const rows = db
+    .query(
+      "SELECT id FROM documents WHERE status NOT IN ('ready','failed') ORDER BY created_at",
+    )
+    .all() as Array<{ id: string }>;
+  for (const row of rows) await ingestDocument(row.id);
+}

@@ -24,14 +24,14 @@ export async function buildKnowledgeGraph(documentId: string): Promise<void> {
                     "SELECT COUNT(*) count FROM chunks WHERE document_id=?",
                   )
                   .get(documentId) as { count: number }
-              ).count / 20,
+              ).count / 8,
             ),
           ) ===
         0,
     )
-    .slice(0, 20)
+    .slice(0, 8)
     .map((c) => ({
-      content: c.content.slice(0, 1500),
+      content: c.content.slice(0, 800),
       pageNumber: c.page_number,
     }));
   const graph = await extractConceptGraph({ documentTitle: doc.name, chunks });
