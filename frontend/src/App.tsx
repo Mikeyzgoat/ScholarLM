@@ -1,1 +1,2 @@
-export default function App(){return <main className="grid min-h-full place-items-center"><h1 className="text-2xl font-semibold">ScholarLM</h1></main>}
+import {Routes,Route} from "react-router-dom";import HomePage from "./pages/HomePage";
+export default function App(){return <Routes><Route path="/" element={<HomePage/>}/><Route path="*" element={<main className="p-8">Page not found</main>}/></Routes>}
