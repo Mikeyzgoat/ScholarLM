@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -23,6 +23,7 @@ import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { DocumentQA } from "../components/rag/DocumentQA";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import { activateDocumentIndex } from "../services/rag";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
   const [searchParams] = useSearchParams();
@@ -54,6 +55,12 @@ export default function WorkspacePage() {
   const status = useDocumentStatus(documentId);
   const search = useSemanticSearch(documentId);
   const graph = useKnowledgeGraph(documentId, status.status?.status);
+  useEffect(() => {
+    if (!documentId || status.status?.status !== "ready") return;
+    void activateDocumentIndex(documentId).catch((error) => {
+      console.warn("Could not prewarm the active PDF index", error);
+    });
+  }, [documentId, status.status?.status]);
   const selectNode = useCallback((n: GraphNode) => {
     if (n.pageNumber) setActivePage(n.pageNumber);
   }, []);

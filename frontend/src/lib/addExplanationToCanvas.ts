@@ -9,16 +9,17 @@ export function addExplanationToCanvas(
   },
 ): void {
   const viewport = editor.getViewportPageBounds();
-  const page = input.pageNumber ? `Page ${input.pageNumber}\n` : "";
+  const heading = input.pageNumber
+    ? `Explanation · Page ${input.pageNumber}\n\n`
+    : "";
   editor.createShape({
     type: "text",
     x: viewport.center.x - 210,
     y: viewport.center.y - 80,
     props: {
-      richText: toRichText(
-        `${page}Selected: ${input.selectedText}\n\n${input.explanation}`,
-      ),
+      richText: toRichText(`${heading}${input.explanation}`),
       color: "orange",
+      font: "sans",
       size: "m",
       autoSize: false,
       w: 420,

@@ -41,6 +41,9 @@ export function DocumentQA({
       <div className="mb-3 flex items-center gap-2">
         <BookOpenCheck size={16} className="text-orange-400" />
         <h2 className="text-sm font-semibold text-stone-100">Ask the PDF</h2>
+        <span className="ml-auto rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] uppercase tracking-wide text-emerald-300">
+          Open PDF only
+        </span>
       </div>
       <div className="max-h-72 space-y-3 overflow-auto">
         {turns.map((turn, index) => (

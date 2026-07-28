@@ -10,3 +10,12 @@ export function askDocument(input: {
     body: JSON.stringify(input),
   });
 }
+
+export function activateDocumentIndex(
+  documentId: string,
+): Promise<{ documentId: string; chunkCount: number; active: boolean }> {
+  return apiFetch("/qa/activate", {
+    method: "POST",
+    body: JSON.stringify({ documentId }),
+  });
+}

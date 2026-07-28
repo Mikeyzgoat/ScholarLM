@@ -181,6 +181,15 @@ input::placeholder {
   background: white;
 }
 
+#root .tl-container {
+  --tl-font-draw: "Google Sans Flex", "Google Sans", sans-serif;
+  --tl-font-sans: "Google Sans Flex", "Google Sans", sans-serif;
+  --tl-font-serif: "Google Sans Flex", "Google Sans", sans-serif;
+  --tl-font-mono: "Google Sans Flex", "Google Sans", sans-serif;
+  font-family:
+    "Google Sans Flex", "Google Sans", "Product Sans", sans-serif;
+}
+
 @supports not (backdrop-filter: blur(1px)) {
   .bg-white {
     background-color: #151515 !important;

@@ -16,12 +16,12 @@ export function Topbar() {
       <span className="font-semibold tracking-tight lg:hidden">ScholarLM</span>
       {q.data && (
         <>
-          <span className="ml-auto truncate text-sm text-stone-600">
+          <span className="ml-1 max-w-[40vw] truncate text-sm font-medium text-stone-300">
             {q.data.name}
           </span>
           <Link
             to={`/graph/${q.data.id}`}
-            className="ml-4 flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-white/5 hover:text-orange-300"
+            className="ml-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-white/5 hover:text-orange-300"
           >
             <GitFork size={16} />
             Graph

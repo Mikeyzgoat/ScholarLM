@@ -2,8 +2,42 @@ import { Hono } from "hono";
 import { db } from "../db/database";
 import type { DocumentRecord } from "../types";
 import { answerDocumentQuestion } from "../services/rag";
+import { activateDocumentVectorIndex } from "../services/vectorIndex";
 
 const rag = new Hono();
+
+rag.post("/activate", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => null);
+  const documentId =
+    body && typeof body === "object"
+      ? (body as { documentId?: unknown }).documentId
+      : null;
+  if (typeof documentId !== "string" || !documentId.trim())
+    return c.json(
+      { error: { message: "Document ID is required", code: "INVALID_INPUT" } },
+      400,
+    );
+  const document = db
+    .query("SELECT * FROM documents WHERE id=?")
+    .get(documentId) as DocumentRecord | null;
+  if (!document)
+    return c.json(
+      { error: { message: "Document not found", code: "NOT_FOUND" } },
+      404,
+    );
+  if (document.status !== "ready")
+    return c.json(
+      {
+        error: {
+          message: "Document embeddings are not ready yet",
+          code: "DOCUMENT_NOT_READY",
+        },
+      },
+      409,
+    );
+  const chunkCount = activateDocumentVectorIndex(documentId);
+  return c.json({ documentId, chunkCount, active: true });
+});
 
 rag.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);

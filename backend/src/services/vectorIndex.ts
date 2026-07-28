@@ -8,8 +8,13 @@ export interface IndexedChunk {
 }
 
 const documentIndexes = new Map<string, IndexedChunk[]>();
+let activeDocumentId: string | null = null;
 
 export function getDocumentVectorIndex(documentId: string): IndexedChunk[] {
+  if (activeDocumentId !== documentId) {
+    documentIndexes.clear();
+    activeDocumentId = documentId;
+  }
   const cached = documentIndexes.get(documentId);
   if (cached) return cached;
   const index = (
@@ -26,6 +31,11 @@ export function getDocumentVectorIndex(documentId: string): IndexedChunk[] {
   return index;
 }
 
+export function activateDocumentVectorIndex(documentId: string): number {
+  return getDocumentVectorIndex(documentId).length;
+}
+
 export function invalidateDocumentVectorIndex(documentId: string): void {
   documentIndexes.delete(documentId);
+  if (activeDocumentId === documentId) activeDocumentId = null;
 }
