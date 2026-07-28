@@ -30,6 +30,7 @@ interface CachedExplanation {
   positionKey: string;
   selection: PageHighlight;
   text: string;
+  mode?: "explain" | "regenerate" | "simplify";
 }
 
 function selectionPositionKey(selection: PageHighlight): string {
@@ -75,6 +76,7 @@ export function PDFViewer({
     selectedText: string;
     explanation: string;
     pageNumber: number;
+    mode?: "explain" | "regenerate" | "simplify";
   }) => void;
 }) {
   const speech = useSpeech();
@@ -88,6 +90,7 @@ export function PDFViewer({
     [inlineExplanation, setInlineExplanation] = useState<{
       selection: PageHighlight;
       text: string;
+      mode?: "explain" | "regenerate" | "simplify";
       error: string;
       loading: boolean;
     } | null>(null),
@@ -203,6 +206,7 @@ export function PDFViewer({
   async function explainSelection(
     selection: PageHighlight,
     force = false,
+    mode: "explain" | "regenerate" | "simplify" = "explain",
   ) {
     const generation = ++explanationGeneration.current;
     speech.stop();
@@ -235,12 +239,18 @@ export function PDFViewer({
         selectedText: selection.text,
         documentTitle,
         pageNumber: selection.pageNumber,
+        mode,
+        previousExplanation:
+          mode === "explain"
+            ? undefined
+            : cached?.text || inlineExplanation?.text || undefined,
       });
       const explanation = cleanExplanation(response.explanation);
       if (generation !== explanationGeneration.current) return;
       setInlineExplanation({
         selection,
         text: explanation,
+        mode,
         error: "",
         loading: false,
       });
@@ -253,6 +263,7 @@ export function PDFViewer({
         selectedText: selection.text,
         explanation,
         pageNumber: selection.pageNumber,
+        mode,
       });
       await speech.speak(explanation, selection.text);
     } catch (error) {
@@ -354,11 +365,32 @@ export function PDFViewer({
                   aria-label="Retry explanation"
                   title="Generate a new explanation"
                   onClick={() =>
-                    void explainSelection(inlineExplanation.selection, true)
+                    void explainSelection(
+                      inlineExplanation.selection,
+                      true,
+                      "regenerate",
+                    )
                   }
-                  className="absolute right-8 top-1 rounded p-1 text-stone-500 transition hover:bg-white/5 hover:text-orange-300"
+                  className="absolute right-14 top-1 rounded p-1 text-stone-500 transition hover:bg-white/5 hover:text-orange-300"
                 >
                   <RotateCcw size={13} />
+                </button>
+              )}
+              {!inlineExplanation.loading && (
+                <button
+                  type="button"
+                  aria-label="Simplify explanation"
+                  title="Generate a simpler explanation"
+                  onClick={() =>
+                    void explainSelection(
+                      inlineExplanation.selection,
+                      true,
+                      "simplify",
+                    )
+                  }
+                  className="absolute right-8 top-1 rounded p-1 text-stone-500 transition hover:bg-white/5 hover:text-purple-300"
+                >
+                  <Sparkles size={13} />
                 </button>
               )}
               <button

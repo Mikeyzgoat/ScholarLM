@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { getDocument, getDocumentFileUrl } from "../services/documents";
@@ -33,17 +33,16 @@ export default function WorkspacePage() {
     return Number.isInteger(requested) && requested > 0 ? requested : 1;
   });
   const [selectedText, setSelectedText] = useState("");
+  const [selectedTexts, setSelectedTexts] = useState<string[]>();
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();
-  const [selectionOrigin, setSelectionOrigin] = useState<
-    "pdf" | "canvas" | null
-  >(null);
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
   const queuedCanvasExplanations = useRef<
     Array<{
       selectedText: string;
       explanation: string;
       pageNumber?: number;
+      mode?: "explain" | "regenerate" | "simplify";
     }>
   >([]);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
@@ -69,6 +68,7 @@ export default function WorkspacePage() {
       selectedText: string;
       explanation: string;
       pageNumber?: number;
+      mode?: "explain" | "regenerate" | "simplify";
     }) => {
       if (canvasEditor) addExplanationToCanvas(canvasEditor, input);
       else queuedCanvasExplanations.current.push(input);
@@ -153,9 +153,9 @@ export default function WorkspacePage() {
               onPageChange={setActivePage}
               onTextSelected={(s) => {
                 setSelectedText(s.text);
+                setSelectedTexts(s.text ? [s.text] : undefined);
                 setSelectionImage(undefined);
                 setSelectedTextPage(s.pageNumber);
-                setSelectionOrigin("pdf");
               }}
               onExplanationGenerated={saveExplanationToCanvas}
             />
@@ -166,15 +166,15 @@ export default function WorkspacePage() {
               documentId={documentId}
               onTextSelected={(text) => {
                 setSelectedText(text);
+                setSelectedTexts(text ? [text] : undefined);
                 setSelectionImage(undefined);
                 setSelectedTextPage(null);
-                setSelectionOrigin("canvas");
               }}
               onCanvasSelection={(selection) => {
                 setSelectedText(selection.text);
+                setSelectedTexts(selection.texts);
                 setSelectionImage(selection.imageDataUrl);
                 setSelectedTextPage(null);
-                setSelectionOrigin("canvas");
               }}
               onEditorReady={(editor) => {
                 setCanvasEditor(editor);
@@ -196,17 +196,25 @@ export default function WorkspacePage() {
       >
         <ExplainPanel
           selectedText={selectedText}
+          selectedTexts={selectedTexts}
           selectionImage={selectionImage}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
-          liveSelections={selectionOrigin !== "pdf"}
           onPlotGenerated={(plot, equation) => {
             if (canvasEditor) drawMathPlot(canvasEditor, plot, equation);
           }}
           onExplanationGenerated={saveExplanationToCanvas}
         />
-        <motion.section layout className="rounded-lg border bg-white p-4">
-          <h2 className="mb-2 font-semibold">Knowledge graph</h2>
+        <motion.section layout className="min-w-0 rounded-lg border bg-white p-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="font-semibold">Knowledge graph</h2>
+            <Link
+              to={`/graph/${documentId}`}
+              className="text-xs text-orange-300 hover:text-orange-200"
+            >
+              Open atlas ↗
+            </Link>
+          </div>
           {graph.error && (
             <p className="text-sm text-red-700">{graph.error.message}</p>
           )}
@@ -214,6 +222,7 @@ export default function WorkspacePage() {
             graph={graph.graph}
             isLoading={graph.isLoading}
             onNodeSelect={selectNode}
+            className="h-[clamp(16rem,34vh,28rem)] min-h-64 w-full rounded-lg"
           />
         </motion.section>
       </motion.aside>

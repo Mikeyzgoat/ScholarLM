@@ -19,7 +19,70 @@ export function NotesCanvas({
 }) {
   const selectionCleanup = useRef<(() => void) | null>(null);
   const lastSelection = useRef("");
-  useEffect(() => () => selectionCleanup.current?.(), []);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = root.current;
+    if (!host) return;
+    let offset = { x: 0, y: 0 };
+    try {
+      const saved = localStorage.getItem("scholarlm-style-panel-position");
+      if (saved) offset = JSON.parse(saved) as { x: number; y: number };
+    } catch {
+      localStorage.removeItem("scholarlm-style-panel-position");
+    }
+    const applyPosition = () => {
+      host
+        .querySelectorAll<HTMLElement>(".tlui-style-panel__wrapper")
+        .forEach((panel) => {
+          panel.style.translate = `${offset.x}px ${offset.y}px`;
+          panel.dataset.floating = "true";
+        });
+    };
+    const observer = new MutationObserver(applyPosition);
+    observer.observe(host, { childList: true, subtree: true });
+    applyPosition();
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      const panel = target.closest<HTMLElement>(
+        ".tlui-style-panel__wrapper",
+      );
+      if (!panel) return;
+      const bounds = panel.getBoundingClientRect();
+      const onHandle =
+        event.clientY >= bounds.top - 28 && event.clientY <= bounds.top + 8;
+      if (!onHandle) return;
+      event.preventDefault();
+      const start = {
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        offsetX: offset.x,
+        offsetY: offset.y,
+      };
+      const move = (moveEvent: PointerEvent) => {
+        offset = {
+          x: start.offsetX + moveEvent.clientX - start.pointerX,
+          y: start.offsetY + moveEvent.clientY - start.pointerY,
+        };
+        panel.style.translate = `${offset.x}px ${offset.y}px`;
+      };
+      const up = () => {
+        localStorage.setItem(
+          "scholarlm-style-panel-position",
+          JSON.stringify(offset),
+        );
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    };
+    host.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      observer.disconnect();
+      host.removeEventListener("pointerdown", onPointerDown);
+      selectionCleanup.current?.();
+    };
+  }, []);
 
   const mount = useCallback(
     (editor: Editor) => {
@@ -46,10 +109,9 @@ export function NotesCanvas({
           const inputShapes = selectedShapes.filter(
             (shape) => !isGeneratedExplanationShape(shape),
           );
-          const parts: string[] = [];
-          const collectText = (value: unknown): void => {
+          const collectText = (value: unknown, parts: string[]): void => {
             if (Array.isArray(value)) {
-              value.forEach(collectText);
+              value.forEach((child) => collectText(child, parts));
               return;
             }
             if (value && typeof value === "object") {
@@ -58,16 +120,23 @@ export function NotesCanvas({
                 parts.push(record.text.trim());
               Object.entries(record)
                 .filter(([key]) => key !== "text")
-                .forEach(([, child]) => collectText(child));
+                .forEach(([, child]) => collectText(child, parts));
             }
           };
-          inputShapes.forEach((shape) => {
+          const texts = inputShapes.flatMap((shape) => {
+            const parts: string[] = [];
             const props = shape.props as Record<string, unknown>;
             if (typeof props.text === "string" && props.text.trim())
               parts.push(props.text.trim());
-            if (props.richText) collectText(props.richText);
+            if (props.richText) collectText(props.richText, parts);
+            const value = [...new Set(parts)].join(" ").trim();
+            return value ? [value] : [];
           });
-          const text = [...new Set(parts)].join(" ").trim();
+          const text = texts
+            .map((value, index) =>
+              texts.length > 1 ? `Selection ${index + 1}: ${value}` : value,
+            )
+            .join("\n\n");
           const signature = selectedShapes
             .map((shape) => shape.id)
             .sort()
@@ -89,7 +158,7 @@ export function NotesCanvas({
           const containsDrawing = inputShapes.some((shape) =>
             ["draw", "line", "arrow"].includes(shape.type),
           );
-          if (!containsDrawing) onCanvasSelection?.({ text });
+          if (!containsDrawing) onCanvasSelection?.({ text, texts });
           else
             void editor
               .toImageDataUrl(inputShapes, {
@@ -102,6 +171,7 @@ export function NotesCanvas({
                 if (lastSelection.current !== signature) return;
                 onCanvasSelection?.({
                   text: text || "Handwritten equation",
+                  texts,
                   imageDataUrl: url,
                 });
               })
@@ -116,6 +186,7 @@ export function NotesCanvas({
   );
   return (
     <div
+      ref={root}
       className={
         embedded ? "relative h-full min-h-[576px]" : "absolute inset-0 top-14"
       }

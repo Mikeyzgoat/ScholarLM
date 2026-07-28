@@ -92,6 +92,11 @@ export function KnowledgeGraph({
       stagePadding: 60,
     });
     renderer.current = sigma;
+    const resizeObserver = new ResizeObserver(() => {
+      sigma.resize();
+      sigma.refresh();
+    });
+    resizeObserver.observe(container.current);
     runPhysics();
     let draggedNode: string | null = null;
     sigma.on("clickNode", ({ node }) => {
@@ -121,6 +126,7 @@ export function KnowledgeGraph({
       runPhysics(24);
     });
     return () => {
+      resizeObserver.disconnect();
       cancelAnimationFrame(physicsFrame.current);
       sigma.kill();
       renderer.current = null;

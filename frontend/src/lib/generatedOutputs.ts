@@ -7,10 +7,11 @@ export interface GeneratedOutputRecord {
   text: string;
   sourceText: string;
   pageNumber?: number;
+  mode?: "explain" | "regenerate" | "simplify";
   createdAt: string;
 }
 
-function hashText(value: string): string {
+export function generatedOutputKey(value: string): string {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
@@ -34,8 +35,9 @@ export function registerGeneratedOutput(input: {
   text: string;
   sourceText: string;
   pageNumber?: number;
+  mode?: "explain" | "regenerate" | "simplify";
 }): GeneratedOutputRecord {
-  const id = `explanation:${hashText(
+  const id = `explanation:${generatedOutputKey(
     `${input.pageNumber ?? "canvas"}:${input.sourceText}:${input.text}`,
   )}`;
   const records = readRecords();
@@ -45,6 +47,7 @@ export function registerGeneratedOutput(input: {
     text: input.text,
     sourceText: input.sourceText,
     pageNumber: input.pageNumber,
+    mode: input.mode,
     createdAt: records[id]?.createdAt ?? new Date().toISOString(),
   };
   records[id] = record;
@@ -60,6 +63,23 @@ export function registerGeneratedOutput(input: {
     console.warn("Could not persist the generated-output map", error);
   }
   return record;
+}
+
+export function findLatestGeneratedOutput(
+  sourceText: string,
+  pageNumber?: number,
+): GeneratedOutputRecord | null {
+  const normalized = sourceText.trim().replace(/\s+/g, " ");
+  return (
+    Object.values(readRecords())
+      .filter(
+        (record) =>
+          record.sourceText.trim().replace(/\s+/g, " ") === normalized &&
+          record.pageNumber === pageNumber,
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ??
+    null
+  );
 }
 
 export function isGeneratedExplanationShape(shape: {

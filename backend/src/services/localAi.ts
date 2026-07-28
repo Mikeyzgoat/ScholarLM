@@ -126,9 +126,12 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
 export async function explainCanvasSelection(input: {
   imageDataUrl?: string;
   selectedText?: string;
+  selectedTexts?: string[];
   documentTitle?: string;
   pageNumber?: number;
   graphRequested?: boolean;
+  mode?: "explain" | "regenerate" | "simplify";
+  previousExplanation?: string;
   signal?: AbortSignal;
 }): Promise<CanvasAnalysis> {
   const prompt = `Analyze the selected mathematics${input.imageDataUrl ? " in the image" : ""}.
@@ -138,7 +141,10 @@ Return only JSON:
 {"recognizedEquation":"...","explanation":"...","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
 ${input.documentTitle ? `Document context: ${input.documentTitle}` : ""}
 ${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
-${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
+${input.selectedTexts?.length ? `Treat these as separate numbered selections and answer each separately:\n${input.selectedTexts.map((text, index) => `Selection ${index + 1}: ${text}`).join("\n")}\nRequired explanation format: "Answer 1: ...\\n<ANSWER_SPLIT>\\nAnswer 2: ..." with exactly one answer per selection.` : input.selectedText ? `Associated text: ${input.selectedText}` : ""}
+${input.previousExplanation ? `Previous explanation: ${input.previousExplanation}` : ""}
+${input.mode === "simplify" ? "Rewrite the explanation more simply with shorter steps and intuitive language." : ""}
+${input.mode === "regenerate" ? "Use a new solution or teaching angle and improve on the previous explanation." : ""}`;
   const system =
     "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the explanation. Return valid JSON only.";
   return parseCanvasAnalysis(
@@ -208,8 +214,11 @@ export async function generateQueryEmbedding(text: string): Promise<number[]> {
 
 export async function explainSelectedText(input: {
   selectedText: string;
+  selectedTexts?: string[];
   documentTitle?: string;
   pageNumber?: number;
+  mode?: "explain" | "regenerate" | "simplify";
+  previousExplanation?: string;
   signal?: AbortSignal;
 }): Promise<string> {
   const context = [
@@ -218,9 +227,34 @@ export async function explainSelectedText(input: {
   ]
     .filter(Boolean)
     .join("\n");
-  const prompt = `${context}\n\nSELECTED PASSAGE:\n${input.selectedText}`;
+  const selections =
+    input.selectedTexts?.length && input.selectedTexts.length > 1
+      ? input.selectedTexts
+          .map((text, index) => `Selection ${index + 1}:\n${text}`)
+          .join("\n\n")
+      : input.selectedText;
+  const revisionContext = input.previousExplanation
+    ? `\n\nPREVIOUS EXPLANATION:\n${input.previousExplanation}`
+    : "";
+  const prompt = `${context}\n\nSELECTED PASSAGE${input.selectedTexts?.length ? "S" : ""}:\n${selections}${revisionContext}`;
+  const outputFormat =
+    input.selectedTexts && input.selectedTexts.length > 1
+      ? `Return exactly ${input.selectedTexts.length} answer sections in this plain-text format:
+Answer 1:
+<answer for Selection 1>
+<ANSWER_SPLIT>
+Answer 2:
+<answer for Selection 2>
+Continue the same numbering for every selection. Never merge the selections or omit an answer.`
+      : "";
+  const revisionInstruction =
+    input.mode === "simplify"
+      ? "Rewrite the previous explanation using simpler vocabulary, shorter sentences, and one intuitive example where useful."
+      : input.mode === "regenerate"
+        ? "Create a genuinely new explanation with a different teaching angle. Improve clarity instead of paraphrasing sentence by sentence."
+        : "Explain the passage clearly.";
   const system =
-    'Explain only the selected passage in English. Do not answer unrelated questions. Do not repeat or quote the selected passage, and never prefix the answer with "Selected" or "Selected passage". Start directly with the explanation. Use clear educational language, preserve important technical terminology, and use short paragraphs. Return plain text only: no Markdown, headings, bullets, code fences, or LaTeX delimiters. Write mathematical notation with Unicode symbols.';
+    `${revisionInstruction} ${outputFormat} Explain only the selected passage in English. Do not answer unrelated questions. Do not repeat or quote the selected passage, and never prefix the answer with "Selected" or "Selected passage". Start directly with the explanation. Use clear educational language, preserve important technical terminology, and use short paragraphs. Return plain text only: no Markdown, headings, bullets, code fences, or LaTeX delimiters. Write mathematical notation with Unicode symbols.`;
   return ollamaGenerate({ prompt, system, signal: input.signal });
 }
 

@@ -61,6 +61,8 @@ export interface ExplanationResponse {
   explanation: string;
   recognizedEquation?: string;
   plot?: MathPlot;
+  historyId?: string;
+  revisionCount?: number;
 }
 export interface MathPlot {
   title: string;
@@ -70,6 +72,7 @@ export interface MathPlot {
 }
 export interface CanvasSelection {
   text: string;
+  texts?: string[];
   imageDataUrl?: string;
 }
 export interface NotePage {

@@ -20,6 +20,7 @@ export default function StandaloneCanvasPage() {
   const { canvasId = "" } = useParams();
   const canvas = getLocalCanvas(canvasId);
   const [selectedText, setSelectedText] = useState("");
+  const [selectedTexts, setSelectedTexts] = useState<string[]>();
   const [selectionImage, setSelectionImage] = useState<string>();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -163,15 +164,20 @@ export default function StandaloneCanvasPage() {
           note={note}
           embedded
           onEditorReady={connectEditor}
-          onTextSelected={setSelectedText}
+          onTextSelected={(text) => {
+            setSelectedText(text);
+            setSelectedTexts(text ? [text] : undefined);
+          }}
           onCanvasSelection={(selection) => {
             setSelectedText(selection.text);
+            setSelectedTexts(selection.texts);
             setSelectionImage(selection.imageDataUrl);
           }}
         />
         <aside className="overflow-auto border-l p-3">
           <ExplainPanel
             selectedText={selectedText}
+            selectedTexts={selectedTexts}
             selectionImage={selectionImage}
             pageNumber={null}
             documentTitle="Independent canvas"

@@ -23,6 +23,7 @@ export default function NotesPage() {
   const [editor, setEditor] = useState<Editor | null>(null),
     [note, setNote] = useState<NotePage | undefined>(),
     [selectedText, setSelectedText] = useState(""),
+    [selectedTexts, setSelectedTexts] = useState<string[]>(),
     [selectionImage, setSelectionImage] = useState<string>(),
     [title, setTitle] = useState(""),
     [titleSaveState, setTitleSaveState] = useState<SaveState | null>(null);
@@ -102,16 +103,19 @@ export default function NotesPage() {
         onEditorReady={setEditor}
         onTextSelected={(text) => {
           setSelectedText(text);
+          setSelectedTexts(text ? [text] : undefined);
           setSelectionImage(undefined);
         }}
         onCanvasSelection={(selection) => {
           setSelectedText(selection.text);
+          setSelectedTexts(selection.texts);
           setSelectionImage(selection.imageDataUrl);
         }}
       />
       <aside className="absolute bottom-4 right-4 top-28 z-20 w-80 overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
         <ExplainPanel
           selectedText={selectedText}
+          selectedTexts={selectedTexts}
           selectionImage={selectionImage}
           pageNumber={null}
           documentTitle={note.title}

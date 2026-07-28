@@ -17,6 +17,7 @@ export function cleanExplanation(value: string): string {
     .replace(/\\pm\b/g, "±")
     .replace(/\\infty\b/g, "∞")
     .replace(/\\sum\b/g, "∑")
+    .replace(/\s*<ANSWER_SPLIT>\s*/g, "\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

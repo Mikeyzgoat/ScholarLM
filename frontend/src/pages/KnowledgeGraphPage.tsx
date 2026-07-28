@@ -107,8 +107,8 @@ export default function KnowledgeGraphPage() {
 
   const focus = useCallback((node: GraphNode) => setSelected(node), []);
   return (
-    <main className="grid h-[calc(100vh-3.5rem)] min-h-[640px] grid-cols-[320px_minmax(0,1fr)] overflow-hidden bg-neutral-950">
-      <aside className="z-10 overflow-auto border-r border-orange-400/10 bg-neutral-950/90 p-4 backdrop-blur-xl">
+    <main className="grid min-h-[calc(100vh-3.5rem)] grid-rows-[auto_minmax(420px,1fr)] overflow-hidden bg-neutral-950 lg:h-[calc(100vh-3.5rem)] lg:min-h-[640px] lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-1">
+      <aside className="z-10 max-h-[46vh] overflow-auto border-b border-orange-400/10 bg-neutral-950/90 p-4 backdrop-blur-xl lg:max-h-none lg:border-b-0 lg:border-r">
         <div className="mb-5 flex items-center gap-2">
           <Sparkles size={16} className="text-orange-400" />
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-orange-300">

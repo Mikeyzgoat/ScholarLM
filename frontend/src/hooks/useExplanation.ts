@@ -18,10 +18,13 @@ export function useExplanation() {
     explanation,
     explain: async (input: {
       selectedText?: string;
+      selectedTexts?: string[];
       imageDataUrl?: string;
       graphRequested?: boolean;
       documentTitle?: string;
       pageNumber?: number;
+      mode?: "explain" | "regenerate" | "simplify";
+      previousExplanation?: string;
     }) => {
       cancel();
       const id = ++generation.current;
@@ -52,6 +55,11 @@ export function useExplanation() {
     clear: () => {
       cancel();
       setExplanation("");
+      setError(null);
+    },
+    load: (value: string) => {
+      cancel();
+      setExplanation(value);
       setError(null);
     },
     isExplaining,
