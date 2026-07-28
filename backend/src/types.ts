@@ -33,7 +33,7 @@ export interface ChunkRecord {
   page_number: number;
   chunk_index: number;
   content: string;
-  embedding: string | null;
+  embedding: string | Uint8Array | null;
   created_at: string;
 }
 export interface ConceptRecord {
@@ -72,6 +72,14 @@ export interface SearchResult {
   pageNumber: number;
   content: string;
   score: number;
+}
+export interface RagSource extends SearchResult {
+  sourceId: string;
+}
+export interface RagAnswer {
+  answer: string;
+  sources: RagSource[];
+  grounded: boolean;
 }
 export interface ExplainRequest {
   selectedText?: string;

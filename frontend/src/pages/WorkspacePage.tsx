@@ -21,6 +21,7 @@ import {
 import type { GraphNode } from "../lib/types";
 import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
+import { DocumentQA } from "../components/rag/DocumentQA";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
   const [searchParams] = useSearchParams();
@@ -52,7 +53,7 @@ export default function WorkspacePage() {
     return <main className="p-6 text-red-700">Unable to load workspace.</main>;
   return (
     <motion.main
-      className="grid gap-4 p-4 xl:grid-cols-[260px_minmax(720px,1fr)_320px]"
+      className="grid gap-4 p-4 xl:grid-cols-[300px_minmax(720px,1fr)_320px]"
       initial={reduceMotion ? false : "hidden"}
       animate="visible"
       variants={{
@@ -67,6 +68,12 @@ export default function WorkspacePage() {
         }}
         transition={{ duration: 0.38, ease: "easeOut" }}
       >
+        <DocumentQA
+          documentId={documentId}
+          disabled={status.status?.status !== "ready"}
+          onSourceSelect={setActivePage}
+        />
+        <h2 className="mb-2 mt-5 text-sm font-semibold">Semantic search</h2>
         <SearchBar
           query={search.query}
           onQueryChange={search.setQuery}

@@ -30,6 +30,14 @@ export interface SearchResult {
   content: string;
   score: number;
 }
+export interface RagSource extends SearchResult {
+  sourceId: string;
+}
+export interface RagAnswer {
+  answer: string;
+  sources: RagSource[];
+  grounded: boolean;
+}
 export interface GraphNode {
   id: string;
   label: string;

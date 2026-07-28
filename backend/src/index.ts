@@ -9,6 +9,7 @@ import explanation from "./routes/explanation";
 import speech from "./routes/speech";
 import graph from "./routes/graph";
 import notes from "./routes/notes";
+import rag from "./routes/rag";
 import { resumePendingIngestions } from "./services/ingestion";
 initializeDatabase();
 await ensureUploadDirectory();
@@ -22,6 +23,7 @@ app.route("/explain", explanation);
 app.route("/tts", speech);
 app.route("/graph", graph);
 app.route("/notes", notes);
+app.route("/qa", rag);
 app.notFound((c) =>
   c.json({ error: { message: "Route not found", code: "NOT_FOUND" } }, 404),
 );
