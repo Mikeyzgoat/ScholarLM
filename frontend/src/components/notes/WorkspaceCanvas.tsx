@@ -11,13 +11,11 @@ import { SaveStatus } from "./SaveStatus";
 
 export function WorkspaceCanvas({
   documentId,
-  documentTitle,
   onTextSelected,
   onCanvasSelection,
   onEditorReady,
 }: {
   documentId: string;
-  documentTitle: string;
   onTextSelected?: (text: string) => void;
   onCanvasSelection?: (selection: CanvasSelection) => void;
   onEditorReady?: (editor: Editor) => void;
@@ -39,7 +37,7 @@ export function WorkspaceCanvas({
     if (notes.isLoading || notes.isError || note || createError) return;
     void createNote({
       documentId,
-      title: `${documentTitle} notes`,
+      title: "Untitled note",
       metadata: { page: 1 },
       snapshot: {},
     })
@@ -54,7 +52,6 @@ export function WorkspaceCanvas({
       );
   }, [
     documentId,
-    documentTitle,
     notes.data,
     notes.isLoading,
     notes.isError,

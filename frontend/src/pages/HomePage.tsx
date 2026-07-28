@@ -5,27 +5,14 @@ import { useNavigate } from "react-router-dom";
 import { UploadBox } from "../components/documents/UploadBox";
 import { DocumentCard } from "../components/documents/DocumentCard";
 import { listDocuments } from "../services/documents";
-import { createNote, listDocumentNotes } from "../services/notes";
 export default function HomePage() {
   const nav = useNavigate();
   const reduceMotion = useReducedMotion();
   const [navigationError, setNavigationError] = useState("");
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
-  async function openNotes(documentId: string, documentName: string) {
+  function openDocument(documentId: string) {
     setNavigationError("");
-    const notes = await listDocumentNotes(documentId);
-    const newest = notes[0];
-    if (newest) {
-      nav(`/notes/${newest.id}`);
-      return;
-    }
-    const note = await createNote({
-      documentId,
-      title: `${documentName} notes`,
-      metadata: { page: 1 },
-      snapshot: {},
-    });
-    nav(`/notes/${note.id}`);
+    nav(`/graph/${documentId}`);
   }
   return (
     <motion.main
@@ -44,8 +31,8 @@ export default function HomePage() {
         Upload a PDF to search, explore, and understand it.
       </p>
       <UploadBox
-        onUploaded={async (document) => {
-          await openNotes(document.id, document.name);
+        onUploaded={(document) => {
+          openDocument(document.id);
         }}
       />
       <h2 className="mb-3 mt-10 text-lg font-semibold">Recent documents</h2>
@@ -72,15 +59,7 @@ export default function HomePage() {
             <DocumentCard
               key={d.id}
               document={d}
-              onOpen={(id) =>
-                void openNotes(id, d.name).catch((error: unknown) =>
-                  setNavigationError(
-                    error instanceof Error
-                      ? error.message
-                      : "Unable to open notes.",
-                  ),
-                )
-              }
+              onOpen={openDocument}
             />
           ))}
         </motion.div>

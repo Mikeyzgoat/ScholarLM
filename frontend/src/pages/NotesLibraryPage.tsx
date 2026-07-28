@@ -1,10 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, PencilRuler, StickyNote } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  Pencil,
+  PencilRuler,
+  StickyNote,
+  X,
+} from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { NotePage } from "../lib/types";
 import { listDocuments } from "../services/documents";
-import { listDocumentNotes } from "../services/notes";
+import { listDocumentNotes, updateNote } from "../services/notes";
 
 interface LibraryNote extends NotePage {
   documentName: string;
@@ -28,10 +36,46 @@ async function listAllNotes(): Promise<LibraryNote[]> {
 
 export default function NotesLibraryPage() {
   const reduceMotion = useReducedMotion();
+  const client = useQueryClient();
+  const [renaming, setRenaming] = useState<LibraryNote | null>(null);
+  const [nextTitle, setNextTitle] = useState("");
   const notes = useQuery({
     queryKey: ["notes", "library"],
     queryFn: listAllNotes,
   });
+  const rename = useMutation({
+    mutationFn: (note: LibraryNote) =>
+      updateNote({
+        noteId: note.id,
+        title: nextTitle.trim(),
+        expectedRevision: note.revision,
+      }),
+    onSuccess: (updated) => {
+      client.setQueriesData<LibraryNote[]>(
+        { queryKey: ["notes"] },
+        (items) =>
+          items?.map((item) =>
+            item.id === updated.id
+              ? {
+                  ...item,
+                  ...updated,
+                  documentName: item.documentName,
+                }
+              : item,
+          ),
+      );
+      client.setQueryData(["note", updated.id], updated);
+      setRenaming(null);
+      setNextTitle("");
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ["notes"] }),
+  });
+
+  function beginRename(note: LibraryNote) {
+    rename.reset();
+    setRenaming(note);
+    setNextTitle(note.title);
+  }
 
   return (
     <main className="mx-auto max-w-6xl p-6 md:p-8">
@@ -84,12 +128,65 @@ export default function NotesLibraryPage() {
               visible: { opacity: 1, y: 0 },
             }}
           >
-            <Link
-              to={`/notes/${note.id}`}
-              className="group flex min-h-44 flex-col rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:-translate-y-0.5 hover:border-orange-400/30 hover:bg-white/[0.055]"
-            >
-              <StickyNote size={20} className="text-orange-300" />
-              <h2 className="mt-5 truncate font-semibold">{note.title}</h2>
+            <div className="group flex min-h-44 flex-col rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:-translate-y-0.5 hover:border-orange-400/30 hover:bg-white/[0.055]">
+              <div className="flex items-center justify-between">
+                <StickyNote size={20} className="text-orange-300" />
+                <button
+                  type="button"
+                  aria-label={`Rename ${note.title}`}
+                  onClick={() => beginRename(note)}
+                  className="rounded-lg p-2 text-stone-500 hover:bg-white/5 hover:text-orange-300"
+                >
+                  <Pencil size={15} />
+                </button>
+              </div>
+              {renaming?.id === note.id ? (
+                <div className="mt-4">
+                  <input
+                    autoFocus
+                    value={nextTitle}
+                    maxLength={200}
+                    onChange={(event) => setNextTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        nextTitle.trim() &&
+                        !rename.isPending
+                      )
+                        rename.mutate(note);
+                      if (event.key === "Escape") setRenaming(null);
+                    }}
+                    className="w-full rounded-lg border border-orange-400/30 bg-black/20 px-3 py-2 text-sm outline-none focus:border-orange-400"
+                    aria-label="New note title"
+                  />
+                  <div className="mt-2 flex justify-end gap-1">
+                    <button
+                      type="button"
+                      aria-label="Cancel rename"
+                      onClick={() => setRenaming(null)}
+                      className="rounded p-1.5 text-stone-500 hover:bg-white/5"
+                    >
+                      <X size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Save note name"
+                      disabled={!nextTitle.trim() || rename.isPending}
+                      onClick={() => rename.mutate(note)}
+                      className="rounded bg-orange-500/15 p-1.5 text-orange-300 disabled:opacity-40"
+                    >
+                      <Check size={15} />
+                    </button>
+                  </div>
+                  {rename.isError && (
+                    <p className="mt-2 text-xs text-red-400">
+                      {rename.error.message}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <h2 className="mt-4 truncate font-semibold">{note.title}</h2>
+              )}
               <p className="mt-1 truncate text-xs text-stone-500">
                 {note.documentName}
               </p>
@@ -97,12 +194,15 @@ export default function NotesLibraryPage() {
                 <span className="text-[11px] text-stone-600">
                   Updated {new Date(note.updatedAt).toLocaleString()}
                 </span>
-                <ArrowUpRight
-                  size={16}
-                  className="text-stone-600 transition group-hover:text-orange-300"
-                />
+                <Link
+                  to={`/notes/${note.id}`}
+                  className="flex items-center gap-1 text-xs text-stone-500 transition hover:text-orange-300"
+                >
+                  Open
+                  <ArrowUpRight size={15} />
+                </Link>
               </div>
-            </Link>
+            </div>
           </motion.div>
         ))}
       </motion.div>

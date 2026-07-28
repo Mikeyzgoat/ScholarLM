@@ -125,7 +125,6 @@ export default function WorkspacePage() {
             <WorkspaceCanvas
               key={documentId}
               documentId={documentId}
-              documentTitle={doc.data.name}
               onTextSelected={(text) => {
                 setSelectedText(text);
                 setSelectionImage(undefined);
