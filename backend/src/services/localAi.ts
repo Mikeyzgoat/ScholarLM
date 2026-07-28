@@ -1,60 +1,58 @@
 import { env } from "../env";
 
-function requireSglang(): void {
-  if (!env.SGLANG_BASE_URL || !env.SGLANG_MODEL)
-    throw new Error(
-      "Local inference is not configured. Set SGLANG_BASE_URL and SGLANG_MODEL.",
-    );
-}
-
-async function sglangGenerate(input: {
+async function ollamaGenerate(input: {
   prompt: string;
   system?: string;
   json?: boolean;
+  imageDataUrl?: string;
 }): Promise<string> {
-  requireSglang();
-  const response = await fetch(`${env.SGLANG_BASE_URL}/v1/chat/completions`, {
+  const image = input.imageDataUrl?.replace(/^data:image\/[^;]+;base64,/, "");
+  const response = await fetch(`${env.OLLAMA_BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: env.SGLANG_MODEL,
+      model: env.OLLAMA_GENERATION_MODEL,
       messages: [
         ...(input.system ? [{ role: "system", content: input.system }] : []),
-        { role: "user", content: input.prompt },
+        {
+          role: "user",
+          content: input.prompt,
+          images: image ? [image] : undefined,
+        },
       ],
       stream: true,
-      temperature: 0.2,
-      response_format: input.json ? { type: "json_object" } : undefined,
-      chat_template_kwargs: { enable_thinking: false },
+      think: false,
+      format: input.json ? "json" : undefined,
+      options: { temperature: 0.2 },
     }),
   });
-  return readSglangStream(response);
+  return readOllamaStream(response);
 }
 
-async function readSglangStream(response: Response): Promise<string> {
+async function readOllamaStream(response: Response): Promise<string> {
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
-      error?: { message?: unknown };
+      error?: unknown;
     } | null;
     throw new Error(
-      typeof payload?.error?.message === "string"
-        ? payload.error.message
-        : `SGLang returned ${response.status}`,
+      typeof payload?.error === "string"
+        ? payload.error
+        : `Ollama returned ${response.status}`,
     );
   }
-  if (!response.body) throw new Error("SGLang returned no response stream");
+  if (!response.body) throw new Error("Ollama returned no response stream");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
   const consume = (line: string) => {
-    if (!line.startsWith("data:")) return;
-    const data = line.slice(5).trim();
-    if (!data || data === "[DONE]") return;
-    const part = JSON.parse(data) as {
-      choices?: Array<{ delta?: { content?: unknown } }>;
+    if (!line.trim()) return;
+    const part = JSON.parse(line) as {
+      message?: { content?: unknown };
+      error?: unknown;
     };
-    const token = part.choices?.[0]?.delta?.content;
+    if (typeof part.error === "string") throw new Error(part.error);
+    const token = part.message?.content;
     if (typeof token === "string") content += token;
   };
   while (true) {
@@ -66,7 +64,7 @@ async function readSglangStream(response: Response): Promise<string> {
     if (done) break;
   }
   consume(buffer);
-  if (!content.trim()) throw new Error("SGLang returned no content");
+  if (!content.trim()) throw new Error("Ollama returned no content");
   return content.trim();
 }
 
@@ -136,38 +134,14 @@ ${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
 ${input.selectedText ? `Associated text: ${input.selectedText}` : ""}`;
   const system =
     "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the explanation. Return valid JSON only.";
-  requireSglang();
-  const response = await fetch(
-    `${env.SGLANG_BASE_URL}/v1/chat/completions`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: env.SGLANG_MODEL,
-        messages: [
-          { role: "system", content: system },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              ...(input.imageDataUrl
-                ? [
-                    {
-                      type: "image_url",
-                      image_url: { url: input.imageDataUrl },
-                    },
-                  ]
-                : []),
-            ],
-          },
-        ],
-        temperature: 0.1,
-        stream: true,
-        chat_template_kwargs: { enable_thinking: false },
-      }),
-    },
+  return parseCanvasAnalysis(
+    await ollamaGenerate({
+      prompt,
+      system,
+      json: true,
+      imageDataUrl: input.imageDataUrl,
+    }),
   );
-  return parseCanvasAnalysis(await readSglangStream(response));
 }
 
 async function ollamaEmbedding(text: string): Promise<number[]> {
@@ -218,7 +192,7 @@ export async function explainSelectedText(input: {
   const prompt = `${context}\n\nSELECTED PASSAGE:\n${input.selectedText}`;
   const system =
     "Explain only the selected passage. Do not answer unrelated questions. Use clear educational language, preserve important technical terminology, use short paragraphs, and return plain text.";
-  return sglangGenerate({ prompt, system });
+  return ollamaGenerate({ prompt, system });
 }
 
 interface ConceptGraph {
@@ -269,7 +243,7 @@ export async function extractConceptGraph(input: {
 }): Promise<ConceptGraph> {
   const prompt = `Extract a knowledge graph from "${input.documentTitle}". Return concepts (maximum 30: label, description, pageNumber) and meaningful edges (source, target, relationship). Every edge label must exactly match a concept label. Use the most relevant page.\n\n${input.chunks.map((chunk) => `[Page ${chunk.pageNumber}] ${chunk.content}`).join("\n\n")}`;
   return parseConceptGraph(
-    await sglangGenerate({
+    await ollamaGenerate({
       prompt,
       system: "Return only a valid JSON object with concepts and edges.",
       json: true,

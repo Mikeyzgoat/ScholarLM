@@ -70,7 +70,7 @@ explanation.post("/", async (c) => {
     return c.json(
       {
         error: {
-          message: `${message} Start the local SGLang server and try again.`,
+          message: `${message} Make sure Ollama is running and try again.`,
           code: "LOCAL_INFERENCE_UNAVAILABLE",
         },
       },
