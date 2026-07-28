@@ -109,8 +109,19 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
       "SELECT id,source_concept_id source,target_concept_id target,relationship FROM concept_edges WHERE document_id=?",
     )
     .all(documentId) as GraphResponse["edges"];
+  const notes = db
+    .query(
+      "SELECT id,title,updated_at updatedAt FROM note_pages WHERE document_id=? ORDER BY updated_at DESC",
+    )
+    .all(documentId) as Array<{
+    id: string;
+    title: string;
+    updatedAt: string;
+  }>;
   const sourceId = `source:${documentId}`;
-  const connected = new Set(conceptEdges.flatMap((edge) => [edge.source, edge.target]));
+  const connected = new Set(
+    conceptEdges.flatMap((edge) => [edge.source, edge.target]),
+  );
   return {
     nodes: [
       {
@@ -126,6 +137,15 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
         kind: "concept" as const,
         documentId,
       })),
+      ...notes.map((note) => ({
+        id: `note:${note.id}`,
+        label: note.title,
+        description: "Linked canvas note",
+        pageNumber: null,
+        kind: "note" as const,
+        documentId,
+        noteId: note.id,
+      })),
     ],
     edges: [
       ...conceptEdges,
@@ -137,6 +157,12 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
           target: node.id,
           relationship: "contains",
         })),
+      ...notes.map((note) => ({
+        id: `note-link:${note.id}`,
+        source: sourceId,
+        target: `note:${note.id}`,
+        relationship: "note",
+      })),
     ],
   };
 }
@@ -153,6 +179,11 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
     status: string;
   }>;
   const hubId = "scholarlm:hub";
+  const notes = db
+    .query(
+      "SELECT id,document_id documentId,title FROM note_pages ORDER BY updated_at DESC",
+    )
+    .all() as Array<{ id: string; documentId: string; title: string }>;
   return {
     nodes: [
       {
@@ -173,12 +204,29 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
         kind: "source" as const,
         documentId: document.id,
       })),
+      ...notes.map((note) => ({
+        id: `note:${note.id}`,
+        label: note.title,
+        description: "Linked canvas note",
+        pageNumber: null,
+        kind: "note" as const,
+        documentId: note.documentId,
+        noteId: note.id,
+      })),
     ],
-    edges: documents.map((document) => ({
-      id: `library-link:${document.id}`,
-      source: hubId,
-      target: `source:${document.id}`,
-      relationship: "source",
-    })),
+    edges: [
+      ...documents.map((document) => ({
+        id: `library-link:${document.id}`,
+        source: hubId,
+        target: `source:${document.id}`,
+        relationship: "source",
+      })),
+      ...notes.map((note) => ({
+        id: `note-link:${note.id}`,
+        source: `source:${note.documentId}`,
+        target: `note:${note.id}`,
+        relationship: "note",
+      })),
+    ],
   };
 }

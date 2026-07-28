@@ -1,6 +1,18 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, FilePlus2, Search, Sparkles } from "lucide-react";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  ArrowUpRight,
+  BookOpen,
+  FilePlus2,
+  Plus,
+  Search,
+  Sparkles,
+  StickyNote,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { useDocumentStatus } from "../hooks/useDocumentStatus";
@@ -10,6 +22,8 @@ import {
 } from "../hooks/useKnowledgeGraph";
 import type { GraphNode } from "../lib/types";
 import { getDocument } from "../services/documents";
+import { createNote } from "../services/notes";
+import { createRandomCanvasName } from "../lib/randomName";
 
 function fuzzyScore(query: string, value: string): number {
   const needle = query.toLowerCase().trim();
@@ -35,6 +49,7 @@ export default function KnowledgeGraphPage() {
   const { documentId = "" } = useParams();
   const isGlobal = !documentId;
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const document = useQuery({
@@ -49,6 +64,32 @@ export default function KnowledgeGraphPage() {
   );
   const globalGraph = useGlobalKnowledgeGraph();
   const graph = isGlobal ? globalGraph : documentGraph;
+  const linkedNotes = useMemo(
+    () =>
+      graph.graph?.nodes.filter(
+        (node) =>
+          node.kind === "note" &&
+          node.documentId &&
+          node.documentId === selected?.documentId,
+      ) ?? [],
+    [graph.graph?.nodes, selected?.documentId],
+  );
+  const newNote = useMutation({
+    mutationFn: (sourceDocumentId: string) =>
+      createNote({
+        documentId: sourceDocumentId,
+        title: createRandomCanvasName(),
+        metadata: { source: "knowledge-graph" },
+        snapshot: {},
+      }),
+    onSuccess: async (note) => {
+      await queryClient.invalidateQueries({ queryKey: ["graph"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["notes", note.documentId],
+      });
+      navigate(`/notes/${note.id}`);
+    },
+  });
   const matches = useMemo(() => {
     if (!graph.graph?.nodes) return [];
     return graph.graph.nodes
@@ -75,13 +116,23 @@ export default function KnowledgeGraphPage() {
           </p>
         </div>
         <h1 className="truncate text-xl font-semibold">
-          {isGlobal ? "Knowledge atlas" : document.data?.name ?? "Knowledge graph"}
+          {isGlobal
+            ? "Knowledge atlas"
+            : document.data?.name ?? "Knowledge graph"}
         </h1>
         <p className="mt-2 text-sm leading-6 text-stone-500">
           {isGlobal
             ? "Every PDF becomes a source bead connected to your library."
             : "Search concepts fuzzily, follow their connections, and jump back to the source."}
         </p>
+        <button
+          type="button"
+          onClick={() => navigate("/upload?returnTo=graph")}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-orange-300/25 bg-orange-500/10 px-4 py-2.5 text-sm font-medium text-orange-100 shadow-[0_8px_30px_rgba(249,115,22,0.08)] transition hover:-translate-y-0.5 hover:border-orange-300/50 hover:bg-orange-500/15"
+        >
+          <FilePlus2 size={16} />
+          Add source
+        </button>
         <label className="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3">
           <Search size={16} className="text-stone-500" />
           <input
@@ -91,41 +142,54 @@ export default function KnowledgeGraphPage() {
             className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-stone-600"
           />
         </label>
-        <div className="mt-3 space-y-1.5">
-          {matches.map(({ node }) => (
-            <button
-              key={node.id}
-              type="button"
-              onClick={() => focus(node)}
-              className={`w-full rounded-xl border p-3 text-left transition ${
-                selected?.id === node.id
-                  ? "border-orange-400/30 bg-orange-500/10"
-                  : "border-transparent hover:border-white/10 hover:bg-white/5"
-              }`}
-            >
-              <span className="block truncate text-sm font-medium">
-                {node.label}
-              </span>
-              {node.description && (
-                <span className="mt-1 line-clamp-2 block text-xs leading-5 text-stone-500">
-                  {node.description}
+        {query.trim() && (
+          <div className="mt-3 space-y-1.5">
+            <p className="px-1 text-[11px] uppercase tracking-wide text-stone-600">
+              Search results
+            </p>
+            {matches.map(({ node }) => (
+              <button
+                key={node.id}
+                type="button"
+                onClick={() => focus(node)}
+                className={`w-full rounded-xl border p-3 text-left transition ${
+                  selected?.id === node.id
+                    ? "border-orange-400/30 bg-orange-500/10"
+                    : "border-transparent hover:border-white/10 hover:bg-white/5"
+                }`}
+              >
+                <span className="block truncate text-sm font-medium">
+                  {node.label}
                 </span>
-              )}
-            </button>
-          ))}
-        </div>
+                {node.description && (
+                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-stone-500">
+                    {node.description}
+                  </span>
+                )}
+              </button>
+            ))}
+            {!matches.length && (
+              <p className="px-1 py-3 text-xs text-stone-600">
+                No matching nodes.
+              </p>
+            )}
+          </div>
+        )}
         {selected && (
-          <section className="mt-5 rounded-2xl border border-orange-400/15 bg-orange-500/5 p-4">
+          <section className="mt-5 rounded-2xl border border-orange-400/20 bg-gradient-to-b from-orange-500/10 to-black/20 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.25)]">
+            <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-orange-400/70">
+              Selected node
+            </p>
             <h2 className="font-medium text-orange-200">{selected.label}</h2>
             <p className="mt-2 text-xs leading-5 text-stone-400">
               {selected.description || "No description available."}
             </p>
-            {selected.pageNumber && (
+            {selected.pageNumber && selected.documentId && (
               <button
                 type="button"
                 onClick={() =>
                   navigate(
-                    `/workspace/${documentId}?page=${selected.pageNumber}`,
+                    `/workspace/${selected.documentId}?page=${selected.pageNumber}`,
                   )
                 }
                 className="mt-3 flex items-center gap-2 text-xs text-orange-300"
@@ -135,12 +199,66 @@ export default function KnowledgeGraphPage() {
               </button>
             )}
             {selected.kind === "source" && selected.documentId && (
+              <div className="mt-4 space-y-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(`/workspace/${selected.documentId}`)
+                  }
+                  className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-stone-200 hover:border-orange-400/30 hover:text-orange-200"
+                >
+                  <BookOpen size={14} />
+                  Open document
+                  <ArrowUpRight size={13} className="ml-auto" />
+                </button>
+                <button
+                  type="button"
+                  disabled={newNote.isPending}
+                  onClick={() => newNote.mutate(selected.documentId!)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-stone-200 hover:border-orange-400/30 hover:text-orange-200 disabled:opacity-50"
+                >
+                  <Plus size={14} />
+                  {newNote.isPending ? "Creating note…" : "Open new note"}
+                </button>
+                <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <p className="mb-1.5 flex items-center gap-2 px-1 text-[11px] uppercase tracking-wide text-stone-500">
+                    <StickyNote size={12} />
+                    Existing notes
+                  </p>
+                  {linkedNotes.length ? (
+                    <div className="space-y-1">
+                      {linkedNotes.map((note) => (
+                        <button
+                          key={note.id}
+                          type="button"
+                          onClick={() => navigate(`/notes/${note.noteId}`)}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-stone-300 hover:bg-white/5 hover:text-purple-200"
+                        >
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-purple-400" />
+                          <span className="truncate">{note.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-1 py-1 text-xs text-stone-600">
+                      No linked notes yet.
+                    </p>
+                  )}
+                </div>
+                {newNote.isError && (
+                  <p className="text-xs text-red-400">
+                    {newNote.error.message}
+                  </p>
+                )}
+              </div>
+            )}
+            {selected.kind === "note" && selected.noteId && (
               <button
                 type="button"
-                onClick={() => navigate(`/graph/${selected.documentId}`)}
-                className="mt-3 flex items-center gap-2 text-xs text-orange-300"
+                onClick={() => navigate(`/notes/${selected.noteId}`)}
+                className="mt-3 flex items-center gap-2 text-xs text-purple-300"
               >
-                Explore source graph
+                Open linked note
                 <ArrowUpRight size={14} />
               </button>
             )}
@@ -148,14 +266,6 @@ export default function KnowledgeGraphPage() {
         )}
       </aside>
       <section className="relative min-w-0 bg-[radial-gradient(circle_at_50%_45%,rgba(249,115,22,0.08),transparent_42%)]">
-        <button
-          type="button"
-          onClick={() => navigate("/upload?returnTo=graph")}
-          className="absolute right-5 top-5 z-20 flex items-center gap-2 rounded-xl border border-orange-300/25 bg-neutral-900/65 px-4 py-2.5 text-sm font-medium text-orange-100 shadow-[0_8px_30px_rgba(249,115,22,0.12)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-orange-300/50 hover:bg-orange-500/15"
-        >
-          <FilePlus2 size={16} />
-          Add source
-        </button>
         {graph.error && (
           <p className="absolute left-4 top-20 z-20 text-sm text-red-400">
             {graph.error.message}

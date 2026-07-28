@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { GitFork, Home, StickyNote } from "lucide-react";
+import { Files, GitFork, Home, StickyNote } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { listDocuments } from "../../services/documents";
 import sidebarLogo from "../../assets/sidebar-logo.png";
@@ -31,6 +31,13 @@ export function Sidebar() {
       >
         <StickyNote size={18} />
         Notes
+      </Link>
+      <Link
+        to="/upload"
+        className="mt-1 flex gap-2 rounded p-2 hover:bg-stone-800"
+      >
+        <Files size={18} />
+        Documents
       </Link>
       <Link
         to="/graph"

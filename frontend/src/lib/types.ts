@@ -43,8 +43,9 @@ export interface GraphNode {
   label: string;
   description: string | null;
   pageNumber: number | null;
-  kind?: "hub" | "source" | "concept";
+  kind?: "hub" | "source" | "concept" | "note";
   documentId?: string;
+  noteId?: string;
 }
 export interface GraphEdge {
   id: string;

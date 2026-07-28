@@ -1,6 +1,6 @@
 import { useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileUp, GitFork, StickyNote } from "lucide-react";
+import { Files, GitFork, StickyNote } from "lucide-react";
 import { Link } from "react-router";
 import { getDocument } from "../../services/documents";
 export function Topbar() {
@@ -48,8 +48,8 @@ export function Topbar() {
         to="/upload"
         className="ml-2 flex items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-1.5 text-sm text-orange-300 hover:border-orange-400/40 hover:bg-orange-500/15"
       >
-        <FileUp size={16} />
-        Upload PDF
+        <Files size={16} />
+        Documents
       </Link>
     </header>
   );

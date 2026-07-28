@@ -37,13 +37,22 @@ export function KnowledgeGraph({
         label: n.label,
         x: n.kind === "hub" ? 0 : Math.cos(i) * 10,
         y: n.kind === "hub" ? 0 : Math.sin(i) * 10,
-        size: n.kind === "hub" ? 15 : n.kind === "source" ? 10 : 7,
+        size:
+          n.kind === "hub"
+            ? 15
+            : n.kind === "source"
+              ? 10
+              : n.kind === "note"
+                ? 6
+                : 7,
         color:
           n.kind === "hub"
             ? "#f97316"
             : n.kind === "source"
               ? "#fb923c"
-              : "#a8a29e",
+              : n.kind === "note"
+                ? "#c084fc"
+                : "#a8a29e",
         forceLabel: n.kind === "hub",
         fixed: n.kind === "hub",
       }),
@@ -84,7 +93,13 @@ export function KnowledgeGraph({
     graph?.nodes.forEach((node) => {
       if (!g.hasNode(node.id)) return;
       const normalSize =
-        node.kind === "hub" ? 15 : node.kind === "source" ? 10 : 7;
+        node.kind === "hub"
+          ? 15
+          : node.kind === "source"
+            ? 10
+            : node.kind === "note"
+              ? 6
+              : 7;
       g.setNodeAttribute(
         node.id,
         "size",
@@ -99,7 +114,9 @@ export function KnowledgeGraph({
             ? "#f97316"
             : node.kind === "source" || node.pageNumber
             ? "#fb923c"
-              : "#a8a29e",
+              : node.kind === "note"
+                ? "#c084fc"
+                : "#a8a29e",
       );
     });
     const { x, y } = g.getNodeAttributes(focusedNodeId);
