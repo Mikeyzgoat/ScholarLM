@@ -5,14 +5,19 @@ import {
   Check,
   Pencil,
   PencilRuler,
+  Plus,
   StickyNote,
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { NotePage } from "../lib/types";
 import { listDocuments } from "../services/documents";
 import { listDocumentNotes, updateNote } from "../services/notes";
+import {
+  createLocalCanvas,
+  listLocalCanvases,
+} from "../lib/localCanvases";
 
 interface LibraryNote extends NotePage {
   documentName: string;
@@ -36,7 +41,9 @@ async function listAllNotes(): Promise<LibraryNote[]> {
 
 export default function NotesLibraryPage() {
   const reduceMotion = useReducedMotion();
+  const navigate = useNavigate();
   const client = useQueryClient();
+  const [localCanvases] = useState(() => listLocalCanvases());
   const [renaming, setRenaming] = useState<LibraryNote | null>(null);
   const [nextTitle, setNextTitle] = useState("");
   const notes = useQuery({
@@ -104,21 +111,55 @@ export default function NotesLibraryPage() {
             visible: { opacity: 1, y: 0 },
           }}
         >
-          <Link
-            to="/canvas"
+          <button
+            type="button"
+            onClick={() => {
+              const canvas = createLocalCanvas();
+              navigate(`/canvas/${canvas.id}`);
+            }}
             className="group flex min-h-44 flex-col rounded-2xl border border-orange-400/20 bg-orange-500/5 p-5 shadow-[0_0_40px_rgba(249,115,22,0.04)] transition hover:-translate-y-0.5 hover:border-orange-400/40 hover:bg-orange-500/10"
           >
-            <PencilRuler size={20} className="text-orange-400" />
-            <h2 className="mt-5 font-semibold">Independent canvas</h2>
+            <Plus size={20} className="text-orange-400" />
+            <h2 className="mt-5 font-semibold">New empty canvas</h2>
             <p className="mt-1 text-xs text-stone-500">
-              Local canvas · saved in this browser
+              Create a separate local note
             </p>
             <ArrowUpRight
               size={16}
               className="mt-auto self-end text-stone-600 transition group-hover:text-orange-300"
             />
-          </Link>
+          </button>
         </motion.div>
+
+        {localCanvases.map((canvas) => (
+          <motion.div
+            key={canvas.id}
+            variants={{
+              hidden: { opacity: 0, y: 10 },
+              visible: { opacity: 1, y: 0 },
+            }}
+          >
+            <Link
+              to={`/canvas/${canvas.id}`}
+              className="group flex min-h-44 flex-col rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:-translate-y-0.5 hover:border-orange-400/30 hover:bg-white/[0.055]"
+            >
+              <PencilRuler size={20} className="text-orange-300" />
+              <h2 className="mt-5 truncate font-semibold">{canvas.title}</h2>
+              <p className="mt-1 text-xs text-stone-500">
+                Local canvas · saved in this browser
+              </p>
+              <div className="mt-auto flex items-end justify-between pt-4">
+                <span className="text-[11px] text-stone-600">
+                  Updated {new Date(canvas.updatedAt).toLocaleString()}
+                </span>
+                <ArrowUpRight
+                  size={16}
+                  className="text-stone-600 transition group-hover:text-orange-300"
+                />
+              </div>
+            </Link>
+          </motion.div>
+        ))}
 
         {notes.data?.map((note) => (
           <motion.div

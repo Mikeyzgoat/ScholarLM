@@ -10,9 +10,9 @@ export default function HomePage() {
   const reduceMotion = useReducedMotion();
   const [navigationError, setNavigationError] = useState("");
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
-  function openDocument(documentId: string) {
+  function openDocument(documentId: string, duplicate = false) {
     setNavigationError("");
-    nav(`/graph/${documentId}`);
+    nav(`/graph/${documentId}${duplicate ? "?duplicate=1" : ""}`);
   }
   return (
     <motion.main
@@ -32,7 +32,7 @@ export default function HomePage() {
       </p>
       <UploadBox
         onUploaded={(document) => {
-          openDocument(document.id);
+          openDocument(document.id, document.duplicate);
         }}
       />
       <h2 className="mb-3 mt-10 text-lg font-semibold">Recent documents</h2>

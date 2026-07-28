@@ -48,20 +48,34 @@ explanation.post("/", async (c) => {
     documentTitle: b.documentTitle as string | undefined,
     pageNumber: b.pageNumber as number | undefined,
   };
-  if (hasImage || b.graphRequested === true)
-    return c.json(
-      await explainCanvasSelection({
+  try {
+    if (hasImage || b.graphRequested === true)
+      return c.json(
+        await explainCanvasSelection({
+          ...context,
+          selectedText: hasText ? (b.selectedText as string).trim() : undefined,
+          imageDataUrl: hasImage ? (b.imageDataUrl as string) : undefined,
+          graphRequested: b.graphRequested === true,
+        }),
+      );
+    return c.json({
+      explanation: await explainSelectedText({
         ...context,
-        selectedText: hasText ? (b.selectedText as string).trim() : undefined,
-        imageDataUrl: hasImage ? (b.imageDataUrl as string) : undefined,
-        graphRequested: b.graphRequested === true,
+        selectedText: (b.selectedText as string).trim(),
       }),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Local inference failed";
+    return c.json(
+      {
+        error: {
+          message: `${message} Start the local SGLang server and try again.`,
+          code: "LOCAL_INFERENCE_UNAVAILABLE",
+        },
+      },
+      503,
     );
-  return c.json({
-    explanation: await explainSelectedText({
-      ...context,
-      selectedText: (b.selectedText as string).trim(),
-    }),
-  });
+  }
 });
 export default explanation;

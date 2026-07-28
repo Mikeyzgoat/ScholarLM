@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import DefaultPage from "./pages/DefaultPage";
 import WorkspacePage from "./pages/WorkspacePage";
@@ -18,7 +18,8 @@ export default function App() {
         <Route path="/notes" element={<NotesLibraryPage />} />
       </Route>
       <Route path="/notes/:noteId" element={<NotesPage />} />
-      <Route path="/canvas" element={<StandaloneCanvasPage />} />
+      <Route path="/canvas" element={<Navigate to="/notes" replace />} />
+      <Route path="/canvas/:canvasId" element={<StandaloneCanvasPage />} />
       <Route path="*" element={<main className="p-8">Page not found</main>} />
     </Routes>
   );

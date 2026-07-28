@@ -15,6 +15,7 @@ export interface DocumentSummary {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  duplicate?: boolean;
 }
 export type DocumentDetails = DocumentSummary;
 export interface DocumentStatusResponse {

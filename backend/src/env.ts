@@ -5,7 +5,6 @@ export const env: {
   BACKEND_PORT: number;
   FRONTEND_ORIGIN: string;
   OLLAMA_BASE_URL: string;
-  OLLAMA_MODEL: string;
   OLLAMA_EMBEDDING_MODEL: string;
   SGLANG_BASE_URL: string;
   SGLANG_MODEL: string;
@@ -15,9 +14,11 @@ export const env: {
   OLLAMA_BASE_URL:
     Bun.env.OLLAMA_BASE_URL?.trim().replace(/\/$/, "") ||
     "http://localhost:11434",
-  OLLAMA_MODEL: Bun.env.OLLAMA_MODEL?.trim() || "gemma4:e2b",
   OLLAMA_EMBEDDING_MODEL:
     Bun.env.OLLAMA_EMBEDDING_MODEL?.trim() || "nomic-embed-text",
-  SGLANG_BASE_URL: Bun.env.SGLANG_BASE_URL?.trim().replace(/\/$/, "") || "",
-  SGLANG_MODEL: Bun.env.SGLANG_MODEL?.trim() || "",
+  SGLANG_BASE_URL:
+    Bun.env.SGLANG_BASE_URL?.trim().replace(/\/$/, "") ||
+    "http://localhost:30000",
+  SGLANG_MODEL:
+    Bun.env.SGLANG_MODEL?.trim() || "google/gemma-3-4b-it",
 };

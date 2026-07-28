@@ -1,24 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileUp, LayoutDashboard, Save } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { getSnapshot, type Editor } from "tldraw";
 import type { NotePage, SaveState } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { SaveStatus } from "../components/notes/SaveStatus";
-
-const storageKey = "scholarlm-standalone-canvas";
-
-function loadLocalSnapshot(): unknown {
-  try {
-    return JSON.parse(localStorage.getItem(storageKey) ?? "{}") as unknown;
-  } catch {
-    return {};
-  }
-}
+import {
+  getLocalCanvas,
+  loadLocalCanvasSnapshot,
+  saveLocalCanvasSnapshot,
+} from "../lib/localCanvases";
 
 export default function StandaloneCanvasPage() {
+  const { canvasId = "" } = useParams();
+  const canvas = getLocalCanvas(canvasId);
   const [selectedText, setSelectedText] = useState("");
   const [selectionImage, setSelectionImage] = useState<string>();
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -26,11 +24,11 @@ export default function StandaloneCanvasPage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const unsubscribe = useRef<(() => void) | null>(null);
   const [note] = useState<NotePage>(() => ({
-    id: "standalone",
+    id: canvasId,
     documentId: "",
-    title: "Independent canvas",
+    title: canvas?.title ?? "Untitled canvas",
     metadata: {},
-    snapshot: loadLocalSnapshot(),
+    snapshot: loadLocalCanvasSnapshot(canvasId),
     revision: 1,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -38,17 +36,14 @@ export default function StandaloneCanvasPage() {
   const saveCanvas = useCallback((activeEditor: Editor) => {
     setSaveState("saving");
     try {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify(getSnapshot(activeEditor.store)),
-      );
+      saveLocalCanvasSnapshot(canvasId, getSnapshot(activeEditor.store));
       setLastSavedAt(new Date().toISOString());
       setSaveState("saved");
     } catch (error) {
       console.error("Could not save the independent canvas", error);
       setSaveState("error");
     }
-  }, []);
+  }, [canvasId]);
 
   useEffect(() => {
     const saveShortcut = (event: KeyboardEvent) => {
@@ -88,11 +83,13 @@ export default function StandaloneCanvasPage() {
     URL.revokeObjectURL(url);
   }
 
+  if (!canvas) return <Navigate to="/notes" replace />;
+
   return (
     <main className="fixed inset-0 flex flex-col bg-neutral-950">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-white px-4">
         <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.9)]" />
-        <strong className="tracking-tight">Independent canvas</strong>
+        <strong className="tracking-tight">{canvas.title}</strong>
         <span className="text-xs">
           <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
         </span>
