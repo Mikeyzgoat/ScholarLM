@@ -449,6 +449,13 @@ input::placeholder {
   z-index: 2;
 }
 
+.pdf-text-selection-layer,
+.pdf-text-selection-layer .textLayer,
+.pdf-text-selection-layer .textLayer span {
+  cursor: text !important;
+  user-select: text !important;
+}
+
 #root .tl-container {
   --tl-font-draw: "Google Sans Flex", "Google Sans", sans-serif !important;
   --tl-font-sans: "Google Sans Flex", "Google Sans", sans-serif !important;

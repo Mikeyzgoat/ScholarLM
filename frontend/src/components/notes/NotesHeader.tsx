@@ -1,4 +1,11 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, FileUp } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  FileUp,
+  MousePointer2,
+  Pencil,
+} from "lucide-react";
 import { Link } from "react-router";
 import type { SaveState } from "../../lib/types";
 import { SaveStatus } from "./SaveStatus";
@@ -10,6 +17,7 @@ export function NotesHeader({
   onBack,
   lastSavedAt = null,
   pageNavigation,
+  pdfTextSelection,
 }: {
   title: string;
   saveState: SaveState;
@@ -21,6 +29,10 @@ export function NotesHeader({
     total: number;
     onPrevious: () => void;
     onNext: () => void;
+  };
+  pdfTextSelection?: {
+    enabled: boolean;
+    onToggle: () => void;
   };
 }) {
   return (
@@ -59,6 +71,20 @@ export function NotesHeader({
             <ChevronRight size={16} />
           </button>
         </div>
+      )}
+      {pdfTextSelection && (
+        <button
+          type="button"
+          onClick={pdfTextSelection.onToggle}
+          className="scholar-secondary-action flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs"
+        >
+          {pdfTextSelection.enabled ? (
+            <MousePointer2 size={14} />
+          ) : (
+            <Pencil size={14} />
+          )}
+          {pdfTextSelection.enabled ? "Select text" : "Draw"}
+        </button>
       )}
       <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
       <ThemeSelector compact />

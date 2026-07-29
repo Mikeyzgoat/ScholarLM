@@ -3,11 +3,13 @@ import { ApiError } from "../lib/api";
 export async function generateSpeech(
   text: string,
   signal?: AbortSignal,
+  sourceText?: string,
+  explanationId?: string,
 ): Promise<Blob> {
   const r = await fetch(`${API_BASE_URL}/tts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, sourceText, explanationId }),
     signal,
   });
   if (!r.ok) {

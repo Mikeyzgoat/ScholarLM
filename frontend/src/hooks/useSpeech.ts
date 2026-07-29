@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { streamSpeech } from "../services/speech";
-import { combineWavChunks } from "../lib/audio";
+import { generateSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
 const silentWav =
@@ -180,21 +179,16 @@ export function useSpeech() {
     setError(null);
     const next = new AbortController();
     controller.current = next;
-    const chunks: Blob[] = [];
     try {
-      await streamSpeech(
+      const wav = await generateSpeech(
         text,
-        (blob) => {
-          if (!next.signal.aborted && blob.size) chunks.push(blob);
-        },
         next.signal,
         sourceText,
         explanationId,
       );
-      if (!chunks.length) throw new Error("Kokoro returned no audio chunks");
-      const combined = await combineWavChunks(chunks);
+      if (!wav.size) throw new Error("Kokoro returned no audio");
       if (next.signal.aborted) return;
-      audioUrl.current = URL.createObjectURL(combined);
+      audioUrl.current = URL.createObjectURL(wav);
       setReady(true);
       if (autoRead) playAudio();
     } catch (kokoroError) {

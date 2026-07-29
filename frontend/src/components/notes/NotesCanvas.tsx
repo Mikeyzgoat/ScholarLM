@@ -92,6 +92,16 @@ export function NotesCanvas({
       selectionCleanup.current?.();
     };
   }, []);
+  useEffect(() => {
+    const selected = (event: Event) => {
+      const text = (event as CustomEvent<unknown>).detail;
+      if (typeof text === "string" && text.trim())
+        onPdfTextSelected?.(text.trim());
+    };
+    window.addEventListener("scholarlm:pdf-selection", selected);
+    return () =>
+      window.removeEventListener("scholarlm:pdf-selection", selected);
+  }, [onPdfTextSelected]);
 
   const mount = useCallback(
     (editor: Editor) => {

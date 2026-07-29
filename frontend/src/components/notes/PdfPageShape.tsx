@@ -161,6 +161,7 @@ export class PdfPageShapeUtil extends BaseBoxShapeUtil<PdfPageShape> {
           width: shape.props.w,
           height: shape.props.h,
           pointerEvents: selectable ? "all" : "none",
+          userSelect: selectable ? "text" : "none",
         }}
         onPointerDown={
           selectable ? (event) => event.stopPropagation() : undefined
@@ -169,7 +170,20 @@ export class PdfPageShapeUtil extends BaseBoxShapeUtil<PdfPageShape> {
           selectable ? (event) => event.stopPropagation() : undefined
         }
         onPointerUp={
-          selectable ? (event) => event.stopPropagation() : undefined
+          selectable
+            ? (event) => {
+                event.stopPropagation();
+                requestAnimationFrame(() => {
+                  const text = getSelection()?.toString().trim() ?? "";
+                  if (text)
+                    window.dispatchEvent(
+                      new CustomEvent("scholarlm:pdf-selection", {
+                        detail: text,
+                      }),
+                    );
+                });
+              }
+            : undefined
         }
       >
         <PdfPageContent

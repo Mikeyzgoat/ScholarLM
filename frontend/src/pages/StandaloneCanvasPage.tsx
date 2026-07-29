@@ -14,7 +14,10 @@ import {
   saveLocalCanvasSnapshot,
   updateLocalCanvasTitle,
 } from "../lib/localCanvases";
-import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import {
+  addExplanationStickyToCanvas,
+  addExplanationToCanvas,
+} from "../lib/addExplanationToCanvas";
 import { ThemeSelector } from "../components/layout/ThemeSelector";
 
 export default function StandaloneCanvasPage() {
@@ -197,6 +200,9 @@ export default function StandaloneCanvasPage() {
             }}
             onExplanationGenerated={(input) => {
               if (editor) addExplanationToCanvas(editor, input);
+            }}
+            onExplanationStickyRequested={(input) => {
+              if (editor) addExplanationStickyToCanvas(editor, input);
             }}
           />
           <p className="mt-3 text-xs leading-5 text-stone-500">

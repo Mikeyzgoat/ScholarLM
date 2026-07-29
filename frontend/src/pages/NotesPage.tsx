@@ -11,7 +11,10 @@ import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { NotesHeader } from "../components/notes/NotesHeader";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
-import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import {
+  addExplanationStickyToCanvas,
+  addExplanationToCanvas,
+} from "../lib/addExplanationToCanvas";
 import {
   focusPdfPage,
   showPdfPageOnCanvas,
@@ -36,6 +39,7 @@ export default function NotesPage() {
     [selectedTexts, setSelectedTexts] = useState<string[]>(),
     [selectionImage, setSelectionImage] = useState<string>(),
     [existingExplanation, setExistingExplanation] = useState<string>(),
+    [pdfTextSelectionEnabled, setPdfTextSelectionEnabled] = useState(false),
     [selectionAnchors, setSelectionAnchors] =
       useState<CanvasSelectionAnchor[]>(),
     [title, setTitle] = useState(""),
@@ -101,9 +105,21 @@ export default function NotesPage() {
       documentId: note.documentId,
       fileUrl: getDocumentFileUrl(note.documentId),
       pageNumber,
-      textSelectionEnabled: false,
+      textSelectionEnabled: pdfTextSelectionEnabled,
     });
     setCanvasPage((current) => ({ ...current, current: pageNumber }));
+  };
+  const togglePdfTextSelection = () => {
+    if (!editor || !note) return;
+    const enabled = !pdfTextSelectionEnabled;
+    setPdfTextSelectionEnabled(enabled);
+    showPdfPageOnCanvas({
+      editor,
+      documentId: note.documentId,
+      fileUrl: getDocumentFileUrl(note.documentId),
+      pageNumber: canvasPage.current,
+      textSelectionEnabled: enabled,
+    });
   };
   useEffect(() => {
     if (!note || !title.trim() || title === note.title) return;
@@ -141,6 +157,10 @@ export default function NotesPage() {
           onPrevious: () => moveCanvasPage(-1),
           onNext: () => moveCanvasPage(1),
         }}
+        pdfTextSelection={{
+          enabled: pdfTextSelectionEnabled,
+          onToggle: togglePdfTextSelection,
+        }}
       />
       <AnimatePresence>
         {recovered &&
@@ -174,6 +194,13 @@ export default function NotesPage() {
           setExistingExplanation(selection.existingExplanation);
           setSelectionAnchors(selection.anchors);
         }}
+        onPdfTextSelected={(text) => {
+          setSelectedText(text);
+          setSelectedTexts([text]);
+          setSelectionImage(undefined);
+          setExistingExplanation(undefined);
+          setSelectionAnchors(undefined);
+        }}
       />
       <aside className="absolute bottom-4 right-4 top-28 z-20 w-[min(24rem,calc(100vw-2rem))] overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
         <ExplainPanel
@@ -189,6 +216,9 @@ export default function NotesPage() {
           }}
           onExplanationGenerated={(input) => {
             if (editor) addExplanationToCanvas(editor, input);
+          }}
+          onExplanationStickyRequested={(input) => {
+            if (editor) addExplanationStickyToCanvas(editor, input);
           }}
         />
         <p className="mt-3 px-1 text-xs leading-5 text-stone-500">
