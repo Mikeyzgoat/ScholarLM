@@ -33,9 +33,15 @@ export function useExplanation() {
       setError(null);
       setLoading(true);
       try {
+        let streamed = "";
         const value: ExplanationResponse = await explainText({
           ...input,
           signal: next.signal,
+          onToken: (token) => {
+            if (id !== generation.current) return;
+            streamed += token;
+            setExplanation(streamed);
+          },
         });
         const answers = value.explanation
           .split(/\s*<ANSWER_SPLIT>\s*/i)

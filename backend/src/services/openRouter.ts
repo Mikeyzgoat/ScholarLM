@@ -1,65 +1,111 @@
 import { env } from "../env";
 
-async function ollamaGenerate(input: {
+interface OpenRouterChunk {
+  choices?: Array<{
+    delta?: { content?: unknown };
+    message?: { content?: unknown };
+  }>;
+  error?: { message?: unknown };
+}
+
+function authorizationHeaders(): Record<string, string> {
+  if (!env.OPENROUTER_API_KEY)
+    throw new Error("OPENROUTER_API_KEY is not configured");
+  return {
+    Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+    "Content-Type": "application/json",
+    "HTTP-Referer": env.FRONTEND_ORIGIN,
+    "X-Title": "ScholarLM",
+  };
+}
+
+async function openRouterGenerate(input: {
   prompt: string;
   system?: string;
   json?: boolean;
   imageDataUrl?: string;
   signal?: AbortSignal;
+  maxTokens?: number;
+  onToken?: (token: string) => void;
 }): Promise<string> {
-  const image = input.imageDataUrl?.replace(/^data:image\/[^;]+;base64,/, "");
-  const response = await fetch(`${env.OLLAMA_BASE_URL}/api/chat`, {
+  const content = input.imageDataUrl
+    ? [
+        { type: "text", text: input.prompt },
+        { type: "image_url", image_url: { url: input.imageDataUrl } },
+      ]
+    : input.prompt;
+  const response = await fetch(`${env.OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authorizationHeaders(),
     body: JSON.stringify({
-      model: env.OLLAMA_GENERATION_MODEL,
+      model: env.OPENROUTER_MODEL,
       messages: [
         ...(input.system ? [{ role: "system", content: input.system }] : []),
-        {
-          role: "user",
-          content: input.prompt,
-          images: image ? [image] : undefined,
-        },
+        { role: "user", content },
       ],
       stream: true,
-      think: false,
-      keep_alive: "10m",
-      format: input.json ? "json" : undefined,
-      options: {
-        temperature: 0.2,
-        num_ctx: 4096,
+      max_tokens: input.maxTokens ?? 500,
+      temperature: 0.2,
+      provider: {
+        sort: "throughput",
+        allow_fallbacks: true,
+        require_parameters: input.json === true,
+        max_price: {
+          prompt: env.OPENROUTER_MAX_INPUT_PRICE,
+          completion: env.OPENROUTER_MAX_OUTPUT_PRICE,
+        },
       },
+      response_format: input.json ? { type: "json_object" } : undefined,
+      plugins:
+        env.OPENROUTER_MODEL === "openrouter/auto"
+          ? [
+              {
+                id: "auto-router",
+                cost_quality_tradeoff: 9,
+                allowed_models: env.OPENROUTER_ALLOWED_MODELS,
+              },
+            ]
+          : undefined,
     }),
     signal: input.signal,
   });
-  return readOllamaStream(response);
+  return readOpenRouterStream(response, input.onToken);
 }
 
-async function readOllamaStream(response: Response): Promise<string> {
+async function readOpenRouterStream(
+  response: Response,
+  onToken?: (token: string) => void,
+): Promise<string> {
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
-      error?: unknown;
+      error?: { message?: unknown };
     } | null;
     throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Ollama returned ${response.status}`,
+      typeof payload?.error?.message === "string"
+        ? payload.error.message
+        : `OpenRouter returned ${response.status}`,
     );
   }
-  if (!response.body) throw new Error("Ollama returned no response stream");
+  if (!response.body) throw new Error("OpenRouter returned no response stream");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
   const consume = (line: string) => {
-    if (!line.trim()) return;
-    const part = JSON.parse(line) as {
-      message?: { content?: unknown };
-      error?: unknown;
-    };
-    if (typeof part.error === "string") throw new Error(part.error);
-    const token = part.message?.content;
-    if (typeof token === "string") content += token;
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const data = trimmed.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    const part = JSON.parse(data) as OpenRouterChunk;
+    if (typeof part.error?.message === "string")
+      throw new Error(part.error.message);
+    const token =
+      part.choices?.[0]?.delta?.content ??
+      part.choices?.[0]?.message?.content;
+    if (typeof token === "string") {
+      content += token;
+      onToken?.(token);
+    }
   };
   while (true) {
     const { done, value } = await reader.read();
@@ -70,7 +116,7 @@ async function readOllamaStream(response: Response): Promise<string> {
     if (done) break;
   }
   consume(buffer);
-  if (!content.trim()) throw new Error("Ollama returned no content");
+  if (!content.trim()) throw new Error("OpenRouter returned no content");
   return content.trim();
 }
 
@@ -148,12 +194,13 @@ ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improv
   const system =
     "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the explanation. Return valid JSON only.";
   return parseCanvasAnalysis(
-    await ollamaGenerate({
+    await openRouterGenerate({
       prompt,
       system,
       json: true,
       imageDataUrl: input.imageDataUrl,
       signal: input.signal,
+      maxTokens: 750,
     }),
   );
 }
@@ -162,27 +209,39 @@ export async function generateEmbeddings(
   texts: string[],
 ): Promise<number[][]> {
   if (!texts.length) return [];
-  const response = await fetch(`${env.OLLAMA_BASE_URL}/api/embed`, {
+  const response = await fetch(`${env.OPENROUTER_BASE_URL}/embeddings`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authorizationHeaders(),
     body: JSON.stringify({
-      model: env.OLLAMA_EMBEDDING_MODEL,
+      model: env.OPENROUTER_EMBEDDING_MODEL,
       input: texts,
-      keep_alive: "10m",
+      provider: {
+        sort: "throughput",
+        allow_fallbacks: true,
+        max_price: { prompt: 0.2 },
+      },
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(60_000),
   });
   const payload = (await response.json().catch(() => null)) as {
-    embeddings?: unknown;
-    error?: unknown;
+    data?: unknown;
+    error?: { message?: unknown };
   } | null;
   if (!response.ok)
     throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Ollama returned ${response.status}`,
+      typeof payload?.error?.message === "string"
+        ? payload.error.message
+        : `OpenRouter returned ${response.status}`,
     );
-  const embeddings = payload?.embeddings;
+  const embeddings = Array.isArray(payload?.data)
+    ? payload.data
+        .slice()
+        .sort(
+          (left: { index?: number }, right: { index?: number }) =>
+            Number(left.index ?? 0) - Number(right.index ?? 0),
+        )
+        .map((item: { embedding?: unknown }) => item.embedding)
+    : null;
   if (
     !Array.isArray(embeddings) ||
     embeddings.length !== texts.length ||
@@ -192,7 +251,7 @@ export async function generateEmbeddings(
         embedding.every((value) => typeof value === "number"),
     )
   )
-    throw new Error("Ollama returned invalid embeddings");
+    throw new Error("OpenRouter returned invalid embeddings");
   return embeddings as number[][];
 }
 
@@ -220,6 +279,7 @@ export async function explainSelectedText(input: {
   mode?: "explain" | "regenerate" | "simplify";
   previousExplanation?: string;
   signal?: AbortSignal;
+  onToken?: (token: string) => void;
 }): Promise<string> {
   const context = [
     input.documentTitle && `Document: ${input.documentTitle}`,
@@ -255,7 +315,13 @@ Continue the same numbering for every selection. Never merge the selections or o
         : "Explain the passage clearly.";
   const system =
     `${revisionInstruction} ${outputFormat} Explain only the selected passage in English. Do not answer unrelated questions. Do not repeat or quote the selected passage, and never prefix the answer with "Selected" or "Selected passage". Start directly with the explanation. Use clear educational language, preserve important technical terminology, and use short paragraphs. Return plain text only: no Markdown, headings, bullets, code fences, or LaTeX delimiters. Write mathematical notation with Unicode symbols.`;
-  return ollamaGenerate({ prompt, system, signal: input.signal });
+  return openRouterGenerate({
+    prompt,
+    system,
+    signal: input.signal,
+    maxTokens: 450,
+    onToken: input.onToken,
+  });
 }
 
 export async function generateGroundedAnswer(input: {
@@ -267,6 +333,7 @@ export async function generateGroundedAnswer(input: {
   }>;
   documentTitle: string;
   signal?: AbortSignal;
+  onToken?: (token: string) => void;
 }): Promise<string> {
   const context = input.sources
     .map(
@@ -288,10 +355,12 @@ Source excerpts:
 ${context}
 
 Give a concise, direct answer with inline source citations.`;
-  return ollamaGenerate({
+  return openRouterGenerate({
     prompt,
     system,
     signal: input.signal,
+    maxTokens: 400,
+    onToken: input.onToken,
   });
 }
 
@@ -343,10 +412,11 @@ export async function extractConceptGraph(input: {
 }): Promise<ConceptGraph> {
   const prompt = `Extract a knowledge graph from "${input.documentTitle}". Return concepts (maximum 30: label, description, pageNumber) and meaningful edges (source, target, relationship). Every edge label must exactly match a concept label. Use the most relevant page.\n\n${input.chunks.map((chunk) => `[Page ${chunk.pageNumber}] ${chunk.content}`).join("\n\n")}`;
   return parseConceptGraph(
-    await ollamaGenerate({
+    await openRouterGenerate({
       prompt,
       system: "Return only a valid JSON object with concepts and edges.",
       json: true,
+      maxTokens: 900,
     }),
   );
 }

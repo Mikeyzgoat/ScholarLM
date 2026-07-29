@@ -1,7 +1,7 @@
 import { db } from "../db/database";
 import type { ChunkRecord, DocumentRecord, GraphResponse } from "../types";
 import { createId } from "../utils/ids";
-import { extractConceptGraph } from "./localAi";
+import { extractConceptGraph } from "./openRouter";
 export async function buildKnowledgeGraph(documentId: string): Promise<void> {
   const doc = db
     .query("SELECT * FROM documents WHERE id=?")

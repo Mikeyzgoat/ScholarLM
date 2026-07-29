@@ -23,6 +23,10 @@ import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { DocumentQA } from "../components/rag/DocumentQA";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import {
+  addPdfRegionToCanvas,
+  type PdfTextRegion,
+} from "../lib/addPdfRegionToCanvas";
 import { activateDocumentIndex } from "../services/rag";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
@@ -50,6 +54,7 @@ export default function WorkspacePage() {
       anchors?: CanvasSelectionAnchor[];
     }>
   >([]);
+  const queuedPdfRegions = useRef<PdfTextRegion[]>([]);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
   const doc = useQuery({
     queryKey: ["document", documentId],
@@ -166,6 +171,10 @@ export default function WorkspacePage() {
                 setSelectionAnchors(undefined);
                 setSelectedTextPage(s.pageNumber);
               }}
+              onRegionAddedToNotes={(region) => {
+                if (canvasEditor) addPdfRegionToCanvas(canvasEditor, region);
+                else queuedPdfRegions.current.push(region);
+              }}
               onExplanationGenerated={saveExplanationToCanvas}
             />
           )}
@@ -191,6 +200,9 @@ export default function WorkspacePage() {
               }}
               onEditorReady={(editor) => {
                 setCanvasEditor(editor);
+                queuedPdfRegions.current.splice(0).forEach((region) => {
+                  addPdfRegionToCanvas(editor, region);
+                });
                 queuedCanvasExplanations.current.splice(0).forEach((item) => {
                   addExplanationToCanvas(editor, item);
                 });

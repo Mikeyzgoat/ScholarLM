@@ -1,14 +1,15 @@
 # ScholarLM
 
-ScholarLM is a fully local semantic learning workspace for PDFs. It extracts
-page-aware text, searches with local Nomic embeddings, explains selections with
-a Gemma model served by Ollama, reads explanations with Kokoro, visualizes a
-knowledge graph, and stores full tldraw snapshots with local recovery.
+ScholarLM is an AI learning workspace for PDFs. It extracts page-aware text,
+searches with hosted embeddings, routes explanations and visual reasoning
+through OpenRouter, reads explanations locally with compact Kokoro TTS,
+visualizes a knowledge graph, and stores full tldraw snapshots with local
+recovery.
 
 ## Requirements
 
 - [Bun](https://bun.sh/) 1.3 or newer
-- Ollama
+- An OpenRouter API key
 - A modern browser
 
 ## Setup
@@ -19,11 +20,10 @@ knowledge graph, and stores full tldraw snapshots with local recovery.
    cp .env.example .env
    ```
 
-2. Pull the local models:
+2. Add your OpenRouter key to `.env`:
 
    ```sh
-   ollama pull nomic-embed-text
-   ollama pull gemma4:e2b
+   OPENROUTER_API_KEY=your_key_here
    ```
 
 3. Install dependencies:
@@ -48,12 +48,6 @@ knowledge graph, and stores full tldraw snapshots with local recovery.
    ```
 
 Open `http://localhost:3000`. The API defaults to `http://localhost:3001`.
-
-Run Ollama in its own terminal:
-
-```sh
-ollama serve
-```
 
 Run the backend and frontend in separate terminals using the commands above.
 
@@ -96,6 +90,13 @@ The database and uploaded PDFs are ignored by Git.
 - A document workspace opens in split mode with the PDF and its persisted
   tldraw canvas side by side.
 - Select PDF text to explain or save a page-aware highlight.
+- PDF text-layer geometry is captured as a page-aware region. Add a detected
+  region to the linked notes canvas first, then optionally request a streamed
+  explanation.
 - Select a tldraw text shape to explain its content live.
-- Nomic embeddings, explanations, and graph generation run through local
-  Ollama.
+- OpenRouter Auto selects the generation model per task and routes requests to
+  high-throughput providers. Its default allowlist favors Qwen 3.5 Flash,
+  Gemma 4 26B, Seed 1.6 Flash, and Mistral Small 3.2, with hard price ceilings
+  of $0.20/M input tokens and $0.40/M output tokens.
+- Embeddings use OpenRouter's hosted embeddings API and are stored locally.
+- Kokoro TTS remains local and uses the compact INT8 model.

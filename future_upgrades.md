@@ -2,6 +2,11 @@
 
 Last reviewed: 29 July 2026
 
+> Runtime update: generation now uses OpenRouter Auto, embeddings use
+> OpenRouter's hosted embeddings API, and only compact Kokoro TTS remains local.
+> Historical Ollama references below describe the previous baseline and should
+> not be treated as current setup instructions.
+
 ## Purpose of this document
 
 ScholarLM's original build checklist described an early Gemini-based MVP. The

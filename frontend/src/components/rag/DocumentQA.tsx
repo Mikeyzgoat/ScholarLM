@@ -19,16 +19,25 @@ export function DocumentQA({
 }) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<QuestionTurn[]>([]);
+  const [draftAnswer, setDraftAnswer] = useState("");
   const ask = useMutation({
     mutationFn: (value: string) =>
-      askDocument({ documentId, question: value }),
+      askDocument({
+        documentId,
+        question: value,
+        onToken: (token) =>
+          setDraftAnswer((current) => current + token),
+      }),
+    onMutate: () => setDraftAnswer(""),
     onSuccess: (answer, askedQuestion) => {
       setTurns((current) => [
         ...current,
         { ...answer, question: askedQuestion },
       ]);
+      setDraftAnswer("");
       setQuestion("");
     },
+    onError: () => setDraftAnswer(""),
   });
 
   function submit() {
@@ -74,6 +83,17 @@ export function DocumentQA({
             )}
           </article>
         ))}
+        {ask.isPending && draftAnswer && (
+          <article className="rounded-lg border border-orange-400/15 bg-orange-500/[0.04] p-3">
+            <p className="text-xs font-medium text-orange-200">
+              {ask.variables}
+            </p>
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-300">
+              {draftAnswer}
+              <span className="ml-1 inline-block h-3 w-1 animate-pulse rounded bg-orange-400 align-middle" />
+            </p>
+          </article>
+        )}
       </div>
       <form
         className="mt-3"

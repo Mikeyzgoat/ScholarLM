@@ -14,3 +14,27 @@ export function initializeDatabase(): void {
   initializeSchema(db);
   initialized = true;
 }
+
+export function prepareEmbeddingModel(model: string): void {
+  const key = "embedding_model";
+  const current = db
+    .query("SELECT value FROM runtime_metadata WHERE key=?")
+    .get(key) as { value: string } | null;
+  if (current?.value === model) return;
+  const hasEmbeddings = (
+    db
+      .query("SELECT EXISTS(SELECT 1 FROM chunks WHERE embedding IS NOT NULL) present")
+      .get() as { present: number }
+  ).present;
+  db.transaction(() => {
+    if (hasEmbeddings) {
+      db.exec("UPDATE chunks SET embedding=NULL;");
+      db.query(
+        "UPDATE documents SET status='embedding',error_message=NULL,updated_at=? WHERE status='ready'",
+      ).run(new Date().toISOString());
+    }
+    db.query(
+      "INSERT INTO runtime_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+    ).run(key, model);
+  })();
+}

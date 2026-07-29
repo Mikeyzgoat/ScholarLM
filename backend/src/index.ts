@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { env } from "./env";
-import { initializeDatabase } from "./db/database";
+import { initializeDatabase, prepareEmbeddingModel } from "./db/database";
 import { ensureUploadDirectory } from "./utils/files";
 import documents from "./routes/documents";
 import search from "./routes/search";
@@ -12,6 +12,8 @@ import notes from "./routes/notes";
 import rag from "./routes/rag";
 import { resumePendingIngestions } from "./services/ingestion";
 initializeDatabase();
+if (env.OPENROUTER_API_KEY)
+  prepareEmbeddingModel(env.OPENROUTER_EMBEDDING_MODEL);
 await ensureUploadDirectory();
 void resumePendingIngestions();
 const app = new Hono({ strict: false });

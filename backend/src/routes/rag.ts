@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { stream } from "hono/streaming";
 import { db } from "../db/database";
 import type { DocumentRecord } from "../types";
 import { answerDocumentQuestion } from "../services/rag";
@@ -84,6 +85,36 @@ rag.post("/", async (c) => {
     );
 
   try {
+    if (c.req.query("stream") === "1") {
+      c.header("Content-Type", "application/x-ndjson; charset=utf-8");
+      c.header("Cache-Control", "no-cache, no-transform");
+      return stream(c, async (output) => {
+        let writes = Promise.resolve();
+        const send = (value: unknown) => {
+          writes = writes.then(async () => {
+            await output.write(`${JSON.stringify(value)}\n`);
+          });
+        };
+        try {
+          const result = await answerDocumentQuestion({
+            documentId: input.documentId as string,
+            question: (input.question as string).trim(),
+            signal: c.req.raw.signal,
+            onToken: (token) => send({ type: "token", token }),
+          });
+          send({ type: "done", result });
+        } catch (error) {
+          send({
+            type: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Document question failed",
+          });
+        }
+        await writes;
+      });
+    }
     return c.json(
       await answerDocumentQuestion({
         documentId: input.documentId,

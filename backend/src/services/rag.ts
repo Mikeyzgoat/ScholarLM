@@ -4,7 +4,7 @@ import type {
   RagAnswer,
   RagSource,
 } from "../types";
-import { generateGroundedAnswer } from "./localAi";
+import { generateGroundedAnswer } from "./openRouter";
 import { retrieveForRag } from "./semanticSearch";
 
 const refusal =
@@ -14,6 +14,7 @@ export async function answerDocumentQuestion(input: {
   documentId: string;
   question: string;
   signal?: AbortSignal;
+  onToken?: (token: string) => void;
 }): Promise<RagAnswer> {
   const document = db
     .query("SELECT * FROM documents WHERE id=?")
@@ -41,6 +42,7 @@ export async function answerDocumentQuestion(input: {
     documentTitle: document.name,
     sources,
     signal: input.signal,
+    onToken: input.onToken,
   });
   const citedIds = new Set<string>();
   for (const match of answer.matchAll(/\bS(\d+)\b/g)) {

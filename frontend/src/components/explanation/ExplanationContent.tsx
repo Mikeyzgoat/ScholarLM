@@ -41,7 +41,8 @@ export function ExplanationContent({
   error: Error | null;
   activeWordIndex?: number;
 }) {
-  if (isLoading) return <p className="text-sm">Explaining selection…</p>;
+  if (isLoading && !explanation)
+    return <p className="text-sm">Explaining selection…</p>;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (explanation)
     return (
@@ -52,6 +53,9 @@ export function ExplanationContent({
             text={explanation}
             activeWordIndex={activeWordIndex}
           />
+          {isLoading && (
+            <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded bg-orange-400 align-middle" />
+          )}
         </p>
       </div>
     );

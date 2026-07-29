@@ -1,5 +1,5 @@
 import type { SearchResult } from "../types";
-import { generateQueryEmbedding } from "./localAi";
+import { generateQueryEmbedding } from "./openRouter";
 import { dotProduct, normalizeVector } from "../utils/vectors";
 import { getDocumentVectorIndex } from "./vectorIndex";
 

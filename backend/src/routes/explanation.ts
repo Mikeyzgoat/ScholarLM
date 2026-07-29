@@ -1,8 +1,9 @@
 import { Hono } from "hono";
+import { stream } from "hono/streaming";
 import {
   explainCanvasSelection,
   explainSelectedText,
-} from "../services/localAi";
+} from "../services/openRouter";
 import {
   storeExplanationRevision,
   type ExplanationMode,
@@ -108,6 +109,48 @@ explanation.post("/", async (c) => {
       });
       return c.json({ ...result, ...history });
     }
+    if (c.req.query("stream") === "1") {
+      c.header("Content-Type", "application/x-ndjson; charset=utf-8");
+      c.header("Cache-Control", "no-cache, no-transform");
+      c.header("X-Content-Type-Options", "nosniff");
+      return stream(c, async (output) => {
+        let writes = Promise.resolve();
+        const send = (value: unknown) => {
+          writes = writes.then(async () => {
+            await output.write(`${JSON.stringify(value)}\n`);
+          });
+        };
+        try {
+          const generated = await explainSelectedText({
+            ...context,
+            selectedText: historySelection,
+            selectedTexts: hasMultipleTexts ? selectedTexts : undefined,
+            mode,
+            previousExplanation,
+            onToken: (token) => send({ type: "token", token }),
+          });
+          const history = storeExplanationRevision({
+            selectedText: historySelection,
+            documentTitle: context.documentTitle,
+            pageNumber: context.pageNumber,
+            mode,
+            explanation: generated,
+          });
+          send({
+            type: "done",
+            result: { explanation: generated, ...history },
+          });
+          await writes;
+        } catch (error) {
+          send({
+            type: "error",
+            message:
+              error instanceof Error ? error.message : "AI inference failed",
+          });
+          await writes;
+        }
+      });
+    }
     const generated = await explainSelectedText({
       ...context,
       selectedText: historySelection,
@@ -133,11 +176,11 @@ explanation.post("/", async (c) => {
       {
         error: {
           message: timedOut
-            ? "Ollama is running, but the local model took too long to respond. Try a shorter selection."
-            : `${message} Make sure Ollama is running and try again.`,
+            ? "The AI provider took too long to respond. Try a shorter selection."
+            : message,
           code: timedOut
-            ? "LOCAL_INFERENCE_TIMEOUT"
-            : "LOCAL_INFERENCE_UNAVAILABLE",
+            ? "AI_INFERENCE_TIMEOUT"
+            : "AI_INFERENCE_UNAVAILABLE",
         },
       },
       503,

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Highlighter, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import {
+  Highlighter,
+  NotebookPen,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs" with { type: "file" };
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -65,6 +71,7 @@ export function PDFViewer({
   activePage,
   onPageChange,
   onTextSelected,
+  onRegionAddedToNotes,
   onExplanationGenerated,
 }: {
   fileUrl: string;
@@ -72,6 +79,11 @@ export function PDFViewer({
   activePage: number;
   onPageChange: (p: number) => void;
   onTextSelected: (i: { text: string; pageNumber: number }) => void;
+  onRegionAddedToNotes?: (region: {
+    id: string;
+    text: string;
+    pageNumber: number;
+  }) => void;
   onExplanationGenerated?: (input: {
     selectedText: string;
     explanation: string;
@@ -235,6 +247,7 @@ export function PDFViewer({
       loading: true,
     });
     try {
+      let streamedText = "";
       const response = await explainText({
         selectedText: selection.text,
         documentTitle,
@@ -244,6 +257,17 @@ export function PDFViewer({
           mode === "explain"
             ? undefined
             : cached?.text || inlineExplanation?.text || undefined,
+        onToken: (token) => {
+          if (generation !== explanationGeneration.current) return;
+          streamedText += token;
+          setInlineExplanation({
+            selection,
+            text: streamedText,
+            mode,
+            error: "",
+            loading: true,
+          });
+        },
       });
       const explanation = cleanExplanation(response.explanation);
       if (generation !== explanationGeneration.current) return;
@@ -281,9 +305,31 @@ export function PDFViewer({
   function explainPending() {
     if (!pending) return;
     const selection = pending;
+    addSelectionToNotes(selection);
     setPending(null);
     getSelection()?.removeAllRanges();
     void explainSelection(selection);
+  }
+
+  function addSelectionToNotes(selection: PageHighlight) {
+    if (!highlights.some((item) => item.id === selection.id))
+      persist([...highlights, selection]);
+    onTextSelected({
+      text: selection.text,
+      pageNumber: selection.pageNumber,
+    });
+    onRegionAddedToNotes?.({
+      id: selectionPositionKey(selection),
+      text: selection.text,
+      pageNumber: selection.pageNumber,
+    });
+  }
+
+  function addPendingToNotes() {
+    if (!pending) return;
+    addSelectionToNotes(pending);
+    setPending(null);
+    getSelection()?.removeAllRanges();
   }
 
   function highlightPending() {
@@ -407,8 +453,10 @@ export function PDFViewer({
               <p className="pr-5 font-mono text-[10px] uppercase tracking-[0.16em] text-orange-400">
                 Selected explanation
               </p>
-              {inlineExplanation.loading ? (
-                <p className="mt-2 text-xs text-stone-400">Thinking locally…</p>
+              {inlineExplanation.loading && !inlineExplanation.text ? (
+                <p className="mt-2 text-xs text-stone-400">
+                  Routing the fastest answer…
+                </p>
               ) : inlineExplanation.error ? (
                 <p className="mt-2 text-xs leading-5 text-red-400">
                   {inlineExplanation.error}
@@ -420,8 +468,11 @@ export function PDFViewer({
                       text={inlineExplanation.text}
                       activeWordIndex={speech.activeWordIndex}
                     />
+                    {inlineExplanation.loading && (
+                      <span className="ml-1 inline-block h-3 w-1 animate-pulse rounded bg-orange-400 align-middle" />
+                    )}
                   </p>
-                  <AudioControls
+                  {!inlineExplanation.loading && <AudioControls
                     isLoading={speech.isLoading}
                     isPlaying={speech.isPlaying}
                     isPaused={speech.isPaused}
@@ -433,7 +484,7 @@ export function PDFViewer({
                     onReplay={speech.replay}
                     onStop={speech.stop}
                     onAutoReadChange={speech.setAutoRead}
-                  />
+                  />}
                   {speech.error && (
                     <p className="mt-2 text-xs text-red-400">
                       {speech.error.message}
@@ -462,7 +513,16 @@ export function PDFViewer({
             className="flex items-center gap-2 rounded-xl border border-orange-400/15 bg-orange-500/10 px-3 py-2 text-xs text-orange-200 transition hover:bg-orange-500/20"
           >
             <Sparkles size={15} />
-            Select &amp; explain
+            Add &amp; explain
+          </motion.button>
+          <motion.button
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={addPendingToNotes}
+            className="flex items-center gap-2 rounded-xl border border-teal-400/15 bg-teal-500/10 px-3 py-2 text-xs text-teal-200 transition hover:bg-teal-500/20"
+          >
+            <NotebookPen size={15} />
+            Add to notes
           </motion.button>
           <motion.button
             whileHover={{ y: -1 }}
