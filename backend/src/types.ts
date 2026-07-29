@@ -103,7 +103,7 @@ export interface GraphResponse {
     label: string;
     description: string | null;
     pageNumber: number | null;
-    kind?: "hub" | "source" | "concept" | "note";
+    kind?: "hub" | "source" | "concept" | "note" | "sticky";
     documentId?: string;
     noteId?: string;
   }>;

@@ -1,4 +1,4 @@
-import { toRichText, type Editor } from "tldraw";
+import { createShapeId, toRichText, type Editor } from "tldraw";
 import type { CanvasSelectionAnchor } from "./types";
 import {
   generatedOutputKey,
@@ -31,7 +31,9 @@ export function addExplanationStickyToCanvas(
     pageNumber: input.pageNumber,
     mode: input.mode,
   });
+  const shapeId = createShapeId();
   editor.createShape<ExplanationStickyShape>({
+    id: shapeId,
     type: EXPLANATION_STICKY_SHAPE_TYPE,
     x: viewport.center.x - width / 2,
     y: viewport.center.y - 56,
@@ -52,6 +54,7 @@ export function addExplanationStickyToCanvas(
       expanded: false,
     },
   });
+  editor.select(shapeId);
 }
 
 function withoutAnswerPrefix(value: string): string {

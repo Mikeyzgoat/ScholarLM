@@ -2,6 +2,61 @@ import { db } from "../db/database";
 import type { ChunkRecord, DocumentRecord, GraphResponse } from "../types";
 import { createId } from "../utils/ids";
 import { extractConceptGraph } from "./openRouter";
+
+interface GraphNote {
+  id: string;
+  documentId?: string;
+  title: string;
+  snapshot: string;
+}
+
+function stickyNodes(notes: GraphNote[]) {
+  return notes.flatMap((note) => {
+    try {
+      const snapshot = JSON.parse(note.snapshot) as {
+        document?: { store?: Record<string, unknown> };
+      };
+      return Object.values(snapshot.document?.store ?? {}).flatMap((record) => {
+        if (!record || typeof record !== "object") return [];
+        const shape = record as {
+          id?: unknown;
+          type?: unknown;
+          props?: {
+            question?: unknown;
+            explanation?: unknown;
+          };
+        };
+        if (
+          shape.type !== "scholar-explanation-sticky" ||
+          typeof shape.id !== "string"
+        )
+          return [];
+        const question =
+          typeof shape.props?.question === "string"
+            ? shape.props.question.trim()
+            : "Explanation";
+        const explanation =
+          typeof shape.props?.explanation === "string"
+            ? shape.props.explanation.trim()
+            : "";
+        return [
+          {
+            id: `sticky:${note.id}:${shape.id}`,
+            label:
+              question.length > 80 ? `${question.slice(0, 77)}…` : question,
+            description: explanation || "Expandable explanation sticky note",
+            pageNumber: null,
+            kind: "sticky" as const,
+            documentId: note.documentId,
+            noteId: note.id,
+          },
+        ];
+      });
+    } catch {
+      return [];
+    }
+  });
+}
 export async function buildKnowledgeGraph(documentId: string): Promise<void> {
   const doc = db
     .query("SELECT * FROM documents WHERE id=?")
@@ -111,13 +166,17 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
     .all(documentId) as GraphResponse["edges"];
   const notes = db
     .query(
-      "SELECT id,title,updated_at updatedAt FROM note_pages WHERE document_id=? ORDER BY updated_at DESC",
+      "SELECT id,title,snapshot,updated_at updatedAt FROM note_pages WHERE document_id=? ORDER BY updated_at DESC",
     )
     .all(documentId) as Array<{
     id: string;
     title: string;
+    snapshot: string;
     updatedAt: string;
   }>;
+  const stickies = stickyNodes(
+    notes.map((note) => ({ ...note, documentId })),
+  );
   const sourceId = `source:${documentId}`;
   const connected = new Set(
     conceptEdges.flatMap((edge) => [edge.source, edge.target]),
@@ -146,6 +205,7 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
         documentId,
         noteId: note.id,
       })),
+      ...stickies,
     ],
     edges: [
       ...conceptEdges,
@@ -162,6 +222,12 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
         source: sourceId,
         target: `note:${note.id}`,
         relationship: "note",
+      })),
+      ...stickies.map((sticky) => ({
+        id: `sticky-link:${sticky.id}`,
+        source: `note:${sticky.noteId}`,
+        target: sticky.id,
+        relationship: "explanation",
       })),
     ],
   };
@@ -181,9 +247,15 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
   const hubId = "scholarlm:hub";
   const notes = db
     .query(
-      "SELECT id,document_id documentId,title FROM note_pages ORDER BY updated_at DESC",
+      "SELECT id,document_id documentId,title,snapshot FROM note_pages ORDER BY updated_at DESC",
     )
-    .all() as Array<{ id: string; documentId: string; title: string }>;
+    .all() as Array<{
+    id: string;
+    documentId: string;
+    title: string;
+    snapshot: string;
+  }>;
+  const stickies = stickyNodes(notes);
   return {
     nodes: [
       {
@@ -213,6 +285,7 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
         documentId: note.documentId,
         noteId: note.id,
       })),
+      ...stickies,
     ],
     edges: [
       ...documents.map((document) => ({
@@ -226,6 +299,12 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
         source: `source:${note.documentId}`,
         target: `note:${note.id}`,
         relationship: "note",
+      })),
+      ...stickies.map((sticky) => ({
+        id: `sticky-link:${sticky.id}`,
+        source: `note:${sticky.noteId}`,
+        target: sticky.id,
+        relationship: "explanation",
       })),
     ],
   };

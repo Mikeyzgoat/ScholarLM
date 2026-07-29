@@ -64,7 +64,9 @@ export function KnowledgeGraph({
               ? 10
               : n.kind === "note"
                 ? 6
-                : 7,
+                : n.kind === "sticky"
+                  ? 4.5
+                  : 7,
         color:
           n.kind === "hub"
             ? light
@@ -78,6 +80,10 @@ export function KnowledgeGraph({
                 ? light
                   ? "#31b7ad"
                   : "#c084fc"
+                : n.kind === "sticky"
+                  ? light
+                    ? "#ca8a04"
+                    : "#facc15"
                 : light
                   ? "#64748b"
                   : "#a8a29e",
@@ -157,7 +163,9 @@ export function KnowledgeGraph({
             ? 10
             : node.kind === "note"
               ? 6
-              : 7;
+              : node.kind === "sticky"
+                ? 4.5
+                : 7;
       g.setNodeAttribute(
         node.id,
         "size",

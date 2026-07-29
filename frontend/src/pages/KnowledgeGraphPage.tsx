@@ -198,6 +198,16 @@ export default function KnowledgeGraphPage() {
                 <ArrowUpRight size={14} />
               </button>
             )}
+            {selected.kind === "sticky" && selected.noteId && (
+              <button
+                type="button"
+                onClick={() => navigate(`/notes/${selected.noteId}`)}
+                className="mt-3 flex items-center gap-2 text-xs text-orange-300"
+              >
+                Open sticky note canvas
+                <ArrowUpRight size={14} />
+              </button>
+            )}
             {selected.kind === "source" && selected.documentId && (
               <div className="mt-4 space-y-2">
                 <button
