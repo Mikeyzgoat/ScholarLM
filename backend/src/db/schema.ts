@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS speech_cache (text_hash TEXT PRIMARY KEY,source_text 
 CREATE TABLE IF NOT EXISTS generated_output_audio (source_hash TEXT NOT NULL,text_hash TEXT NOT NULL,source_text TEXT NOT NULL,output_text TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,PRIMARY KEY(source_hash,text_hash),FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS explanation_history (id TEXT PRIMARY KEY,selection_hash TEXT NOT NULL,selected_text TEXT NOT NULL,document_title TEXT,page_number INTEGER,prompt_mode TEXT NOT NULL,explanation TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_explanation_history_selection_created ON explanation_history(selection_hash,created_at DESC);
+CREATE TABLE IF NOT EXISTS openrouter_requests (id TEXT PRIMARY KEY,operation TEXT NOT NULL,model TEXT NOT NULL,status TEXT NOT NULL,http_status INTEGER,error_code TEXT,error_message TEXT,created_at TEXT NOT NULL,completed_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_openrouter_requests_created ON openrouter_requests(created_at DESC);
+CREATE TABLE IF NOT EXISTS explanation_audio (explanation_id TEXT PRIMARY KEY,text_hash TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE,FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS runtime_metadata (key TEXT PRIMARY KEY,value TEXT NOT NULL);
 `);
   const columns = db.query("PRAGMA table_info(documents)").all() as Array<{

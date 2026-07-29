@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { db } from "../db/database";
-import { createId } from "../utils/ids";
 
 export type ExplanationMode = "explain" | "regenerate" | "simplify";
 
@@ -26,9 +25,10 @@ export function storeExplanationRevision(input: {
   pageNumber?: number;
   mode: ExplanationMode;
   explanation: string;
+  requestId: string;
 }): { historyId: string; revisionCount: number } {
   const hash = selectionHash(input);
-  const historyId = createId();
+  const historyId = input.requestId;
   db.query(
     "INSERT INTO explanation_history VALUES (?,?,?,?,?,?,?,?)",
   ).run(

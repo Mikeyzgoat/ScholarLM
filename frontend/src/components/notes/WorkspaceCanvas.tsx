@@ -96,6 +96,19 @@ export function WorkspaceCanvas({
     });
   }, [editor, documentId, fileUrl, activePage, textSelectionEnabled]);
 
+  const navigateToPage = (pageNumber: number) => {
+    const nextPage = Math.max(1, Math.min(Math.max(1, pageCount), pageNumber));
+    if (editor)
+      showPdfPageOnCanvas({
+        editor,
+        documentId,
+        fileUrl,
+        pageNumber: nextPage,
+        textSelectionEnabled,
+      });
+    onPageChange(nextPage);
+  };
+
   if (notes.isLoading || (!note && !createError))
     return (
       <div className="grid h-[620px] place-items-center">Loading canvas…</div>
@@ -116,7 +129,7 @@ export function WorkspaceCanvas({
             type="button"
             aria-label="Previous PDF page"
             disabled={activePage <= 1}
-            onClick={() => onPageChange(Math.max(1, activePage - 1))}
+            onClick={() => navigateToPage(activePage - 1)}
             className="rounded p-1.5 hover:bg-white/10 disabled:opacity-30"
           >
             <ChevronLeft size={15} />
@@ -128,7 +141,7 @@ export function WorkspaceCanvas({
             type="button"
             aria-label="Next PDF page"
             disabled={activePage >= pageCount}
-            onClick={() => onPageChange(Math.min(pageCount, activePage + 1))}
+            onClick={() => navigateToPage(activePage + 1)}
             className="rounded p-1.5 hover:bg-white/10 disabled:opacity-30"
           >
             <ChevronRight size={15} />

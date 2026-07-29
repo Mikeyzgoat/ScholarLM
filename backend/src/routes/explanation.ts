@@ -8,6 +8,11 @@ import {
   storeExplanationRevision,
   type ExplanationMode,
 } from "../services/explanationHistory";
+import {
+  beginOpenRouterRequest,
+  failOpenRouterRequest,
+  finishOpenRouterRequest,
+} from "../services/providerTelemetry";
 const explanation = new Hono();
 explanation.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
@@ -89,6 +94,7 @@ explanation.post("/", async (c) => {
     : hasText
       ? (b.selectedText as string).trim()
       : "Handwritten canvas selection";
+  const requestId = beginOpenRouterRequest("explanation");
   try {
     if (hasImage || b.graphRequested === true) {
       const result = await explainCanvasSelection({
@@ -106,7 +112,9 @@ explanation.post("/", async (c) => {
         pageNumber: context.pageNumber,
         mode,
         explanation: result.explanation,
+        requestId,
       });
+      finishOpenRouterRequest(requestId);
       return c.json({ ...result, ...history });
     }
     if (c.req.query("stream") === "1") {
@@ -135,13 +143,16 @@ explanation.post("/", async (c) => {
             pageNumber: context.pageNumber,
             mode,
             explanation: generated,
+            requestId,
           });
+          finishOpenRouterRequest(requestId);
           send({
             type: "done",
             result: { explanation: generated, ...history },
           });
           await writes;
         } catch (error) {
+          failOpenRouterRequest(requestId, error);
           send({
             type: "error",
             message:
@@ -164,9 +175,12 @@ explanation.post("/", async (c) => {
       pageNumber: context.pageNumber,
       mode,
       explanation: generated,
+      requestId,
     });
+    finishOpenRouterRequest(requestId);
     return c.json({ explanation: generated, ...history });
   } catch (error) {
+    failOpenRouterRequest(requestId, error);
     const message =
       error instanceof Error ? error.message : "Local inference failed";
     const timedOut =

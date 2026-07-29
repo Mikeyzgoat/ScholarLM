@@ -11,6 +11,7 @@ import graph from "./routes/graph";
 import notes from "./routes/notes";
 import rag from "./routes/rag";
 import { resumePendingIngestions } from "./services/ingestion";
+import { getProviderStatus } from "./services/providerTelemetry";
 initializeDatabase();
 if (env.OPENROUTER_API_KEY)
   prepareEmbeddingModel(env.OPENROUTER_EMBEDDING_MODEL);
@@ -18,7 +19,9 @@ await ensureUploadDirectory();
 void resumePendingIngestions();
 const app = new Hono({ strict: false });
 app.use("*", cors({ origin: env.FRONTEND_ORIGIN }));
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", (c) =>
+  c.json({ ok: true, providers: { openrouter: getProviderStatus() } }),
+);
 app.route("/documents", documents);
 app.route("/search", search);
 app.route("/explain", explanation);

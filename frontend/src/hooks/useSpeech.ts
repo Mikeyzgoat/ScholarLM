@@ -139,10 +139,16 @@ export function useSpeech() {
   useEffect(() => {
     const unlockAudio = () => {
       if (!audio.current) audio.current = new Audio(silentWav);
-      void audio.current.play().then(() => {
-        audio.current?.pause();
-        if (audio.current) audio.current.currentTime = 0;
-      });
+      void audio.current
+        .play()
+        .then(() => {
+          audio.current?.pause();
+          if (audio.current) audio.current.currentTime = 0;
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof DOMException && error.name === "AbortError"))
+            console.debug("Audio unlock was deferred", error);
+        });
     };
     window.addEventListener("pointerdown", unlockAudio, {
       once: true,
@@ -159,7 +165,11 @@ export function useSpeech() {
     [clearAudio, stop],
   );
 
-  const speak = async (text: string, sourceText?: string) => {
+  const speak = async (
+    text: string,
+    sourceText?: string,
+    explanationId?: string,
+  ) => {
     stop();
     clearAudio();
     latestText.current = text;
@@ -179,6 +189,7 @@ export function useSpeech() {
         },
         next.signal,
         sourceText,
+        explanationId,
       );
       if (!chunks.length) throw new Error("Kokoro returned no audio chunks");
       const combined = await combineWavChunks(chunks);

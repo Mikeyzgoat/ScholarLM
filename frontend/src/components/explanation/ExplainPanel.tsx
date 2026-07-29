@@ -7,21 +7,24 @@ import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
 import type { CanvasSelectionAnchor, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
-import { ChartSpline, FilePlus2 } from "lucide-react";
+import { ChartSpline, FilePlus2, StickyNote } from "lucide-react";
 export function ExplainPanel({
   selectedText,
   selectedTexts,
   existingExplanation,
+  existingExplanationId,
   selectionAnchors,
   selectionImage,
   pageNumber,
   documentTitle,
   onPlotGenerated,
   onExplanationGenerated,
+  onExplanationStickyRequested,
 }: {
   selectedText: string;
   selectedTexts?: string[];
   existingExplanation?: string;
+  existingExplanationId?: string;
   selectionAnchors?: CanvasSelectionAnchor[];
   selectionImage?: string;
   pageNumber: number | null;
@@ -33,7 +36,11 @@ export function ExplainPanel({
     mode: "explain" | "regenerate" | "simplify";
     answers?: string[];
     anchors?: CanvasSelectionAnchor[];
+    explanationId?: string;
   }) => void;
+  onExplanationStickyRequested?: NonNullable<
+    typeof onExplanationGenerated
+  >;
 }) {
   const state = useExplanation(),
     speech = useSpeech();
@@ -64,8 +71,9 @@ export function ExplainPanel({
         mode,
         answers: value.answers,
         anchors: selectionAnchors,
+        explanationId: value.historyId,
       });
-      await speech.speak(value.explanation, selectedText);
+      await speech.speak(value.explanation, selectedText, value.historyId);
     }
   }
   useEffect(() => {
@@ -78,9 +86,27 @@ export function ExplainPanel({
     const existing =
       existingExplanation ||
       findLatestGeneratedOutput(selectedText, pageNumber ?? undefined)?.text;
-    if (existing) state.load(existing);
-    else state.clear();
-  }, [selectedText, selectionImage, pageNumber, existingExplanation]);
+    if (existing) {
+      state.load(existing);
+      setCanvasInput({
+        selectedText,
+        explanation: existing,
+        mode: "explain",
+        anchors: selectionAnchors,
+        explanationId: existingExplanationId,
+      });
+    } else {
+      state.clear();
+      setCanvasInput(undefined);
+    }
+  }, [
+    selectedText,
+    selectionImage,
+    pageNumber,
+    existingExplanation,
+    existingExplanationId,
+    selectionAnchors,
+  ]);
   return (
     <motion.section
       layout
@@ -130,7 +156,7 @@ export function ExplainPanel({
               type="button"
               disabled={state.isExplaining}
               onClick={() => void explain("regenerate")}
-              className="rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs text-orange-200 hover:bg-orange-500/20 disabled:opacity-50"
+              className="scholar-secondary-action rounded-lg border px-3 py-2 text-xs disabled:cursor-not-allowed"
             >
               {state.isExplaining ? "Working…" : "New explanation"}
             </button>
@@ -138,26 +164,39 @@ export function ExplainPanel({
               type="button"
               disabled={state.isExplaining}
               onClick={() => void explain("simplify")}
-              className="rounded-lg border border-purple-400/20 bg-purple-500/10 px-3 py-2 text-xs text-purple-200 hover:bg-purple-500/20 disabled:opacity-50"
+              className="scholar-purple-action rounded-lg border px-3 py-2 text-xs disabled:cursor-not-allowed"
             >
               Simplify
             </button>
           </div>
-          <button
-            type="button"
-            disabled={!canvasInput || state.isExplaining}
-            onClick={() => {
-              if (canvasInput) onExplanationGenerated?.(canvasInput);
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-medium text-white hover:bg-orange-400 disabled:opacity-50"
-          >
-            <FilePlus2 size={15} />
-            Add explanation to canvas
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={!canvasInput || state.isExplaining}
+              onClick={() => {
+                if (canvasInput) onExplanationStickyRequested?.(canvasInput);
+              }}
+              className="scholar-primary-action flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium disabled:cursor-not-allowed"
+            >
+              <StickyNote size={15} />
+              Add as sticky
+            </button>
+            <button
+              type="button"
+              disabled={!canvasInput || state.isExplaining}
+              onClick={() => {
+                if (canvasInput) onExplanationGenerated?.(canvasInput);
+              }}
+              className="scholar-secondary-action flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs disabled:cursor-not-allowed"
+            >
+              <FilePlus2 size={15} />
+              Add as text
+            </button>
+          </div>
           {selectedText && (
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/15"
+              className="scholar-secondary-action flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs"
               disabled={state.isExplaining}
               onClick={() => void explain("regenerate", true)}
             >
@@ -170,10 +209,19 @@ export function ExplainPanel({
             isPlaying={speech.isPlaying}
             isPaused={speech.isPaused}
             isReady={speech.isReady}
+            canLoad={Boolean(existingExplanationId)}
             usingFallback={speech.usingFallback}
             autoRead={speech.autoRead}
             onPause={speech.pause}
-            onResume={speech.resume}
+            onResume={() => {
+              if (speech.isReady) speech.resume();
+              else
+                void speech.speak(
+                  state.explanation,
+                  selectedText,
+                  existingExplanationId,
+                );
+            }}
             onReplay={speech.replay}
             onStop={speech.stop}
             onAutoReadChange={speech.setAutoRead}

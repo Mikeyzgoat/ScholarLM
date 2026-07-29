@@ -9,6 +9,7 @@ import {
 } from "../../lib/generatedOutputs";
 import { useTheme } from "../../lib/theme";
 import { pdfPageShapeUtils } from "./PdfPageShape";
+import { explanationStickyShapeUtils } from "./ExplanationStickyShape";
 export function NotesCanvas({
   note,
   onEditorReady,
@@ -220,10 +221,17 @@ export function NotesCanvas({
                 typeof meta.scholarLmExplanation === "string"
                   ? meta.scholarLmExplanation
                   : mapped?.text ?? "";
+              const explanationId =
+                typeof meta.scholarLmExplanationId === "string"
+                  ? meta.scholarLmExplanationId
+                  : generatedShapes[0].type === "scholar-explanation-sticky"
+                    ? generatedShapes[0].props.explanationId
+                    : undefined;
               onTextSelected?.(sourceText);
               onCanvasSelection?.({
                 text: sourceText,
                 existingExplanation,
+                explanationId,
                 generatedOutput: true,
               });
             } else {
@@ -278,7 +286,7 @@ export function NotesCanvas({
       <Tldraw
         colorScheme={resolvedTheme}
         onMount={mount}
-        shapeUtils={pdfPageShapeUtils}
+        shapeUtils={[...pdfPageShapeUtils, ...explanationStickyShapeUtils]}
       />
     </div>
   );

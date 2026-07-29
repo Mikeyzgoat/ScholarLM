@@ -16,6 +16,31 @@ function speechHash(text: string): string {
   return createHash("sha256").update(normalizeSpeechText(text)).digest("hex");
 }
 
+export function getExplanationSpeech(explanationId: string): Uint8Array | null {
+  const row = db
+    .query(
+      "SELECT s.audio FROM explanation_audio ea JOIN speech_cache s ON s.text_hash=ea.text_hash WHERE ea.explanation_id=?",
+    )
+    .get(explanationId) as { audio: Uint8Array } | null;
+  if (!row) return null;
+  db.query(
+    "UPDATE explanation_audio SET last_accessed_at=? WHERE explanation_id=?",
+  ).run(new Date().toISOString(), explanationId);
+  return row.audio;
+}
+
+export function linkExplanationSpeech(
+  explanationId: string,
+  text: string,
+): void {
+  const now = new Date().toISOString();
+  db.query(
+    `INSERT INTO explanation_audio(explanation_id,text_hash,created_at,last_accessed_at)
+     VALUES(?,?,?,?)
+     ON CONFLICT(explanation_id) DO UPDATE SET text_hash=excluded.text_hash,last_accessed_at=excluded.last_accessed_at`,
+  ).run(explanationId, speechHash(text), now, now);
+}
+
 function sourceHash(text: string): string {
   return createHash("sha256").update(text.trim()).digest("hex");
 }

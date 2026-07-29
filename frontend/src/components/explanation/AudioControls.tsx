@@ -4,6 +4,7 @@ export function AudioControls({
   isPlaying,
   isPaused,
   isReady,
+  canLoad = false,
   usingFallback,
   autoRead,
   onPause,
@@ -16,6 +17,7 @@ export function AudioControls({
   isPlaying: boolean;
   isPaused: boolean;
   isReady: boolean;
+  canLoad?: boolean;
   usingFallback: boolean;
   autoRead: boolean;
   onPause: () => void;
@@ -29,7 +31,7 @@ export function AudioControls({
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
         onClick={isPlaying ? onPause : onResume}
-        disabled={!isReady}
+        disabled={!isReady && !canLoad}
       >
         {isPlaying ? <Pause size={17} /> : <Play size={17} />}
       </button>

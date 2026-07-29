@@ -76,6 +76,7 @@ export interface CanvasSelection {
   texts?: string[];
   imageDataUrl?: string;
   existingExplanation?: string;
+  explanationId?: string;
   generatedOutput?: boolean;
   anchors?: CanvasSelectionAnchor[];
 }

@@ -2,7 +2,9 @@ import { Hono } from "hono";
 import { streamSpeech, synthesizeSpeech } from "../services/speech";
 import {
   combineWavBytes,
+  getExplanationSpeech,
   getCachedSpeech,
+  linkExplanationSpeech,
   normalizeSpeechText,
   storeCachedSpeech,
 } from "../services/speechCache";
@@ -14,6 +16,10 @@ speech.post("/", async (c) => {
   const sourceText =
     body && typeof body === "object"
       ? (body as { sourceText?: unknown }).sourceText
+      : null;
+  const explanationId =
+    body && typeof body === "object"
+      ? (body as { explanationId?: unknown }).explanationId
       : null;
   if (typeof text !== "string" || text.trim().length < 1 || text.length > 12000)
     return c.json(
@@ -39,8 +45,27 @@ speech.post("/", async (c) => {
       },
       400,
     );
+  if (
+    explanationId != null &&
+    (typeof explanationId !== "string" ||
+      !/^[a-f0-9]{64}$/.test(explanationId))
+  )
+    return c.json(
+      {
+        error: {
+          message: "Invalid explanation identifier",
+          code: "INVALID_INPUT",
+        },
+      },
+      400,
+    );
   const normalizedText = normalizeSpeechText(text);
-  const cached = getCachedSpeech(normalizedText);
+  const cached =
+    typeof explanationId === "string"
+      ? getExplanationSpeech(explanationId) ?? getCachedSpeech(normalizedText)
+      : getCachedSpeech(normalizedText);
+  if (cached && typeof explanationId === "string")
+    linkExplanationSpeech(explanationId, normalizedText);
   if (cached && typeof sourceText === "string" && sourceText.trim())
     storeCachedSpeech(normalizedText, cached, sourceText);
   if (c.req.query("stream") === "1") {
@@ -73,6 +98,8 @@ speech.post("/", async (c) => {
                 combineWavBytes(generatedChunks),
                 typeof sourceText === "string" ? sourceText : undefined,
               );
+            if (generatedChunks.length && typeof explanationId === "string")
+              linkExplanationSpeech(explanationId, normalizedText);
             controller.close();
             return;
           }
@@ -109,6 +136,8 @@ speech.post("/", async (c) => {
       bytes,
       typeof sourceText === "string" ? sourceText : undefined,
     );
+  if (typeof explanationId === "string")
+    linkExplanationSpeech(explanationId, normalizedText);
   const wav = bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,

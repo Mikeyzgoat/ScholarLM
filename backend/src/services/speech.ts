@@ -3,12 +3,19 @@ import type { KokoroTTS as KokoroModel } from "kokoro-js";
 let modelPromise: Promise<KokoroModel> | null = null;
 
 function getModel(): Promise<KokoroModel> {
-  return (modelPromise ??= import("kokoro-js").then(({ KokoroTTS }) =>
-    KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
-      dtype: "q8",
-      device: "cpu",
-    }),
-  ));
+  if (!modelPromise)
+    modelPromise = import("kokoro-js")
+      .then(({ KokoroTTS }) =>
+        KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
+          dtype: "q8",
+          device: "cpu",
+        }),
+      )
+      .catch((error) => {
+        modelPromise = null;
+        throw error;
+      });
+  return modelPromise;
 }
 export async function synthesizeSpeech(text: string): Promise<Uint8Array> {
   if (!text.trim()) throw new Error("Speech text is required");

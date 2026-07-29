@@ -4,14 +4,54 @@ import {
   generatedOutputKey,
   registerGeneratedOutput,
 } from "./generatedOutputs";
+import {
+  EXPLANATION_STICKY_SHAPE_TYPE,
+  type ExplanationStickyShape,
+} from "../components/notes/ExplanationStickyShape";
 
-interface ExplanationCanvasInput {
+export interface ExplanationCanvasInput {
   selectedText: string;
   explanation: string;
   pageNumber?: number;
   mode?: "explain" | "regenerate" | "simplify";
   answers?: string[];
   anchors?: CanvasSelectionAnchor[];
+  explanationId?: string;
+}
+
+export function addExplanationStickyToCanvas(
+  editor: Editor,
+  input: ExplanationCanvasInput,
+): void {
+  const viewport = editor.getViewportPageBounds();
+  const width = 340;
+  const output = registerGeneratedOutput({
+    text: input.explanation,
+    sourceText: input.selectedText,
+    pageNumber: input.pageNumber,
+    mode: input.mode,
+  });
+  editor.createShape<ExplanationStickyShape>({
+    type: EXPLANATION_STICKY_SHAPE_TYPE,
+    x: viewport.center.x - width / 2,
+    y: viewport.center.y - 56,
+    meta: {
+      scholarLmGenerated: true,
+      scholarLmOutputKind: "explanation",
+      scholarLmOutputId: output.id,
+      scholarLmSourceText: input.selectedText,
+      scholarLmExplanation: input.explanation,
+      scholarLmExplanationId: input.explanationId,
+    },
+    props: {
+      w: width,
+      h: 112,
+      question: input.selectedText,
+      explanation: input.explanation,
+      explanationId: input.explanationId ?? "",
+      expanded: false,
+    },
+  });
 }
 
 function withoutAnswerPrefix(value: string): string {

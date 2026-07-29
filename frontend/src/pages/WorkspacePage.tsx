@@ -17,7 +17,10 @@ import type { CanvasSelectionAnchor, GraphNode } from "../lib/types";
 import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { DocumentQA } from "../components/rag/DocumentQA";
-import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import {
+  addExplanationStickyToCanvas,
+  addExplanationToCanvas,
+} from "../lib/addExplanationToCanvas";
 import { activateDocumentIndex } from "../services/rag";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
@@ -32,6 +35,7 @@ export default function WorkspacePage() {
   const [selectedTextPage, setSelectedTextPage] = useState<number | null>(null);
   const [selectionImage, setSelectionImage] = useState<string>();
   const [existingExplanation, setExistingExplanation] = useState<string>();
+  const [existingExplanationId, setExistingExplanationId] = useState<string>();
   const [selectionAnchors, setSelectionAnchors] =
     useState<CanvasSelectionAnchor[]>();
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
@@ -114,6 +118,7 @@ export default function WorkspacePage() {
             setSelectedTexts([text]);
             setSelectionImage(undefined);
             setExistingExplanation(undefined);
+            setExistingExplanationId(undefined);
             setSelectionAnchors(undefined);
             setSelectedTextPage(activePage);
           }}
@@ -122,6 +127,7 @@ export default function WorkspacePage() {
             setSelectedTexts(text ? [text] : undefined);
             setSelectionImage(undefined);
             setExistingExplanation(undefined);
+            setExistingExplanationId(undefined);
             setSelectionAnchors(undefined);
             setSelectedTextPage(null);
           }}
@@ -130,6 +136,7 @@ export default function WorkspacePage() {
             setSelectedTexts(selection.texts);
             setSelectionImage(selection.imageDataUrl);
             setExistingExplanation(selection.existingExplanation);
+            setExistingExplanationId(selection.explanationId);
             setSelectionAnchors(selection.anchors);
             setSelectedTextPage(null);
           }}
@@ -154,6 +161,7 @@ export default function WorkspacePage() {
           selectedTexts={selectedTexts}
           selectionImage={selectionImage}
           existingExplanation={existingExplanation}
+          existingExplanationId={existingExplanationId}
           selectionAnchors={selectionAnchors}
           pageNumber={selectedTextPage}
           documentTitle={doc.data.name}
@@ -161,6 +169,9 @@ export default function WorkspacePage() {
             if (canvasEditor) drawMathPlot(canvasEditor, plot, equation);
           }}
           onExplanationGenerated={saveExplanationToCanvas}
+          onExplanationStickyRequested={(input) => {
+            if (canvasEditor) addExplanationStickyToCanvas(canvasEditor, input);
+          }}
         />
         <DocumentQA
           documentId={documentId}

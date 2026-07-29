@@ -81,4 +81,8 @@ export function showPdfPageOnCanvas(input: {
     type: PDF_PAGE_SHAPE_TYPE,
     isLocked: true,
   });
+  editor.zoomToBounds(
+    { x: 0, y: 0, w: 816, h: 1056 },
+    { inset: 48, animation: { duration: 180 } },
+  );
 }
