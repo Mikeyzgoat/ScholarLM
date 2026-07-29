@@ -32,6 +32,9 @@ export interface SearchResult {
   kind?: "pdf" | "sticky";
   label?: string;
   noteId?: string;
+  shapeId?: string;
+  stickyKind?: "explanation" | "note";
+  explanationId?: string;
 }
 export interface RagSource extends Omit<SearchResult, "pageNumber"> {
   sourceId: string;
@@ -50,6 +53,9 @@ export interface GraphNode {
   kind?: "hub" | "source" | "concept" | "note" | "sticky";
   documentId?: string;
   noteId?: string;
+  shapeId?: string;
+  stickyKind?: "explanation" | "note";
+  explanationId?: string;
 }
 export interface GraphEdge {
   id: string;

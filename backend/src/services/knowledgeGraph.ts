@@ -21,10 +21,13 @@ function stickyNodes(notes: GraphNote[]) {
       id: sticky.id,
       label: sticky.label,
       description: sticky.content,
-      pageNumber: null,
+      pageNumber: sticky.pageNumber ?? null,
       kind: "sticky" as const,
       documentId: note.documentId,
       noteId: note.id,
+      shapeId: sticky.shapeId,
+      stickyKind: sticky.kind,
+      explanationId: sticky.explanationId,
     })),
   );
 }

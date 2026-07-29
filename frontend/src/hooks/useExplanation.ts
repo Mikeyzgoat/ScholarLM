@@ -21,6 +21,8 @@ export function useExplanation() {
       selectedTexts?: string[];
       imageDataUrl?: string;
       graphRequested?: boolean;
+      documentId?: string;
+      noteId?: string;
       documentTitle?: string;
       pageNumber?: number;
       mode?: "explain" | "regenerate" | "simplify";

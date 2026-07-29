@@ -4,8 +4,109 @@ import Sigma from "sigma";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import type { GraphNode, GraphResponse } from "../../lib/types";
 import { GraphControls } from "./GraphControls";
-import graphHub from "../../assets/graph-hub.png";
 import { useTheme } from "../../lib/theme";
+
+function groupedPositions(
+  graph: GraphResponse,
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const hub = graph.nodes.find((node) => node.kind === "hub");
+  const sources = graph.nodes.filter((node) => node.kind === "source");
+  if (hub) positions.set(hub.id, { x: 0, y: 0 });
+  sources.forEach((source, index) => {
+    const angle = (index / Math.max(1, sources.length)) * Math.PI * 2;
+    const radius = hub ? 7 : 0;
+    positions.set(source.id, {
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+    });
+  });
+  const outgoing = new Map<string, string[]>();
+  graph.edges.forEach((edge) => {
+    const targets = outgoing.get(edge.source) ?? [];
+    targets.push(edge.target);
+    outgoing.set(edge.source, targets);
+  });
+  sources.forEach((source) => {
+    const origin = positions.get(source.id) ?? { x: 0, y: 0 };
+    const directChildren = (outgoing.get(source.id) ?? [])
+      .map((id) => nodeById.get(id))
+      .filter((node): node is GraphNode => Boolean(node));
+    const children = [
+      ...new Map(
+        [
+          ...directChildren,
+          ...graph.nodes.filter(
+            (node) =>
+              node.kind === "concept" &&
+              node.documentId === source.documentId,
+          ),
+        ].map((node) => [node.id, node]),
+      ).values(),
+    ];
+    const concepts = children.filter((node) => node.kind === "concept");
+    const notes = children.filter((node) => node.kind === "note");
+    concepts.forEach((node, index) => {
+      const angle = (index / Math.max(1, concepts.length)) * Math.PI * 2;
+      positions.set(node.id, {
+        x: origin.x + Math.cos(angle) * 3.4,
+        y: origin.y + Math.sin(angle) * 3.4,
+      });
+    });
+    notes.forEach((node, index) => {
+      const angle =
+        (index / Math.max(1, notes.length)) * Math.PI * 2 + Math.PI / 4;
+      positions.set(node.id, {
+        x: origin.x + Math.cos(angle) * 2.2,
+        y: origin.y + Math.sin(angle) * 2.2,
+      });
+    });
+  });
+  graph.nodes
+    .filter((node) => node.kind === "note")
+    .forEach((note) => {
+      const origin = positions.get(note.id) ?? { x: 0, y: 0 };
+      const stickies = (outgoing.get(note.id) ?? [])
+        .map((id) => nodeById.get(id))
+        .filter((node): node is GraphNode => node?.kind === "sticky");
+      stickies.forEach((sticky, index) => {
+        const angle =
+          (index / Math.max(1, stickies.length)) * Math.PI * 2 + Math.PI / 6;
+        positions.set(sticky.id, {
+          x: origin.x + Math.cos(angle) * 1.15,
+          y: origin.y + Math.sin(angle) * 1.15,
+        });
+      });
+    });
+  graph.nodes.forEach((node, index) => {
+    if (positions.has(node.id)) return;
+    const angle = (index / Math.max(1, graph.nodes.length)) * Math.PI * 2;
+    positions.set(node.id, {
+      x: Math.cos(angle) * 4.5,
+      y: Math.sin(angle) * 4.5,
+    });
+  });
+  return positions;
+}
+
+function nodeSize(node: GraphNode): number {
+  if (node.kind === "hub") return 15;
+  if (node.kind === "source") return 10;
+  if (node.kind === "note") return 6;
+  if (node.kind === "sticky") return 4.5;
+  return 7;
+}
+
+function nodeColor(node: GraphNode, light: boolean): string {
+  if (node.kind === "hub") return light ? "#149da5" : "#f97316";
+  if (node.kind === "source" || node.kind === "concept")
+    return light ? "#2378b5" : "#38bdf8";
+  if (node.kind === "note") return light ? "#7c3aed" : "#c084fc";
+  if (node.kind === "sticky") return light ? "#ca8a04" : "#facc15";
+  return light ? "#64748b" : "#a8a29e";
+}
+
 export function KnowledgeGraph({
   graph,
   isLoading,
@@ -36,9 +137,10 @@ export function KnowledgeGraph({
         iterations: Math.min(2, remaining),
         settings: {
           ...forceAtlas2.inferSettings(activeGraph),
-          gravity: 0.9,
-          scalingRatio: 2.4,
-          slowDown: 5,
+          gravity: 1.3,
+          scalingRatio: 1.55,
+          slowDown: 7,
+          edgeWeightInfluence: 1.2,
         },
       });
       remaining -= 2;
@@ -52,42 +154,19 @@ export function KnowledgeGraph({
   useEffect(() => {
     if (!container.current || !graph?.nodes.length) return;
     const g = new Graph({ multi: true });
+    const positions = groupedPositions(graph);
     graph.nodes.forEach((n, i) =>
       g.addNode(n.id, {
         label: n.label,
-        x: n.kind === "hub" ? 0 : Math.cos(i) * 10,
-        y: n.kind === "hub" ? 0 : Math.sin(i) * 10,
-        size:
-          n.kind === "hub"
-            ? 15
-            : n.kind === "source"
-              ? 10
-              : n.kind === "note"
-                ? 6
-                : n.kind === "sticky"
-                  ? 4.5
-                  : 7,
-        color:
-          n.kind === "hub"
-            ? light
-              ? "#149da5"
-              : "#f97316"
-            : n.kind === "source"
-              ? light
-                ? "#2378b5"
-                : "#fb923c"
-              : n.kind === "note"
-                ? light
-                  ? "#31b7ad"
-                  : "#c084fc"
-                : n.kind === "sticky"
-                  ? light
-                    ? "#ca8a04"
-                    : "#facc15"
-                : light
-                  ? "#64748b"
-                  : "#a8a29e",
-        forceLabel: n.kind === "hub",
+        x: positions.get(n.id)?.x ?? Math.cos(i) * 4,
+        y: positions.get(n.id)?.y ?? Math.sin(i) * 4,
+        size: nodeSize(n),
+        color: nodeColor(n, light),
+        forceLabel:
+          n.kind === "hub" ||
+          n.kind === "source" ||
+          n.kind === "note" ||
+          n.kind === "sticky",
         fixed: n.kind === "hub",
       }),
     );
@@ -97,6 +176,14 @@ export function KnowledgeGraph({
           label: e.relationship,
           color: light ? "#a7d8dc" : "#78350f",
           size: 1.4,
+          weight:
+            e.relationship === "explanation"
+              ? 4
+              : e.relationship === "note"
+                ? 3
+                : e.relationship === "source"
+                  ? 2
+                  : 1.5,
         });
     });
     model.current = g;
@@ -156,44 +243,13 @@ export function KnowledgeGraph({
     if (!g || !sigma || !focusedNodeId || !g.hasNode(focusedNodeId)) return;
     graph?.nodes.forEach((node) => {
       if (!g.hasNode(node.id)) return;
-      const normalSize =
-        node.kind === "hub"
-          ? 15
-          : node.kind === "source"
-            ? 10
-            : node.kind === "note"
-              ? 6
-              : node.kind === "sticky"
-                ? 4.5
-                : 7;
+      const normalSize = nodeSize(node);
       g.setNodeAttribute(
         node.id,
         "size",
         node.id === focusedNodeId ? normalSize + 5 : normalSize,
       );
-      g.setNodeAttribute(
-        node.id,
-        "color",
-        node.id === focusedNodeId
-          ? light
-            ? "#0e7490"
-            : "#fdba74"
-          : node.kind === "hub"
-            ? light
-              ? "#149da5"
-              : "#f97316"
-            : node.kind === "source" || node.pageNumber
-              ? light
-                ? "#2378b5"
-                : "#fb923c"
-              : node.kind === "note"
-                ? light
-                  ? "#31b7ad"
-                  : "#c084fc"
-                : light
-                  ? "#64748b"
-                  : "#a8a29e",
-      );
+      g.setNodeAttribute(node.id, "color", nodeColor(node, light));
     });
     const { x, y } = g.getNodeAttributes(focusedNodeId);
     sigma.getCamera().animate({ x, y, ratio: 0.18 }, { duration: 420 });
@@ -217,19 +273,26 @@ export function KnowledgeGraph({
             : "[background-image:radial-gradient(circle,rgba(251,146,60,0.7)_1px,transparent_1px)]"
         }`}
       />
-      {graph.nodes.some((node) => node.kind === "hub") && (
-        <img
-          src={graphHub}
-          alt=""
-          className="theme-graph-hub pointer-events-none absolute left-1/2 top-1/2 z-10 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover shadow-[0_0_34px_rgba(249,115,22,0.42)] motion-safe:animate-pulse"
-        />
-      )}
       <GraphControls
         onZoomIn={() => renderer.current?.getCamera().animatedZoom()}
         onZoomOut={() => renderer.current?.getCamera().animatedUnzoom()}
         onReset={() => renderer.current?.getCamera().animatedReset()}
         onLayout={layout}
       />
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex flex-wrap gap-1.5 rounded-lg border border-white/10 bg-black/40 p-1.5 text-[9px] font-semibold uppercase tracking-[0.08em] backdrop-blur-md">
+        <span className="flex items-center gap-1.5 rounded px-1.5 py-1 text-sky-300">
+          <span className="h-2 w-2 rounded-full bg-sky-400" />
+          PDF
+        </span>
+        <span className="flex items-center gap-1.5 rounded px-1.5 py-1 text-purple-300">
+          <span className="h-2 w-2 rounded-full bg-purple-400" />
+          Canvas
+        </span>
+        <span className="flex items-center gap-1.5 rounded px-1.5 py-1 text-amber-300">
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          Sticky
+        </span>
+      </div>
       <div ref={container} className="h-full w-full" />
     </div>
   );

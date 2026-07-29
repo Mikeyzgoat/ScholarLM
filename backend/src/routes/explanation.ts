@@ -13,6 +13,7 @@ import {
   failOpenRouterRequest,
   finishOpenRouterRequest,
 } from "../services/providerTelemetry";
+import { db } from "../db/database";
 const explanation = new Hono();
 explanation.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
@@ -26,6 +27,8 @@ explanation.post("/", async (c) => {
     selectedTexts?: unknown;
     imageDataUrl?: unknown;
     graphRequested?: unknown;
+    documentId?: unknown;
+    noteId?: unknown;
     documentTitle?: unknown;
     pageNumber?: unknown;
     mode?: unknown;
@@ -58,6 +61,10 @@ explanation.post("/", async (c) => {
         b.selectedTexts.length !== selectedTexts.length)) ||
     (b.graphRequested !== undefined &&
       typeof b.graphRequested !== "boolean") ||
+    (b.documentId !== undefined &&
+      (typeof b.documentId !== "string" || !b.documentId.trim())) ||
+    (b.noteId !== undefined &&
+      (typeof b.noteId !== "string" || !b.noteId.trim())) ||
     (b.documentTitle !== undefined && typeof b.documentTitle !== "string") ||
     (b.pageNumber !== undefined &&
       (!Number.isInteger(b.pageNumber) || Number(b.pageNumber) < 1)) ||
@@ -77,8 +84,36 @@ explanation.post("/", async (c) => {
       },
       400,
     );
+  const documentId =
+    typeof b.documentId === "string" ? b.documentId.trim() : undefined;
+  const noteId = typeof b.noteId === "string" ? b.noteId.trim() : undefined;
+  const document = documentId
+    ? (db
+        .query("SELECT name FROM documents WHERE id=?")
+        .get(documentId) as { name: string } | null)
+    : null;
+  if (documentId && !document)
+    return c.json(
+      { error: { message: "Document not found", code: "NOT_FOUND" } },
+      404,
+    );
+  if (
+    noteId &&
+    !db
+      .query(
+        documentId
+          ? "SELECT 1 FROM note_pages WHERE id=? AND document_id=?"
+          : "SELECT 1 FROM note_pages WHERE id=?",
+      )
+      .get(...(documentId ? [noteId, documentId] : [noteId]))
+  )
+    return c.json(
+      { error: { message: "Canvas note not found", code: "NOT_FOUND" } },
+      404,
+    );
   const context = {
-    documentTitle: b.documentTitle as string | undefined,
+    documentTitle:
+      document?.name ?? (b.documentTitle as string | undefined),
     pageNumber: b.pageNumber as number | undefined,
     signal: c.req.raw.signal,
   };
@@ -108,6 +143,8 @@ explanation.post("/", async (c) => {
       });
       const history = storeExplanationRevision({
         selectedText: historySelection,
+        documentId,
+        noteId,
         documentTitle: context.documentTitle,
         pageNumber: context.pageNumber,
         mode,
@@ -139,6 +176,8 @@ explanation.post("/", async (c) => {
           });
           const history = storeExplanationRevision({
             selectedText: historySelection,
+            documentId,
+            noteId,
             documentTitle: context.documentTitle,
             pageNumber: context.pageNumber,
             mode,
@@ -171,6 +210,8 @@ explanation.post("/", async (c) => {
     });
     const history = storeExplanationRevision({
       selectedText: historySelection,
+      documentId,
+      noteId,
       documentTitle: context.documentTitle,
       pageNumber: context.pageNumber,
       mode,

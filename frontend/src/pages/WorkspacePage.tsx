@@ -256,6 +256,7 @@ export default function WorkspacePage() {
               existingExplanation={existingExplanation}
               existingExplanationId={existingExplanationId}
               selectionAnchors={selectionAnchors}
+              documentId={documentId}
               pageNumber={selectedTextPage}
               documentTitle={doc.data.name}
               onPlotGenerated={(plot, equation) => {
@@ -356,7 +357,13 @@ export default function WorkspacePage() {
                   results={search.results}
                   onSelectResult={(result) => {
                     if (result.kind === "sticky" && result.noteId)
-                      navigate(`/notes/${result.noteId}`);
+                      navigate(
+                        `/notes/${result.noteId}${
+                          result.shapeId
+                            ? `?shape=${encodeURIComponent(result.shapeId)}`
+                            : ""
+                        }`,
+                      );
                     else if (result.pageNumber)
                       setActivePage(result.pageNumber);
                   }}

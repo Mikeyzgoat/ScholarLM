@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useParams, useSearchParams } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import type { Editor } from "tldraw";
+import type { Editor, TLShapeId } from "tldraw";
 import type { CanvasSelectionAnchor, NotePage, SaveState } from "../lib/types";
 import { getNote, updateNote } from "../services/notes";
 import { chooseNewestNoteSource, getLocalNoteDraft } from "../lib/noteStorage";
@@ -23,6 +23,9 @@ import { getDocument, getDocumentFileUrl } from "../services/documents";
 export default function NotesPage() {
   const { noteId = "" } = useParams();
   const nav = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const targetShapeId = searchParams.get("shape");
   const q = useQuery({
     queryKey: ["note", noteId],
     queryFn: () => getNote(noteId),
@@ -39,6 +42,8 @@ export default function NotesPage() {
     [selectedTexts, setSelectedTexts] = useState<string[]>(),
     [selectionImage, setSelectionImage] = useState<string>(),
     [existingExplanation, setExistingExplanation] = useState<string>(),
+    [existingExplanationId, setExistingExplanationId] = useState<string>(),
+    [selectedTextPage, setSelectedTextPage] = useState<number | null>(null),
     [pdfTextSelectionEnabled, setPdfTextSelectionEnabled] = useState(false),
     [selectionAnchors, setSelectionAnchors] =
       useState<CanvasSelectionAnchor[]>(),
@@ -67,7 +72,15 @@ export default function NotesPage() {
   const autosave = useNoteAutosave({
     note,
     editor,
-    onServerNoteUpdated: setNote,
+    onServerNoteUpdated: (updated) => {
+      setNote(updated);
+      void queryClient.invalidateQueries({
+        queryKey: ["graph", updated.documentId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["graph", "global"],
+      });
+    },
   });
   useEffect(() => {
     if (!editor) return;
@@ -86,13 +99,31 @@ export default function NotesPage() {
       });
     };
     syncPage();
-    const frame = requestAnimationFrame(() => focusPdfPage(editor));
+    const frame = requestAnimationFrame(() => {
+      const target = targetShapeId
+        ? editor.getShape(targetShapeId as TLShapeId)
+        : undefined;
+      if (!target) {
+        focusPdfPage(editor);
+        return;
+      }
+      const pageId = editor.getAncestorPageId(target);
+      if (pageId) editor.setCurrentPage(pageId);
+      editor.select(target.id);
+      const bounds = editor.getShapePageBounds(target);
+      if (bounds)
+        editor.zoomToBounds(bounds, {
+          animation: { duration: 300 },
+          inset: 140,
+          targetZoom: 1,
+        });
+    });
     const unsubscribe = editor.store.listen(syncPage, { scope: "session" });
     return () => {
       cancelAnimationFrame(frame);
       unsubscribe();
     };
-  }, [editor, document.data?.pageCount]);
+  }, [editor, document.data?.pageCount, targetShapeId]);
 
   const moveCanvasPage = (offset: number) => {
     if (!editor || !note) return;
@@ -185,21 +216,27 @@ export default function NotesPage() {
           setSelectedTexts(text ? [text] : undefined);
           setSelectionImage(undefined);
           setExistingExplanation(undefined);
+          setExistingExplanationId(undefined);
           setSelectionAnchors(undefined);
+          setSelectedTextPage(null);
         }}
         onCanvasSelection={(selection) => {
           setSelectedText(selection.text);
           setSelectedTexts(selection.texts);
           setSelectionImage(selection.imageDataUrl);
           setExistingExplanation(selection.existingExplanation);
+          setExistingExplanationId(selection.explanationId);
           setSelectionAnchors(selection.anchors);
+          setSelectedTextPage(null);
         }}
         onPdfTextSelected={(text) => {
           setSelectedText(text);
           setSelectedTexts([text]);
           setSelectionImage(undefined);
           setExistingExplanation(undefined);
+          setExistingExplanationId(undefined);
           setSelectionAnchors(undefined);
+          setSelectedTextPage(canvasPage.current);
         }}
       />
       <aside className="absolute bottom-4 right-4 top-28 z-20 w-[min(24rem,calc(100vw-2rem))] overflow-auto rounded-xl bg-neutral-950/85 p-3 shadow-2xl backdrop-blur-xl">
@@ -208,8 +245,11 @@ export default function NotesPage() {
           selectedTexts={selectedTexts}
           selectionImage={selectionImage}
           existingExplanation={existingExplanation}
+          existingExplanationId={existingExplanationId}
           selectionAnchors={selectionAnchors}
-          pageNumber={null}
+          documentId={note.documentId}
+          noteId={note.id}
+          pageNumber={selectedTextPage}
           documentTitle={note.title}
           onPlotGenerated={(plot, equation) => {
             if (editor) drawMathPlot(editor, plot, equation);

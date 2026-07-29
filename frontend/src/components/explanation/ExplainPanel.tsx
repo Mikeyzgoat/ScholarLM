@@ -15,6 +15,8 @@ export function ExplainPanel({
   existingExplanationId,
   selectionAnchors,
   selectionImage,
+  documentId,
+  noteId,
   pageNumber,
   documentTitle,
   onPlotGenerated,
@@ -27,6 +29,8 @@ export function ExplainPanel({
   existingExplanationId?: string;
   selectionAnchors?: CanvasSelectionAnchor[];
   selectionImage?: string;
+  documentId?: string;
+  noteId?: string;
   pageNumber: number | null;
   documentTitle: string;
   onPlotGenerated?: (plot: MathPlot, equation?: string) => void;
@@ -37,6 +41,7 @@ export function ExplainPanel({
     answers?: string[];
     anchors?: CanvasSelectionAnchor[];
     explanationId?: string;
+    pageNumber?: number;
   }) => void;
   onExplanationStickyRequested?: NonNullable<
     typeof onExplanationGenerated
@@ -57,6 +62,8 @@ export function ExplainPanel({
         selectedTexts && selectedTexts.length > 1 ? selectedTexts : undefined,
       imageDataUrl: selectionImage,
       graphRequested: requestGraph,
+      documentId,
+      noteId,
       documentTitle,
       pageNumber: pageNumber ?? undefined,
       mode,
@@ -72,6 +79,7 @@ export function ExplainPanel({
         answers: value.answers,
         anchors: selectionAnchors,
         explanationId: value.historyId,
+        pageNumber: pageNumber ?? undefined,
       });
       await speech.speak(value.explanation, selectedText, value.historyId);
     }
@@ -94,6 +102,7 @@ export function ExplainPanel({
         mode: "explain",
         anchors: selectionAnchors,
         explanationId: existingExplanationId,
+        pageNumber: pageNumber ?? undefined,
       });
     } else {
       state.clear();

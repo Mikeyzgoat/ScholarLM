@@ -383,8 +383,7 @@ input::placeholder {
   color: #20282e !important;
 }
 
-:root[data-theme="light"] .brand-mark,
-:root[data-theme="light"] .theme-graph-hub {
+:root[data-theme="light"] .brand-mark {
   filter: hue-rotate(135deg) saturate(0.88) brightness(1.05);
 }
 

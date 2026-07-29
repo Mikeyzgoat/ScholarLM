@@ -44,12 +44,18 @@ notes.post("/", async (c) => {
     metadata: b.metadata,
     snapshot: b.snapshot,
   });
-  void indexNoteStickies({
-    noteId: note.id,
-    documentId: note.documentId,
-    snapshot: note.snapshot,
-  }).catch((error) => console.warn("[stickies] Initial indexing failed", error));
-  return c.json({ note }, 201);
+  let stickyIndexState: "ready" | "pending" = "ready";
+  try {
+    await indexNoteStickies({
+      noteId: note.id,
+      documentId: note.documentId,
+      snapshot: note.snapshot,
+    });
+  } catch (error) {
+    stickyIndexState = "pending";
+    console.warn("[stickies] Initial indexing deferred", error);
+  }
+  return c.json({ note, stickyIndexState }, 201);
 });
 notes.get("/document/:documentId", (c) => {
   const id = c.req.param("documentId");
@@ -94,14 +100,21 @@ notes.put("/:noteId", async (c) => {
       snapshot: b.snapshot,
       expectedRevision: b.expectedRevision as number | undefined,
     });
+    let stickyIndexState: "ready" | "pending" = "ready";
     if (b.snapshot !== undefined)
-      void indexNoteStickies({
-        noteId: note.id,
-        documentId: note.documentId,
-        snapshot: note.snapshot,
-      }).catch((error) => console.warn("[stickies] Reindexing failed", error));
+      try {
+        await indexNoteStickies({
+          noteId: note.id,
+          documentId: note.documentId,
+          snapshot: note.snapshot,
+        });
+      } catch (error) {
+        stickyIndexState = "pending";
+        console.warn("[stickies] Reindexing deferred", error);
+      }
     return c.json({
       note,
+      stickyIndexState,
     });
   } catch (e) {
     if (e instanceof NoteRevisionConflictError)

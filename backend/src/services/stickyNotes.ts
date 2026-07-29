@@ -11,6 +11,8 @@ export interface ExtractedSticky {
   label: string;
   content: string;
   kind: "explanation" | "note";
+  explanationId?: string;
+  pageNumber?: number;
 }
 
 function collectText(value: unknown, parts: string[]): void {
@@ -36,6 +38,18 @@ function collectText(value: unknown, parts: string[]): void {
 function shorten(value: string, fallback: string): string {
   const firstLine = value.split(/\r?\n/)[0]?.trim() || fallback;
   return firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine;
+}
+
+function stickyHash(sticky: ExtractedSticky): string {
+  return createHash("sha256")
+    .update(
+      [
+        sticky.content,
+        sticky.explanationId ?? "",
+        sticky.pageNumber ?? "",
+      ].join("\u001f"),
+    )
+    .digest("hex");
 }
 
 export function extractStickies(input: {
@@ -65,6 +79,7 @@ export function extractStickies(input: {
         id?: unknown;
         type?: unknown;
         props?: Record<string, unknown>;
+        meta?: Record<string, unknown>;
       };
       if (typeof shape.id !== "string") return [];
       if (shape.type === "scholar-explanation-sticky") {
@@ -78,6 +93,18 @@ export function extractStickies(input: {
             : "";
         const content = [question, explanation].filter(Boolean).join("\n\n");
         if (!content) return [];
+        const explanationId =
+          typeof shape.props?.explanationId === "string" &&
+          /^[a-f0-9]{64}$/.test(shape.props.explanationId)
+            ? shape.props.explanationId
+            : undefined;
+        const rawPageNumber = shape.meta?.scholarLmPageNumber;
+        const pageNumber =
+          typeof rawPageNumber === "number" &&
+          Number.isInteger(rawPageNumber) &&
+          rawPageNumber > 0
+            ? rawPageNumber
+            : undefined;
         return [{
           id: `sticky:${input.noteId}:${shape.id}`,
           noteId: input.noteId,
@@ -86,6 +113,8 @@ export function extractStickies(input: {
           label: shorten(question, "Explanation"),
           content,
           kind: "explanation" as const,
+          explanationId,
+          pageNumber,
         }];
       }
       if (shape.type !== "note") return [];
@@ -121,8 +150,7 @@ export async function indexNoteStickies(input: {
     existing.map((item) => [item.id, item.contentHash]),
   );
   const changed = stickies.filter((sticky) => {
-    const hash = createHash("sha256").update(sticky.content).digest("hex");
-    return existingHashes.get(sticky.id) !== hash;
+    return existingHashes.get(sticky.id) !== stickyHash(sticky);
   });
   const embeddings = changed.length
     ? await generateDocumentEmbeddings(changed.map((sticky) => sticky.content))
@@ -133,15 +161,17 @@ export async function indexNoteStickies(input: {
       if (!currentIds.has(item.id))
         db.query("DELETE FROM sticky_note_index WHERE id=?").run(item.id);
     changed.forEach((sticky, index) => {
-      const hash = createHash("sha256").update(sticky.content).digest("hex");
+      const hash = stickyHash(sticky);
       db.query(
         `INSERT INTO sticky_note_index
-         (id,note_id,document_id,shape_id,label,content,kind,content_hash,embedding,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?)
+         (id,note_id,document_id,shape_id,label,content,kind,content_hash,embedding,updated_at,explanation_id,page_number)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            label=excluded.label,content=excluded.content,kind=excluded.kind,
            content_hash=excluded.content_hash,embedding=excluded.embedding,
-           updated_at=excluded.updated_at`,
+           updated_at=excluded.updated_at,
+           explanation_id=excluded.explanation_id,
+           page_number=excluded.page_number`,
       ).run(
         sticky.id,
         sticky.noteId,
@@ -153,7 +183,17 @@ export async function indexNoteStickies(input: {
         hash,
         serializeEmbedding(embeddings[index]),
         new Date().toISOString(),
+        sticky.explanationId ?? null,
+        sticky.pageNumber ?? null,
       );
+    });
+    stickies.forEach((sticky) => {
+      if (!sticky.explanationId) return;
+      db.query(
+        `UPDATE explanation_history
+         SET document_id=COALESCE(document_id,?),note_id=COALESCE(note_id,?)
+         WHERE id=?`,
+      ).run(sticky.documentId, sticky.noteId, sticky.explanationId);
     });
   })();
 }

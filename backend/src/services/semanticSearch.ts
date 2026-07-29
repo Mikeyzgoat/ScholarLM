@@ -91,14 +91,19 @@ export async function semanticSearch(input: {
   const stickyResults = (
     db
       .query(
-        `SELECT id,note_id noteId,label,content,embedding
+        `SELECT id,note_id noteId,shape_id shapeId,label,content,kind,
+                explanation_id explanationId,page_number pageNumber,embedding
          FROM sticky_note_index WHERE document_id=?`,
       )
       .all(input.documentId) as Array<{
       id: string;
       noteId: string;
+      shapeId: string;
       label: string;
       content: string;
+      kind: "explanation" | "note";
+      explanationId: string | null;
+      pageNumber: number | null;
       embedding: string | Uint8Array;
     }>
   ).flatMap((sticky) => {
@@ -106,12 +111,17 @@ export async function semanticSearch(input: {
     if (embedding.length !== queryVector.length) return [];
     return [{
       chunkId: sticky.id,
-      pageNumber: null,
+      pageNumber: sticky.pageNumber,
       content: sticky.content,
       score: dotProduct(queryVector, embedding),
       kind: "sticky" as const,
       label: sticky.label,
       noteId: sticky.noteId,
+      shapeId: sticky.shapeId,
+      stickyKind: sticky.kind,
+      ...(sticky.explanationId
+        ? { explanationId: sticky.explanationId }
+        : {}),
     }];
   });
   return [...pdfResults, ...stickyResults]

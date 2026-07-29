@@ -45,6 +45,40 @@ function fuzzyScore(query: string, value: string): number {
   return score;
 }
 
+function nodeIdentifier(node: GraphNode): {
+  label: string;
+  className: string;
+} {
+  if (node.kind === "sticky")
+    return {
+      label:
+        node.stickyKind === "explanation" ? "Explanation sticky" : "Sticky",
+      className: "bg-amber-400/15 text-amber-300",
+    };
+  if (node.kind === "note")
+    return {
+      label: "Canvas",
+      className: "bg-purple-400/15 text-purple-300",
+    };
+  if (node.kind === "hub")
+    return {
+      label: "Library",
+      className: "bg-teal-400/15 text-teal-300",
+    };
+  return {
+    label: node.kind === "source" ? "PDF" : "PDF concept",
+    className: "bg-sky-400/15 text-sky-300",
+  };
+}
+
+function stickyRoute(node: GraphNode): string | null {
+  if (!node.noteId) return null;
+  const search = node.shapeId
+    ? `?shape=${encodeURIComponent(node.shapeId)}`
+    : "";
+  return `/notes/${node.noteId}${search}`;
+}
+
 export default function KnowledgeGraphPage() {
   const { documentId = "" } = useParams();
   const isGlobal = !documentId;
@@ -93,16 +127,22 @@ export default function KnowledgeGraphPage() {
   const matches = useMemo(() => {
     if (!graph.graph?.nodes) return [];
     return graph.graph.nodes
-      .map((node) => ({
-        node,
-        score: fuzzyScore(
-          query,
-          `${node.label} ${node.description ?? ""}`,
-        ),
-      }))
+      .map((node) => {
+        const labelScore = fuzzyScore(query, node.label);
+        const descriptionScore = fuzzyScore(query, node.description ?? "");
+        return {
+          node,
+          score: Math.max(
+            labelScore < 0
+              ? -1
+              : labelScore + (node.kind === "sticky" ? 90 : 40),
+            descriptionScore,
+          ),
+        };
+      })
       .filter((match) => match.score >= 0)
       .sort((left, right) => right.score - left.score)
-      .slice(0, query ? 12 : 8);
+      .slice(0, query ? 20 : 8);
   }, [graph.graph?.nodes, query]);
 
   const focus = useCallback((node: GraphNode) => setSelected(node), []);
@@ -147,27 +187,37 @@ export default function KnowledgeGraphPage() {
             <p className="px-1 text-[11px] uppercase tracking-wide text-stone-600">
               Search results
             </p>
-            {matches.map(({ node }) => (
-              <button
-                key={node.id}
-                type="button"
-                onClick={() => focus(node)}
-                className={`w-full rounded-xl border p-3 text-left transition ${
-                  selected?.id === node.id
-                    ? "border-orange-400/30 bg-orange-500/10"
-                    : "border-transparent hover:border-white/10 hover:bg-white/5"
-                }`}
-              >
-                <span className="block truncate text-sm font-medium">
-                  {node.label}
-                </span>
-                {node.description && (
-                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-stone-500">
-                    {node.description}
+            {matches.map(({ node }) => {
+              const identifier = nodeIdentifier(node);
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => focus(node)}
+                  className={`w-full rounded-xl border p-3 text-left transition ${
+                    selected?.id === node.id
+                      ? "border-orange-400/30 bg-orange-500/10"
+                      : "border-transparent hover:border-white/10 hover:bg-white/5"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] ${identifier.className}`}
+                    >
+                      {identifier.label}
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-medium">
+                      {node.label}
+                    </span>
                   </span>
-                )}
-              </button>
-            ))}
+                  {node.description && (
+                    <span className="mt-1.5 line-clamp-2 block text-xs leading-5 text-stone-500">
+                      {node.description}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {!matches.length && (
               <p className="px-1 py-3 text-xs text-stone-600">
                 No matching nodes.
@@ -177,9 +227,16 @@ export default function KnowledgeGraphPage() {
         )}
         {selected && (
           <section className="mt-5 rounded-2xl border border-orange-400/20 bg-gradient-to-b from-orange-500/10 to-black/20 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.25)]">
-            <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-orange-400/70">
-              Selected node
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-orange-400/70">
+                Selected node
+              </p>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] ${nodeIdentifier(selected).className}`}
+              >
+                {nodeIdentifier(selected).label}
+              </span>
+            </div>
             <h2 className="font-medium text-orange-200">{selected.label}</h2>
             <p className="mt-2 text-xs leading-5 text-stone-400">
               {selected.description || "No description available."}
@@ -201,7 +258,10 @@ export default function KnowledgeGraphPage() {
             {selected.kind === "sticky" && selected.noteId && (
               <button
                 type="button"
-                onClick={() => navigate(`/notes/${selected.noteId}`)}
+                onClick={() => {
+                  const route = stickyRoute(selected);
+                  if (route) navigate(route);
+                }}
                 className="mt-3 flex items-center gap-2 text-xs text-orange-300"
               >
                 Open sticky note canvas
