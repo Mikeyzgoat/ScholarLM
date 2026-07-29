@@ -29,6 +29,9 @@ explanation.post("/", async (c) => {
     graphRequested?: unknown;
     documentId?: unknown;
     noteId?: unknown;
+    canvasId?: unknown;
+    shapeId?: unknown;
+    imageInputKind?: unknown;
     documentTitle?: unknown;
     pageNumber?: unknown;
     mode?: unknown;
@@ -52,7 +55,9 @@ explanation.post("/", async (c) => {
   const hasMultipleTexts = selectedTexts.length > 0;
   const hasImage =
     typeof b.imageDataUrl === "string" &&
-    /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(b.imageDataUrl) &&
+    /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(
+      b.imageDataUrl,
+    ) &&
     b.imageDataUrl.length <= 6_000_000;
   if (
     (!hasText && !hasMultipleTexts && !hasImage) ||
@@ -65,6 +70,12 @@ explanation.post("/", async (c) => {
       (typeof b.documentId !== "string" || !b.documentId.trim())) ||
     (b.noteId !== undefined &&
       (typeof b.noteId !== "string" || !b.noteId.trim())) ||
+    (b.canvasId !== undefined &&
+      (typeof b.canvasId !== "string" || !b.canvasId.trim())) ||
+    (b.shapeId !== undefined &&
+      (typeof b.shapeId !== "string" || !b.shapeId.trim())) ||
+    (b.imageInputKind !== undefined &&
+      !["handwriting", "selection"].includes(String(b.imageInputKind))) ||
     (b.documentTitle !== undefined && typeof b.documentTitle !== "string") ||
     (b.pageNumber !== undefined &&
       (!Number.isInteger(b.pageNumber) || Number(b.pageNumber) < 1)) ||
@@ -87,6 +98,10 @@ explanation.post("/", async (c) => {
   const documentId =
     typeof b.documentId === "string" ? b.documentId.trim() : undefined;
   const noteId = typeof b.noteId === "string" ? b.noteId.trim() : undefined;
+  const canvasId =
+    typeof b.canvasId === "string" ? b.canvasId.trim() : undefined;
+  const shapeId =
+    typeof b.shapeId === "string" ? b.shapeId.trim() : undefined;
   const document = documentId
     ? (db
         .query("SELECT name FROM documents WHERE id=?")
@@ -145,10 +160,18 @@ explanation.post("/", async (c) => {
         selectedText: historySelection,
         documentId,
         noteId,
+        canvasId,
+        shapeId,
         documentTitle: context.documentTitle,
         pageNumber: context.pageNumber,
         mode,
         explanation: result.explanation,
+        recognizedText: result.recognizedEquation,
+        inputKind: hasImage
+          ? b.imageInputKind === "selection"
+            ? "selection"
+            : "handwriting"
+          : "text",
         requestId,
       });
       finishOpenRouterRequest(requestId);
@@ -178,10 +201,13 @@ explanation.post("/", async (c) => {
             selectedText: historySelection,
             documentId,
             noteId,
+            canvasId,
+            shapeId,
             documentTitle: context.documentTitle,
             pageNumber: context.pageNumber,
             mode,
             explanation: generated,
+            inputKind: "text",
             requestId,
           });
           finishOpenRouterRequest(requestId);
@@ -212,10 +238,13 @@ explanation.post("/", async (c) => {
       selectedText: historySelection,
       documentId,
       noteId,
+      canvasId,
+      shapeId,
       documentTitle: context.documentTitle,
       pageNumber: context.pageNumber,
       mode,
       explanation: generated,
+      inputKind: "text",
       requestId,
     });
     finishOpenRouterRequest(requestId);

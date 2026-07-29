@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Tldraw, loadSnapshot, type Editor } from "tldraw";
+import {
+  Tldraw,
+  loadSnapshot,
+  type Editor,
+  type TLShape,
+  type TLShapeId,
+} from "tldraw";
 import "tldraw/tldraw.css";
 import type { NotePage } from "../../lib/types";
 import type { CanvasSelection } from "../../lib/types";
@@ -10,6 +16,30 @@ import {
 import { useTheme } from "../../lib/theme";
 import { pdfPageShapeUtils } from "./PdfPageShape";
 import { explanationStickyShapeUtils } from "./ExplanationStickyShape";
+
+function shapesWithDescendants(editor: Editor, shapes: TLShape[]): TLShape[] {
+  if (!shapes.length) return [];
+  return [...editor.getShapeAndDescendantIds(shapes.map((shape) => shape.id))]
+    .map((id) => editor.getShape(id))
+    .filter((shape): shape is TLShape => Boolean(shape));
+}
+
+function selectionSignature(editor: Editor, shapes: TLShape[]): string {
+  return shapesWithDescendants(editor, shapes)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((shape) =>
+      JSON.stringify([
+        shape.id,
+        shape.parentId,
+        shape.x,
+        shape.y,
+        shape.rotation,
+        shape.props,
+      ]),
+    )
+    .join("\u001e");
+}
+
 export function NotesCanvas({
   note,
   onEditorReady,
@@ -27,6 +57,7 @@ export function NotesCanvas({
 }) {
   const { resolvedTheme } = useTheme();
   const selectionCleanup = useRef<(() => void) | null>(null);
+  const captureFrame = useRef(0);
   const lastSelection = useRef("");
   const lastPdfSelection = useRef(0);
   const root = useRef<HTMLDivElement>(null);
@@ -91,6 +122,7 @@ export function NotesCanvas({
       observer.disconnect();
       host.removeEventListener("pointerdown", onPointerDown);
       selectionCleanup.current?.();
+      cancelAnimationFrame(captureFrame.current);
     };
   }, []);
   useEffect(() => {
@@ -198,10 +230,7 @@ export function NotesCanvas({
                     height: selectedBounds.h,
                   },
                 ];
-          const signature = selectedShapes
-            .map((shape) => shape.id)
-            .sort()
-            .join(",");
+          const signature = selectionSignature(editor, selectedShapes);
           if (!signature) {
             const browserSelection = getSelection()?.toString().trim() ?? "";
             if (
@@ -225,6 +254,9 @@ export function NotesCanvas({
                 editor.updateShape({
                   id: generatedShapes[0].id,
                   type: "text",
+                  meta: JSON.parse(
+                    JSON.stringify(generatedShapes[0].meta),
+                  ),
                   props: { color: "black" },
                 });
               const meta = generatedShapes[0].meta as Record<string, unknown>;
@@ -260,33 +292,59 @@ export function NotesCanvas({
             return;
           }
           if (text) onTextSelected?.(text);
-          const containsDrawing = inputShapes.some((shape) =>
+          const containsDrawing = shapesWithDescendants(
+            editor,
+            inputShapes,
+          ).some((shape) =>
             ["draw", "line", "arrow"].includes(shape.type),
           );
           if (!containsDrawing)
             onCanvasSelection?.({ text, texts, anchors: relevantAnchors });
-          else
-            void editor
-              .toImageDataUrl(inputShapes, {
-                format: "png",
-                background: true,
-                padding: 32,
-                scale: 2,
-              })
-              .then(({ url }) => {
-                if (lastSelection.current !== signature) return;
-                onCanvasSelection?.({
-                  text: text || "Handwritten equation",
-                  texts,
-                  anchors: relevantAnchors,
-                  imageDataUrl: url,
-                });
-              })
-              .catch((error) =>
-                console.error("Could not capture canvas selection", error),
-              );
+          else {
+            onCanvasSelection?.({
+              text: text || "Handwritten equation",
+              texts,
+              anchors: relevantAnchors,
+            });
+            cancelAnimationFrame(captureFrame.current);
+            captureFrame.current = requestAnimationFrame(() => {
+              if (
+                lastSelection.current !== signature ||
+                selectionSignature(editor, editor.getSelectedShapes()) !==
+                  signature
+              )
+                return;
+              const freshShapes = inputShapes
+                .map((shape) => editor.getShape(shape.id as TLShapeId))
+                .filter((shape): shape is TLShape => Boolean(shape));
+              void editor
+                .toImageDataUrl(freshShapes, {
+                  format: "png",
+                  background: true,
+                  padding: 32,
+                  scale: 2,
+                })
+                .then(({ url }) => {
+                  if (
+                    lastSelection.current !== signature ||
+                    selectionSignature(editor, editor.getSelectedShapes()) !==
+                      signature
+                  )
+                    return;
+                  onCanvasSelection?.({
+                    text: text || "Handwritten equation",
+                    texts,
+                    anchors: relevantAnchors,
+                    imageDataUrl: url,
+                  });
+                })
+                .catch((error) =>
+                  console.error("Could not capture canvas selection", error),
+                );
+            });
+          }
         },
-        { scope: "session" },
+        { scope: "all" },
       );
     },
     [note.id, onEditorReady, onTextSelected, onCanvasSelection],

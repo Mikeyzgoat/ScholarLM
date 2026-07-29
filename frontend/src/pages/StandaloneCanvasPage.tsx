@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileUp, LayoutDashboard, Save } from "lucide-react";
 import { Link } from "react-router";
-import { Navigate, useNavigate, useParams } from "react-router";
-import { getSnapshot, type Editor } from "tldraw";
+import {
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router";
+import { getSnapshot, type Editor, type TLShapeId } from "tldraw";
 import type { CanvasSelectionAnchor, NotePage, SaveState } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
@@ -21,10 +26,13 @@ import {
 import { ThemeSelector } from "../components/layout/ThemeSelector";
 import { uploadDocument } from "../services/documents";
 import { createNote } from "../services/notes";
+import { saveStandaloneCanvas } from "../services/canvases";
 
 export default function StandaloneCanvasPage() {
   const { canvasId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetShapeId = searchParams.get("shape");
   const canvas = getLocalCanvas(canvasId);
   const [selectedText, setSelectedText] = useState("");
   const [selectedTexts, setSelectedTexts] = useState<string[]>();
@@ -37,6 +45,11 @@ export default function StandaloneCanvasPage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [title, setTitle] = useState(canvas?.title ?? "");
   const unsubscribe = useRef<(() => void) | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveRun = useRef(0);
+  const serverRevision = useRef<number | undefined>(undefined);
+  const titleRef = useRef(title);
   const uploadInput = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -50,37 +63,73 @@ export default function StandaloneCanvasPage() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }));
-  const saveCanvas = useCallback((activeEditor: Editor) => {
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+  const saveCanvas = useCallback((activeEditor: Editor): Promise<void> => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const snapshot = getSnapshot(activeEditor.store);
+    const run = ++saveRun.current;
     setSaveState("saving");
     try {
-      saveLocalCanvasSnapshot(canvasId, getSnapshot(activeEditor.store));
-      setLastSavedAt(new Date().toISOString());
-      setSaveState("saved");
+      saveLocalCanvasSnapshot(canvasId, snapshot);
     } catch (error) {
       console.error("Could not save the independent canvas", error);
       setSaveState("error");
+      return Promise.reject(error);
     }
+    const operation = saveQueue.current.then(async () => {
+      try {
+        const saved = await saveStandaloneCanvas({
+          canvasId,
+          title: titleRef.current.trim() || "Untitled canvas",
+          snapshot,
+          expectedRevision: serverRevision.current,
+        });
+        serverRevision.current = saved.revision;
+        if (run === saveRun.current) {
+          setLastSavedAt(saved.updatedAt);
+          setSaveState("saved");
+        }
+      } catch (error) {
+        console.error("Could not persist the canvas to the database", error);
+        if (run === saveRun.current) setSaveState("error");
+        throw error;
+      }
+    });
+    saveQueue.current = operation.catch(() => undefined);
+    return operation;
   }, [canvasId]);
 
   useEffect(() => {
     const saveShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        if (editor) saveCanvas(editor);
+        if (editor) void saveCanvas(editor);
       }
     };
     window.addEventListener("keydown", saveShortcut);
     return () => window.removeEventListener("keydown", saveShortcut);
   }, [editor, saveCanvas]);
 
-  useEffect(() => () => unsubscribe.current?.(), []);
+  useEffect(
+    () => () => {
+      unsubscribe.current?.();
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    [],
+  );
 
   function connectEditor(editor: Editor) {
     setEditor(editor);
     unsubscribe.current?.();
     const saveAfterTransaction = () => {
       setSaveState("unsaved");
-      queueMicrotask(() => saveCanvas(editor));
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => void saveCanvas(editor), 650);
     };
     const unsubscribeDocument = editor.store.listen(
       saveAfterTransaction,
@@ -100,6 +149,22 @@ export default function StandaloneCanvasPage() {
       unsubscribeDocument();
       unsubscribePage();
     };
+    void saveCanvas(editor);
+    if (targetShapeId)
+      requestAnimationFrame(() => {
+        const target = editor.getShape(targetShapeId as TLShapeId);
+        if (!target) return;
+        const pageId = editor.getAncestorPageId(target);
+        if (pageId) editor.setCurrentPage(pageId);
+        editor.select(target.id);
+        const bounds = editor.getShapePageBounds(target);
+        if (bounds)
+          editor.zoomToBounds(bounds, {
+            animation: { duration: 300 },
+            inset: 140,
+            targetZoom: 1,
+          });
+      });
   }
 
   function downloadBackup() {
@@ -120,7 +185,7 @@ export default function StandaloneCanvasPage() {
     setUploadError("");
     setIsUploading(true);
     try {
-      saveCanvas(editor);
+      await saveCanvas(editor);
       const document = await uploadDocument(file);
       await createNote({
         documentId: document.id,
@@ -153,6 +218,7 @@ export default function StandaloneCanvasPage() {
           onBlur={() => {
             const updated = updateLocalCanvasTitle(canvasId, title);
             setTitle(updated?.title ?? canvas.title);
+            if (editor) void saveCanvas(editor);
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
@@ -166,7 +232,9 @@ export default function StandaloneCanvasPage() {
         <button
           type="button"
           disabled={!editor || saveState === "saving"}
-          onClick={() => editor && saveCanvas(editor)}
+          onClick={() => {
+            if (editor) void saveCanvas(editor);
+          }}
           className="ml-auto flex items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-1.5 text-sm text-orange-300 disabled:opacity-40"
         >
           <Save size={16} />
@@ -237,8 +305,9 @@ export default function StandaloneCanvasPage() {
             selectionImage={selectionImage}
             existingExplanation={existingExplanation}
             selectionAnchors={selectionAnchors}
+            canvasId={canvasId}
             pageNumber={null}
-            documentTitle="Independent canvas"
+            documentTitle={title.trim() || "Independent canvas"}
             onPlotGenerated={(plot, equation) => {
               if (editor) drawMathPlot(editor, plot, equation);
             }}

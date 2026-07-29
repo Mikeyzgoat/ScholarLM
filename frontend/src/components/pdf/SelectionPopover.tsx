@@ -27,6 +27,7 @@ export function SelectionPopover({
           <button
             type="button"
             onClick={onExplainWithGraph}
+            title="Use for graphable equations and functions; the plot is added to the canvas"
             className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-teal-200 bg-white/5 px-3 py-2 text-sm leading-5 text-teal-700 hover:bg-teal-50"
           >
             <ChartSpline size={15} />

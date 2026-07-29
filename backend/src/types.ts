@@ -110,9 +110,16 @@ export interface GraphResponse {
     label: string;
     description: string | null;
     pageNumber: number | null;
-    kind?: "hub" | "source" | "concept" | "note" | "sticky";
+    kind?:
+      | "hub"
+      | "source"
+      | "concept"
+      | "note"
+      | "sticky"
+      | "handwriting";
     documentId?: string;
     noteId?: string;
+    canvasId?: string;
     shapeId?: string;
     stickyKind?: "explanation" | "note";
     explanationId?: string;

@@ -171,7 +171,12 @@ function upsertExplanationBlock(
     scholarLmSourceKey: sourceKey,
     scholarLmSourceText: input.selectedText,
     scholarLmExplanation: input.explanation,
-    scholarLmAnchorShapeId: input.anchor?.shapeId,
+    ...(input.anchor
+      ? { scholarLmAnchorShapeId: input.anchor.shapeId }
+      : {}),
+    ...(input.explanationId
+      ? { scholarLmExplanationId: input.explanationId }
+      : {}),
   };
   if (existing?.type === "text") {
     editor.updateShape({

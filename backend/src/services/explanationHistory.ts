@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 import { db } from "../db/database";
 
 export type ExplanationMode = "explain" | "regenerate" | "simplify";
+export type ExplanationInputKind = "text" | "handwriting" | "selection";
 
 function selectionHash(input: {
   selectedText: string;
   documentId?: string;
+  canvasId?: string;
+  shapeId?: string;
   documentTitle?: string;
   pageNumber?: number;
 }): string {
@@ -13,6 +16,8 @@ function selectionHash(input: {
     .update(
       [
         input.documentId?.trim() ?? "",
+        input.canvasId?.trim() ?? "",
+        input.shapeId?.trim() ?? "",
         input.documentTitle?.trim() ?? "",
         input.pageNumber ?? "",
         input.selectedText.trim().replace(/\s+/g, " "),
@@ -25,10 +30,14 @@ export function storeExplanationRevision(input: {
   selectedText: string;
   documentId?: string;
   noteId?: string;
+  canvasId?: string;
+  shapeId?: string;
   documentTitle?: string;
   pageNumber?: number;
   mode: ExplanationMode;
   explanation: string;
+  recognizedText?: string;
+  inputKind?: ExplanationInputKind;
   requestId: string;
 }): { historyId: string; revisionCount: number } {
   const hash = selectionHash(input);
@@ -48,6 +57,17 @@ export function storeExplanationRevision(input: {
     input.mode,
     input.explanation.trim(),
     new Date().toISOString(),
+  );
+  db.query(
+    `UPDATE explanation_history
+     SET recognized_text=?,input_kind=?,canvas_id=?,shape_id=?
+     WHERE id=?`,
+  ).run(
+    input.recognizedText?.trim() || null,
+    input.inputKind ?? "text",
+    input.canvasId?.trim() || null,
+    input.shapeId?.trim() || null,
+    historyId,
   );
   const revisionCount = (
     db

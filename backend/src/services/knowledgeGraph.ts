@@ -11,6 +11,122 @@ interface GraphNote {
   snapshot: string;
 }
 
+interface HandwritingRow {
+  id: string;
+  documentId: string | null;
+  noteId: string | null;
+  canvasId: string | null;
+  shapeId: string | null;
+  canvasTitle: string | null;
+  label: string;
+  description: string;
+  pageNumber: number | null;
+}
+
+interface StandaloneGraphCanvas {
+  id: string;
+  title: string;
+  snapshot: string;
+}
+
+interface DrawingCanvasSource extends StandaloneGraphCanvas {
+  noteId?: string;
+  canvasId?: string;
+}
+
+function canvasDrawingNodes(canvases: DrawingCanvasSource[]) {
+  return canvases.flatMap((canvas) => {
+    try {
+      const snapshot = JSON.parse(canvas.snapshot) as {
+        document?: { store?: Record<string, unknown> };
+      };
+      const store = snapshot.document?.store ?? {};
+      const drawings = Object.values(store).filter((value) => {
+        if (!value || typeof value !== "object") return false;
+        const record = value as { typeName?: unknown; type?: unknown };
+        return (
+          record.typeName === "shape" &&
+          ["draw", "line", "arrow"].includes(String(record.type))
+        );
+      }) as Array<{ id: string; parentId: string }>;
+      const byPage = new Map<
+        string,
+        { pageName: string; count: number; shapeId: string }
+      >();
+      drawings.forEach((drawing) => {
+        let parentId = drawing.parentId;
+        for (let depth = 0; depth < 20 && parentId; depth += 1) {
+          const parent = store[parentId] as {
+            id?: unknown;
+            parentId?: unknown;
+            typeName?: unknown;
+            name?: unknown;
+          } | undefined;
+          if (!parent) break;
+          if (parent.typeName === "page" && typeof parent.id === "string") {
+            const current = byPage.get(parent.id);
+            byPage.set(parent.id, {
+              pageName:
+                typeof parent.name === "string" ? parent.name : "Canvas page",
+              count: (current?.count ?? 0) + 1,
+              shapeId: current?.shapeId ?? drawing.id,
+            });
+            break;
+          }
+          parentId =
+            typeof parent.parentId === "string" ? parent.parentId : "";
+        }
+      });
+      return [...byPage.entries()].map(([pageId, page]) => ({
+        id: `canvas-drawing:${canvas.id}:${pageId}`,
+        label: `${canvas.title} · ${page.pageName}`,
+        description: `${page.count} handwritten canvas element${page.count === 1 ? "" : "s"}`,
+        pageNumber: null,
+        kind: "handwriting" as const,
+        noteId: canvas.noteId,
+        canvasId: canvas.canvasId,
+        shapeId: page.shapeId,
+      }));
+    } catch {
+      return [];
+    }
+  });
+}
+
+function handwritingNodes(rows: HandwritingRow[]) {
+  return rows.map((row) => ({
+    id: `handwriting:${row.id}`,
+    label:
+      row.label === "Handwritten equation" ||
+      row.label === "Handwritten canvas selection"
+        ? "Handwritten selection"
+        : row.label,
+    description: row.description,
+    pageNumber: row.pageNumber,
+    kind: "handwriting" as const,
+    documentId: row.documentId ?? undefined,
+    noteId: row.noteId ?? undefined,
+    canvasId: row.canvasId ?? undefined,
+    shapeId: row.shapeId ?? undefined,
+  }));
+}
+
+function getHandwritingRows(documentId?: string): HandwritingRow[] {
+  return db
+    .query(
+      `SELECT id,document_id documentId,note_id noteId,
+              canvas_id canvasId,shape_id shapeId,
+              document_title canvasTitle,
+              COALESCE(NULLIF(recognized_text,''),selected_text) label,
+              explanation description,page_number pageNumber
+       FROM explanation_history
+       WHERE input_kind='handwriting'
+         ${documentId ? "AND document_id=?" : ""}
+       ORDER BY created_at DESC`,
+    )
+    .all(...(documentId ? [documentId] : [])) as HandwritingRow[];
+}
+
 function stickyNodes(notes: GraphNote[]) {
   return notes.flatMap((note) =>
     extractStickies({
@@ -151,6 +267,10 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
   const stickies = stickyNodes(
     notes.map((note) => ({ ...note, documentId })),
   );
+  const handwriting = handwritingNodes(getHandwritingRows(documentId));
+  const drawingPages = canvasDrawingNodes(
+    notes.map((note) => ({ ...note, noteId: note.id })),
+  );
   const sourceId = `source:${documentId}`;
   const connected = new Set(
     conceptEdges.flatMap((edge) => [edge.source, edge.target]),
@@ -180,6 +300,8 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
         noteId: note.id,
       })),
       ...stickies,
+      ...drawingPages,
+      ...handwriting,
     ],
     edges: [
       ...conceptEdges,
@@ -202,6 +324,21 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
         source: `note:${sticky.noteId}`,
         target: sticky.id,
         relationship: "explanation",
+      })),
+      ...drawingPages.map((page) => ({
+        id: `canvas-drawing-link:${page.id}`,
+        source: `note:${page.noteId}`,
+        target: page.id,
+        relationship: "handwriting",
+      })),
+      ...handwriting.map((item) => ({
+        id: `handwriting-link:${item.id}`,
+        source:
+          item.noteId && notes.some((note) => note.id === item.noteId)
+            ? `note:${item.noteId}`
+            : sourceId,
+        target: item.id,
+        relationship: "handwriting",
       })),
     ],
   };
@@ -230,6 +367,42 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
     snapshot: string;
   }>;
   const stickies = stickyNodes(notes);
+  const handwritingRows = getHandwritingRows();
+  const handwriting = handwritingNodes(handwritingRows);
+  const savedCanvases = db
+    .query("SELECT id,title,snapshot FROM standalone_canvases")
+    .all() as StandaloneGraphCanvas[];
+  const drawingPages = canvasDrawingNodes([
+    ...notes.map((note) => ({ ...note, noteId: note.id })),
+    ...savedCanvases.map((canvas) => ({
+      ...canvas,
+      canvasId: canvas.id,
+    })),
+  ]);
+  const localCanvases = [
+    ...new Map(
+      [
+        ...savedCanvases.map((canvas) => ({
+          id: `canvas:${canvas.id}`,
+          label: canvas.title,
+          description: "Saved standalone canvas",
+          pageNumber: null,
+          kind: "note" as const,
+          canvasId: canvas.id,
+        })),
+        ...handwritingRows
+          .filter((row) => row.canvasId && !row.documentId)
+          .map((row) => ({
+            id: `canvas:${row.canvasId}`,
+            label: row.canvasTitle || "Independent canvas",
+            description: "Local handwritten canvas",
+            pageNumber: null,
+            kind: "note" as const,
+            canvasId: row.canvasId!,
+          })),
+      ].map((canvas) => [canvas.canvasId, canvas]),
+    ).values(),
+  ];
   return {
     nodes: [
       {
@@ -259,7 +432,10 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
         documentId: note.documentId,
         noteId: note.id,
       })),
+      ...localCanvases,
       ...stickies,
+      ...drawingPages,
+      ...handwriting,
     ],
     edges: [
       ...documents.map((document) => ({
@@ -274,12 +450,43 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
         target: `note:${note.id}`,
         relationship: "note",
       })),
+      ...localCanvases.map((canvas) => ({
+        id: `canvas-link:${canvas.canvasId}`,
+        source: hubId,
+        target: canvas.id,
+        relationship: "canvas",
+      })),
       ...stickies.map((sticky) => ({
         id: `sticky-link:${sticky.id}`,
         source: `note:${sticky.noteId}`,
         target: sticky.id,
         relationship: "explanation",
       })),
+      ...drawingPages.map((page) => ({
+        id: `canvas-drawing-link:${page.id}`,
+        source: page.noteId
+          ? `note:${page.noteId}`
+          : `canvas:${page.canvasId}`,
+        target: page.id,
+        relationship: "handwriting",
+      })),
+      ...handwriting.flatMap((item) => {
+        const source = item.noteId
+          ? `note:${item.noteId}`
+          : item.documentId
+            ? `source:${item.documentId}`
+            : item.canvasId
+              ? `canvas:${item.canvasId}`
+              : null;
+        return source
+          ? [{
+              id: `handwriting-link:${item.id}`,
+              source,
+              target: item.id,
+              relationship: "handwriting",
+            }]
+          : [];
+      }),
     ],
   };
 }

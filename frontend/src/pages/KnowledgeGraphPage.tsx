@@ -55,6 +55,11 @@ function nodeIdentifier(node: GraphNode): {
         node.stickyKind === "explanation" ? "Explanation sticky" : "Sticky",
       className: "bg-amber-400/15 text-amber-300",
     };
+  if (node.kind === "handwriting")
+    return {
+      label: "Handwriting",
+      className: "bg-rose-400/15 text-rose-300",
+    };
   if (node.kind === "note")
     return {
       label: "Canvas",
@@ -71,12 +76,13 @@ function nodeIdentifier(node: GraphNode): {
   };
 }
 
-function stickyRoute(node: GraphNode): string | null {
-  if (!node.noteId) return null;
+function canvasRoute(node: GraphNode): string | null {
   const search = node.shapeId
     ? `?shape=${encodeURIComponent(node.shapeId)}`
     : "";
-  return `/notes/${node.noteId}${search}`;
+  if (node.noteId) return `/notes/${node.noteId}${search}`;
+  if (node.canvasId) return `/canvas/${node.canvasId}${search}`;
+  return null;
 }
 
 export default function KnowledgeGraphPage() {
@@ -259,12 +265,33 @@ export default function KnowledgeGraphPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const route = stickyRoute(selected);
+                  const route = canvasRoute(selected);
                   if (route) navigate(route);
                 }}
                 className="mt-3 flex items-center gap-2 text-xs text-orange-300"
               >
                 Open sticky note canvas
+                <ArrowUpRight size={14} />
+              </button>
+            )}
+            {selected.kind === "handwriting" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const route = canvasRoute(selected);
+                  if (route) navigate(route);
+                  else if (selected.documentId)
+                    navigate(
+                      `/workspace/${selected.documentId}${
+                        selected.pageNumber
+                          ? `?page=${selected.pageNumber}`
+                          : ""
+                      }`,
+                    );
+                }}
+                className="mt-3 flex items-center gap-2 text-xs text-rose-300"
+              >
+                Open handwritten selection
                 <ArrowUpRight size={14} />
               </button>
             )}
@@ -329,6 +356,16 @@ export default function KnowledgeGraphPage() {
                 className="mt-3 flex items-center gap-2 text-xs text-purple-300"
               >
                 Open linked note
+                <ArrowUpRight size={14} />
+              </button>
+            )}
+            {selected.kind === "note" && selected.canvasId && (
+              <button
+                type="button"
+                onClick={() => navigate(`/canvas/${selected.canvasId}`)}
+                className="mt-3 flex items-center gap-2 text-xs text-purple-300"
+              >
+                Open local canvas
                 <ArrowUpRight size={14} />
               </button>
             )}

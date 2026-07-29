@@ -28,6 +28,23 @@ function groupedPositions(
     targets.push(edge.target);
     outgoing.set(edge.source, targets);
   });
+  if (hub) {
+    const localCanvases = (outgoing.get(hub.id) ?? [])
+      .map((id) => nodeById.get(id))
+      .filter(
+        (node): node is GraphNode =>
+          node?.kind === "note" && Boolean(node.canvasId),
+      );
+    localCanvases.forEach((node, index) => {
+      const angle =
+        (index / Math.max(1, localCanvases.length)) * Math.PI * 2 +
+        Math.PI / 5;
+      positions.set(node.id, {
+        x: Math.cos(angle) * 3.6,
+        y: Math.sin(angle) * 3.6,
+      });
+    });
+  }
   sources.forEach((source) => {
     const origin = positions.get(source.id) ?? { x: 0, y: 0 };
     const directChildren = (outgoing.get(source.id) ?? [])
@@ -47,6 +64,9 @@ function groupedPositions(
     ];
     const concepts = children.filter((node) => node.kind === "concept");
     const notes = children.filter((node) => node.kind === "note");
+    const handwriting = children.filter(
+      (node) => node.kind === "handwriting",
+    );
     concepts.forEach((node, index) => {
       const angle = (index / Math.max(1, concepts.length)) * Math.PI * 2;
       positions.set(node.id, {
@@ -62,18 +82,29 @@ function groupedPositions(
         y: origin.y + Math.sin(angle) * 2.2,
       });
     });
+    handwriting.forEach((node, index) => {
+      const angle =
+        (index / Math.max(1, handwriting.length)) * Math.PI * 2 + Math.PI / 3;
+      positions.set(node.id, {
+        x: origin.x + Math.cos(angle) * 2.4,
+        y: origin.y + Math.sin(angle) * 2.4,
+      });
+    });
   });
   graph.nodes
     .filter((node) => node.kind === "note")
     .forEach((note) => {
       const origin = positions.get(note.id) ?? { x: 0, y: 0 };
-      const stickies = (outgoing.get(note.id) ?? [])
+      const details = (outgoing.get(note.id) ?? [])
         .map((id) => nodeById.get(id))
-        .filter((node): node is GraphNode => node?.kind === "sticky");
-      stickies.forEach((sticky, index) => {
+        .filter(
+          (node): node is GraphNode =>
+            node?.kind === "sticky" || node?.kind === "handwriting",
+        );
+      details.forEach((detail, index) => {
         const angle =
-          (index / Math.max(1, stickies.length)) * Math.PI * 2 + Math.PI / 6;
-        positions.set(sticky.id, {
+          (index / Math.max(1, details.length)) * Math.PI * 2 + Math.PI / 6;
+        positions.set(detail.id, {
           x: origin.x + Math.cos(angle) * 1.15,
           y: origin.y + Math.sin(angle) * 1.15,
         });
@@ -95,6 +126,7 @@ function nodeSize(node: GraphNode): number {
   if (node.kind === "source") return 10;
   if (node.kind === "note") return 6;
   if (node.kind === "sticky") return 4.5;
+  if (node.kind === "handwriting") return 5;
   return 7;
 }
 
@@ -104,6 +136,7 @@ function nodeColor(node: GraphNode, light: boolean): string {
     return light ? "#2378b5" : "#38bdf8";
   if (node.kind === "note") return light ? "#7c3aed" : "#c084fc";
   if (node.kind === "sticky") return light ? "#ca8a04" : "#facc15";
+  if (node.kind === "handwriting") return light ? "#ea580c" : "#fb7185";
   return light ? "#64748b" : "#a8a29e";
 }
 
@@ -166,7 +199,8 @@ export function KnowledgeGraph({
           n.kind === "hub" ||
           n.kind === "source" ||
           n.kind === "note" ||
-          n.kind === "sticky",
+          n.kind === "sticky" ||
+          n.kind === "handwriting",
         fixed: n.kind === "hub",
       }),
     );
@@ -179,6 +213,8 @@ export function KnowledgeGraph({
           weight:
             e.relationship === "explanation"
               ? 4
+              : e.relationship === "handwriting"
+                ? 4
               : e.relationship === "note"
                 ? 3
                 : e.relationship === "source"
@@ -291,6 +327,10 @@ export function KnowledgeGraph({
         <span className="flex items-center gap-1.5 rounded px-1.5 py-1 text-amber-300">
           <span className="h-2 w-2 rounded-full bg-amber-400" />
           Sticky
+        </span>
+        <span className="flex items-center gap-1.5 rounded px-1.5 py-1 text-rose-300">
+          <span className="h-2 w-2 rounded-full bg-rose-400" />
+          Handwriting
         </span>
       </div>
       <div ref={container} className="h-full w-full" />

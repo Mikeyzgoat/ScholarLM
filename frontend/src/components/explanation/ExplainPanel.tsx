@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
 import { AnimatePresence, motion } from "framer-motion";
@@ -7,7 +7,33 @@ import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
 import type { CanvasSelectionAnchor, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
-import { ChartSpline, FilePlus2, StickyNote } from "lucide-react";
+import {
+  ChartSpline,
+  ClipboardPaste,
+  FilePlus2,
+  ImageUp,
+  StickyNote,
+} from "lucide-react";
+
+function toDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Clipboard image could not be read"));
+    reader.onerror = () => reject(reader.error ?? new Error("Image read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function imageFromClipboard(items: DataTransferItemList): Blob | null {
+  for (const item of items)
+    if (item.kind === "file" && item.type.startsWith("image/"))
+      return item.getAsFile();
+  return null;
+}
+
 export function ExplainPanel({
   selectedText,
   selectedTexts,
@@ -17,6 +43,7 @@ export function ExplainPanel({
   selectionImage,
   documentId,
   noteId,
+  canvasId,
   pageNumber,
   documentTitle,
   onPlotGenerated,
@@ -31,6 +58,7 @@ export function ExplainPanel({
   selectionImage?: string;
   documentId?: string;
   noteId?: string;
+  canvasId?: string;
   pageNumber: number | null;
   documentTitle: string;
   onPlotGenerated?: (plot: MathPlot, equation?: string) => void;
@@ -49,21 +77,92 @@ export function ExplainPanel({
 }) {
   const state = useExplanation(),
     speech = useSpeech();
+  const [inputMode, setInputMode] = useState<"selection" | "screenshot">(
+    "selection",
+  );
+  const [pastedImage, setPastedImage] = useState<string>();
+  const [pasteError, setPasteError] = useState("");
+  const screenshotInput = useRef<HTMLInputElement>(null);
   const [canvasInput, setCanvasInput] = useState<Parameters<
     NonNullable<typeof onExplanationGenerated>
   >[0]>();
+  const activeImage = selectionImage ?? pastedImage;
+  const activeText =
+    selectedText.trim() || (pastedImage ? "Screenshot selection" : "");
+  const acceptClipboardImage = useCallback(async (blob: Blob) => {
+    if (!blob.type.startsWith("image/")) return;
+    setPasteError("");
+    try {
+      setPastedImage(await toDataUrl(blob));
+    } catch (error) {
+      setPasteError(
+        error instanceof Error ? error.message : "Could not paste screenshot",
+      );
+    }
+  }, []);
+  const readClipboard = useCallback(async () => {
+    setPasteError("");
+    try {
+      if (!navigator.clipboard?.read)
+        throw new Error("Use Ctrl/Cmd+V to paste a screenshot here");
+      const entries = await navigator.clipboard.read();
+      for (const entry of entries) {
+        const imageType = entry.types.find((type) => type.startsWith("image/"));
+        if (!imageType) continue;
+        await acceptClipboardImage(await entry.getType(imageType));
+        return;
+      }
+      throw new Error("The clipboard does not contain an image");
+    } catch (error) {
+      setPasteError(
+        error instanceof Error ? error.message : "Could not access clipboard",
+      );
+    }
+  }, [acceptClipboardImage]);
+  useEffect(() => {
+    const paste = (event: ClipboardEvent) => {
+      if (selectedText.trim() || selectionImage) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      )
+        return;
+      if (!event.clipboardData) return;
+      const image = imageFromClipboard(event.clipboardData.items);
+      if (!image) return;
+      event.preventDefault();
+      void acceptClipboardImage(image);
+    };
+    window.addEventListener("paste", paste);
+    return () => window.removeEventListener("paste", paste);
+  }, [acceptClipboardImage, selectedText, selectionImage]);
+  useEffect(() => {
+    if (!selectedText.trim() && !selectionImage) return;
+    setPastedImage(undefined);
+    setPasteError("");
+  }, [selectedText, selectionImage]);
   async function explain(
     mode: "explain" | "regenerate" | "simplify" = "explain",
     requestGraph = false,
   ) {
     const value = await state.explain({
-      selectedText,
+      selectedText: activeText,
       selectedTexts:
-        selectedTexts && selectedTexts.length > 1 ? selectedTexts : undefined,
-      imageDataUrl: selectionImage,
+        !pastedImage && selectedTexts && selectedTexts.length > 1
+          ? selectedTexts
+          : undefined,
+      imageDataUrl: activeImage,
+      imageInputKind: pastedImage ? "selection" : "handwriting",
       graphRequested: requestGraph,
       documentId,
       noteId,
+      canvasId,
+      shapeId:
+        activeImage && !pastedImage
+          ? selectionAnchors?.[0]?.shapeId
+          : undefined,
       documentTitle,
       pageNumber: pageNumber ?? undefined,
       mode,
@@ -73,7 +172,7 @@ export function ExplainPanel({
     if (value) {
       if (value.plot) onPlotGenerated?.(value.plot, value.recognizedEquation);
       setCanvasInput({
-        selectedText,
+        selectedText: activeText,
         explanation: value.explanation,
         mode,
         answers: value.answers,
@@ -81,23 +180,28 @@ export function ExplainPanel({
         explanationId: value.historyId,
         pageNumber: pageNumber ?? undefined,
       });
-      await speech.speak(value.explanation, selectedText, value.historyId);
+      if (pastedImage) setInputMode("selection");
+      await speech.speak(value.explanation, activeText, value.historyId);
     }
   }
   useEffect(() => {
     speech.stop();
-    if (!selectedText.trim() && !selectionImage) {
+    if (!activeText && !activeImage) {
       state.clear();
       setCanvasInput(undefined);
       return;
     }
     const existing =
       existingExplanation ||
-      findLatestGeneratedOutput(selectedText, pageNumber ?? undefined)?.text;
+      (!activeImage &&
+      activeText !== "Handwritten equation" &&
+      activeText !== "Screenshot selection"
+        ? findLatestGeneratedOutput(activeText, pageNumber ?? undefined)?.text
+        : undefined);
     if (existing) {
       state.load(existing);
       setCanvasInput({
-        selectedText,
+        selectedText: activeText,
         explanation: existing,
         mode: "explain",
         anchors: selectionAnchors,
@@ -109,8 +213,8 @@ export function ExplainPanel({
       setCanvasInput(undefined);
     }
   }, [
-    selectedText,
-    selectionImage,
+    activeText,
+    activeImage,
     pageNumber,
     existingExplanation,
     existingExplanationId,
@@ -125,19 +229,110 @@ export function ExplainPanel({
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">Explanation</h2>
       </div>
+      {!activeText && !activeImage && (
+        <div className="rounded-lg border border-dashed border-orange-400/25 bg-orange-500/[0.04] p-3">
+          <div className="mb-3 grid grid-cols-2 rounded-lg bg-black/5 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setInputMode("selection");
+                setPasteError("");
+              }}
+              className={`rounded-md px-2 py-1.5 text-[11px] transition ${
+                inputMode === "selection"
+                  ? "bg-white font-medium shadow-sm"
+                  : "text-stone-500"
+              }`}
+            >
+              Explain selection
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInputMode("screenshot");
+                setPasteError("");
+                screenshotInput.current?.click();
+              }}
+              className={`rounded-md px-2 py-1.5 text-[11px] transition ${
+                inputMode === "screenshot"
+                  ? "bg-white font-medium shadow-sm"
+                  : "text-stone-500"
+              }`}
+            >
+              Upload screenshot
+            </button>
+          </div>
+          {inputMode === "selection" ? (
+            <div className="py-2 text-center">
+              <p className="text-xs leading-5 text-stone-500">
+                Select PDF text, typed canvas text, or a handwritten region.
+              </p>
+              <p className="mt-1 text-[10px] font-medium text-orange-500/80">
+                Waiting for a selection…
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void readClipboard()}
+                  className="scholar-secondary-action flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs"
+                >
+                  <ClipboardPaste size={15} />
+                  Paste
+                </button>
+                <button
+                  type="button"
+                  onClick={() => screenshotInput.current?.click()}
+                  className="scholar-secondary-action flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs"
+                >
+                  <ImageUp size={15} />
+                  Upload
+                </button>
+              </div>
+              <p className="mt-2 text-center text-[10px] text-stone-500">
+                Or copy any screen region and press Ctrl/Cmd+V.
+              </p>
+            </>
+          )}
+          <input
+            ref={screenshotInput}
+            hidden
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void acceptClipboardImage(file);
+              event.currentTarget.value = "";
+            }}
+          />
+        </div>
+      )}
+      {pasteError && <p className="text-xs text-red-400">{pasteError}</p>}
       <AnimatePresence mode="popLayout">
-        {selectedText && !state.explanation && (
+        {activeText && !state.explanation && (
           <motion.div
             key="selection"
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98 }}
           >
+            {pastedImage && (
+              <img
+                src={pastedImage}
+                alt="Pasted screenshot selection"
+                className="mb-2 max-h-36 w-full rounded-lg border border-white/10 object-contain"
+              />
+            )}
             <SelectionPopover
-              selectedText={selectedText}
+              selectedText={activeText}
               onExplain={() => void explain("explain")}
               onExplainWithGraph={() => void explain("explain", true)}
-              onDismiss={state.clear}
+              onDismiss={() => {
+                setPastedImage(undefined);
+                state.clear();
+              }}
             />
             {selectedTexts && selectedTexts.length > 1 && (
               <p className="mt-2 text-xs text-orange-300">
@@ -149,7 +344,7 @@ export function ExplainPanel({
         )}
       </AnimatePresence>
       <ExplanationContent
-        selectedText={selectedText}
+        selectedText={activeText}
         explanation={state.explanation}
         isLoading={state.isExplaining}
         error={state.error}
@@ -202,7 +397,7 @@ export function ExplainPanel({
               Add as text
             </button>
           </div>
-          {selectedText && (
+          {activeText && (
             <button
               type="button"
               className="scholar-secondary-action flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs"
@@ -227,8 +422,8 @@ export function ExplainPanel({
               else
                 void speech.speak(
                   state.explanation,
-                  selectedText,
-                  existingExplanationId,
+                  activeText,
+                  canvasInput?.explanationId ?? existingExplanationId,
                 );
             }}
             onReplay={speech.replay}

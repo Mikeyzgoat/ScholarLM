@@ -23,6 +23,9 @@ export function useExplanation() {
       graphRequested?: boolean;
       documentId?: string;
       noteId?: string;
+      canvasId?: string;
+      shapeId?: string;
+      imageInputKind?: "handwriting" | "selection";
       documentTitle?: string;
       pageNumber?: number;
       mode?: "explain" | "regenerate" | "simplify";
