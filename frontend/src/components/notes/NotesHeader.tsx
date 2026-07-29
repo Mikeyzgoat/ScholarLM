@@ -76,7 +76,7 @@ export function NotesHeader({
         <button
           type="button"
           onClick={pdfTextSelection.onToggle}
-          className="scholar-secondary-action flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs"
+          className="scholar-secondary-action flex w-28 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs"
         >
           {pdfTextSelection.enabled ? (
             <MousePointer2 size={14} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { generateSpeech } from "../services/speech";
+import { combineWavChunks, getWavDuration } from "../lib/audio";
+import { streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
 const silentWav =
@@ -27,11 +28,73 @@ function wordIndexAtProgress(text: string, progress: number): number {
   return words.length - 1;
 }
 
+type SpeechChunk = {
+  audio: Blob;
+  text: string;
+  duration: number;
+};
+
+function wordWeight(word: string, followingWhitespace: string): number {
+  const spokenCharacters = word.replace(/[^\p{L}\p{N}]/gu, "").length;
+  const punctuationPause = /[.!?…]["')\]}]*$/u.test(word)
+    ? 4.5
+    : /[;:]["')\]}]*$/u.test(word)
+      ? 2.6
+      : /[,—–]["')\]}]*$/u.test(word)
+        ? 1.7
+        : 0;
+  const paragraphPause = /\n\s*\n/.test(followingWhitespace)
+    ? 5
+    : /\n/.test(followingWhitespace)
+      ? 2.5
+      : 0;
+  return Math.max(1.5, spokenCharacters / 3.6) +
+    punctuationPause +
+    paragraphPause;
+}
+
+function buildWordCueEnds(chunks: SpeechChunk[]): number[] {
+  const cueEnds: number[] = [];
+  let elapsed = 0;
+  for (const chunk of chunks) {
+    const matches = [...chunk.text.matchAll(/\S+/g)];
+    if (!matches.length || chunk.duration <= 0) {
+      elapsed += Math.max(0, chunk.duration);
+      continue;
+    }
+    const weights = matches.map((match, index) => {
+      const end = (match.index ?? 0) + match[0].length;
+      const nextStart = matches[index + 1]?.index ?? chunk.text.length;
+      return wordWeight(match[0], chunk.text.slice(end, nextStart));
+    });
+    const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+    let chunkElapsed = 0;
+    for (const weight of weights) {
+      chunkElapsed += (chunk.duration * weight) / totalWeight;
+      cueEnds.push(elapsed + chunkElapsed);
+    }
+    elapsed += chunk.duration;
+  }
+  return cueEnds;
+}
+
+function wordIndexAtTime(cueEnds: number[], currentTime: number): number {
+  let low = 0;
+  let high = cueEnds.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (currentTime <= cueEnds[middle]) high = middle;
+    else low = middle + 1;
+  }
+  return low;
+}
+
 export function useSpeech() {
   const audio = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useRef("");
   const controller = useRef<AbortController | null>(null);
   const latestText = useRef("");
+  const wordCueEnds = useRef<number[]>([]);
   const fallbackActive = useRef(false);
   const progressFrame = useRef(0);
   const [isLoading, setLoading] = useState(false);
@@ -58,10 +121,12 @@ export function useSpeech() {
       player.duration > 0
     ) {
       setActiveWordIndex(
-        wordIndexAtProgress(
-          latestText.current,
-          player.currentTime / player.duration,
-        ),
+        wordCueEnds.current.length
+          ? wordIndexAtTime(wordCueEnds.current, player.currentTime)
+          : wordIndexAtProgress(
+              latestText.current,
+              player.currentTime / player.duration,
+            ),
       );
     }
     if (player && !player.paused && !player.ended)
@@ -154,6 +219,7 @@ export function useSpeech() {
     setPaused(false);
     setLoading(false);
     setActiveWordIndex(-1);
+    wordCueEnds.current = [];
   }, [stopProgress]);
 
   const clearAudio = useCallback(() => {
@@ -206,14 +272,29 @@ export function useSpeech() {
     const next = new AbortController();
     controller.current = next;
     try {
-      const wav = await generateSpeech(
+      const chunks: Array<Omit<SpeechChunk, "duration">> = [];
+      await streamSpeech(
         text,
+        (audioChunk, chunkText) => {
+          chunks.push({ audio: audioChunk, text: chunkText });
+        },
         next.signal,
         sourceText,
         explanationId,
       );
+      if (!chunks.length) throw new Error("Kokoro returned no audio");
+      const timedChunks = await Promise.all(
+        chunks.map(async (chunk) => ({
+          ...chunk,
+          duration: await getWavDuration(chunk.audio),
+        })),
+      );
+      const wav = await combineWavChunks(
+        timedChunks.map((chunk) => chunk.audio),
+      );
       if (!wav.size) throw new Error("Kokoro returned no audio");
       if (next.signal.aborted) return;
+      wordCueEnds.current = buildWordCueEnds(timedChunks);
       audioUrl.current = URL.createObjectURL(wav);
       setReady(true);
       if (autoRead) playAudio();

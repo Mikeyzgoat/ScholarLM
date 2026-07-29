@@ -13,7 +13,12 @@ export function SaveStatus({
     error: "Save failed",
   };
   return (
-    <span className={state === "error" ? "text-red-700" : "text-stone-500"}>
+    <span
+      aria-live="polite"
+      className={`inline-block w-36 whitespace-nowrap text-right tabular-nums ${
+        state === "error" ? "text-red-700" : "text-stone-500"
+      }`}
+    >
       {labels[state]}
       {state === "saved" &&
         lastSavedAt &&

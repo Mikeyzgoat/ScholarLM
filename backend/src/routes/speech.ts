@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { streamSpeech, synthesizeSpeech } from "../services/speech";
 import {
   combineWavBytes,
-  getExplanationSpeech,
   getCachedSpeech,
   linkExplanationSpeech,
   normalizeSpeechText,
@@ -81,10 +80,7 @@ speech.post("/", async (c) => {
       400,
     );
   const normalizedText = normalizeSpeechText(text);
-  const cached =
-    typeof explanationId === "string"
-      ? getExplanationSpeech(explanationId) ?? getCachedSpeech(normalizedText)
-      : getCachedSpeech(normalizedText);
+  const cached = getCachedSpeech(normalizedText);
   if (cached && typeof explanationId === "string")
     linkExplanationSpeech(explanationId, normalizedText);
   if (cached && typeof sourceText === "string" && sourceText.trim())

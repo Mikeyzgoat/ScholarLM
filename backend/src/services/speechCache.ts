@@ -9,7 +9,12 @@ interface SpeechCacheRow {
 }
 
 export function normalizeSpeechText(text: string): string {
-  return text.trim().replace(/\s+/g, " ");
+  return text
+    .trim()
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 function speechHash(text: string): string {

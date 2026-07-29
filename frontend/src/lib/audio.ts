@@ -10,18 +10,29 @@ function parseWav(bytes: Uint8Array) {
   if (bytes.length < 44 || label(0) !== "RIFF" || label(8) !== "WAVE")
     throw new Error("Kokoro returned an invalid WAV chunk");
   let offset = 12;
+  let byteRate = 0;
   while (offset + 8 <= bytes.length) {
     const size = view.getUint32(offset + 4, true);
+    if (label(offset) === "fmt " && size >= 12)
+      byteRate = view.getUint32(offset + 16, true);
     if (label(offset) === "data")
       return {
         bytes,
         dataOffset: offset + 8,
         dataSize: Math.min(size, bytes.length - offset - 8),
         sizeFieldOffset: offset + 4,
+        duration:
+          byteRate > 0
+            ? Math.min(size, bytes.length - offset - 8) / byteRate
+            : 0,
       };
     offset += 8 + size + (size % 2);
   }
   throw new Error("Kokoro WAV data is missing");
+}
+
+export async function getWavDuration(chunk: Blob): Promise<number> {
+  return parseWav(new Uint8Array(await chunk.arrayBuffer())).duration;
 }
 
 export async function combineWavChunks(chunks: Blob[]): Promise<Blob> {

@@ -25,6 +25,37 @@ export function addExplanationStickyToCanvas(
 ): void {
   const viewport = editor.getViewportPageBounds();
   const width = 340;
+  const height = 112;
+  const pageShapes = editor.getCurrentPageShapes();
+  const pdfShape = pageShapes.find(
+    (shape) => shape.type === "scholar-pdf-page",
+  );
+  const pdfBounds = pdfShape
+    ? editor.getShapePageBounds(pdfShape)
+    : undefined;
+  const occupied = pageShapes
+    .filter((shape) => shape.id !== pdfShape?.id)
+    .map((shape) => editor.getShapePageBounds(shape))
+    .filter((bounds) => bounds !== undefined);
+  let x = pdfBounds ? pdfBounds.maxX + 40 : viewport.maxX - width - 32;
+  let y = pdfBounds ? pdfBounds.y + 32 : viewport.y + 48;
+  const laneTop = y;
+  const laneBottom = pdfBounds?.maxY ?? viewport.maxY;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const collision = occupied.some(
+      (bounds) =>
+        x < bounds.maxX + 16 &&
+        x + width > bounds.x - 16 &&
+        y < bounds.maxY + 16 &&
+        y + height > bounds.y - 16,
+    );
+    if (!collision) break;
+    y += height + 24;
+    if (y + height > laneBottom - 24) {
+      x += width + 24;
+      y = laneTop;
+    }
+  }
   const output = registerGeneratedOutput({
     text: input.explanation,
     sourceText: input.selectedText,
@@ -35,21 +66,25 @@ export function addExplanationStickyToCanvas(
   editor.createShape<ExplanationStickyShape>({
     id: shapeId,
     type: EXPLANATION_STICKY_SHAPE_TYPE,
-    x: viewport.center.x - width / 2,
-    y: viewport.center.y - 56,
+    x,
+    y,
+    isLocked: false,
     meta: {
       scholarLmGenerated: true,
       scholarLmOutputKind: "explanation",
       scholarLmOutputId: output.id,
       scholarLmSourceText: input.selectedText,
       scholarLmExplanation: input.explanation,
+      ...(input.pageNumber
+        ? { scholarLmPageNumber: input.pageNumber }
+        : {}),
       ...(input.explanationId
         ? { scholarLmExplanationId: input.explanationId }
         : {}),
     },
     props: {
       w: width,
-      h: 112,
+      h: height,
       question: input.selectedText,
       explanation: input.explanation,
       explanationId: input.explanationId ?? "",

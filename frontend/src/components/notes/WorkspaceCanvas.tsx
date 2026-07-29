@@ -153,7 +153,7 @@ export function WorkspaceCanvas({
           <button
             type="button"
             onClick={() => setTextSelectionEnabled((value) => !value)}
-            className={`ml-2 flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
+            className={`ml-2 flex w-28 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs ${
               textSelectionEnabled
                 ? "bg-teal-500/15 text-teal-300"
                 : "bg-orange-500/15 text-orange-300"
