@@ -87,12 +87,11 @@ The database and uploaded PDFs are ignored by Git.
 
 - `/canvas` is an independent local-first tldraw canvas that does not require a
   PDF.
-- A document workspace opens in split mode with the PDF and its persisted
-  tldraw canvas side by side.
-- Select PDF text to explain or save a page-aware highlight.
-- PDF text-layer geometry is captured as a page-aware region. Add a detected
-  region to the linked notes canvas first, then optionally request a streamed
-  explanation.
+- A document workspace renders each PDF page directly inside its persisted
+  tldraw canvas. Ink, highlights, notes, and generated outputs are saved above
+  the locked source page.
+- Switch between Draw and Select Text modes to annotate the PDF or select its
+  text layer for an optional streamed explanation.
 - Select a tldraw text shape to explain its content live.
 - OpenRouter's free router selects compatible generation models by request
   capabilities, including image input and structured output. A curated,

@@ -8,18 +8,21 @@ import {
   isGeneratedExplanationShape,
 } from "../../lib/generatedOutputs";
 import { useTheme } from "../../lib/theme";
+import { pdfPageShapeUtils } from "./PdfPageShape";
 export function NotesCanvas({
   note,
   onEditorReady,
   embedded = false,
   onTextSelected,
   onCanvasSelection,
+  onPdfTextSelected,
 }: {
   note: NotePage;
   onEditorReady: (editor: Editor) => void;
   embedded?: boolean;
   onTextSelected?: (text: string) => void;
   onCanvasSelection?: (selection: CanvasSelection) => void;
+  onPdfTextSelected?: (text: string) => void;
 }) {
   const { resolvedTheme } = useTheme();
   const selectionCleanup = useRef<(() => void) | null>(null);
@@ -264,11 +267,19 @@ export function NotesCanvas({
   return (
     <div
       ref={root}
+      onMouseUp={() => {
+        const text = getSelection()?.toString().trim() ?? "";
+        if (text) onPdfTextSelected?.(text);
+      }}
       className={
         embedded ? "relative h-full min-h-[576px]" : "absolute inset-0 top-14"
       }
     >
-      <Tldraw colorScheme={resolvedTheme} onMount={mount} />
+      <Tldraw
+        colorScheme={resolvedTheme}
+        onMount={mount}
+        shapeUtils={pdfPageShapeUtils}
+      />
     </div>
   );
 }

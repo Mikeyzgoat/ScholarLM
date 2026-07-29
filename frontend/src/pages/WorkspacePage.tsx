@@ -8,25 +8,16 @@ import { useSemanticSearch } from "../hooks/useSemanticSearch";
 import { useKnowledgeGraph } from "../hooks/useKnowledgeGraph";
 import { SearchBar } from "../components/search/SearchBar";
 import { SearchResults } from "../components/search/SearchResults";
-import { PDFViewer } from "../components/pdf/PDFViewer";
 import { IngestionStatus } from "../components/documents/IngestionStatus";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { DocumentNotes } from "../components/notes/DocumentNotes";
 import { WorkspaceCanvas } from "../components/notes/WorkspaceCanvas";
-import {
-  WorkspaceModeBar,
-  type WorkspaceMode,
-} from "../components/layout/WorkspaceModeBar";
 import type { CanvasSelectionAnchor, GraphNode } from "../lib/types";
 import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { DocumentQA } from "../components/rag/DocumentQA";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
-import {
-  addPdfRegionToCanvas,
-  type PdfTextRegion,
-} from "../lib/addPdfRegionToCanvas";
 import { activateDocumentIndex } from "../services/rag";
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
@@ -54,8 +45,6 @@ export default function WorkspacePage() {
       anchors?: CanvasSelectionAnchor[];
     }>
   >([]);
-  const queuedPdfRegions = useRef<PdfTextRegion[]>([]);
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("split");
   const doc = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => getDocument(documentId),
@@ -93,7 +82,7 @@ export default function WorkspacePage() {
     return <main className="p-6 text-red-700">Unable to load workspace.</main>;
   return (
     <motion.main
-      className="grid gap-4 p-4 xl:grid-cols-[minmax(240px,280px)_minmax(560px,1fr)_minmax(360px,400px)]"
+      className="grid gap-4 p-4 xl:grid-cols-[minmax(680px,1fr)_minmax(360px,400px)]"
       initial={reduceMotion ? false : "hidden"}
       animate="visible"
       variants={{
@@ -101,39 +90,6 @@ export default function WorkspacePage() {
         visible: { transition: { staggerChildren: 0.075 } },
       }}
     >
-      <motion.aside
-        variants={{
-          hidden: { opacity: 0, x: -12 },
-          visible: { opacity: 1, x: 0 },
-        }}
-        transition={{ duration: 0.38, ease: "easeOut" }}
-      >
-        <DocumentQA
-          documentId={documentId}
-          disabled={status.status?.status !== "ready"}
-          onSourceSelect={setActivePage}
-        />
-        <h2 className="mb-2 mt-5 text-sm font-semibold">Semantic search</h2>
-        <SearchBar
-          query={search.query}
-          onQueryChange={search.setQuery}
-          onSearch={search.search}
-          isSearching={search.isSearching}
-          disabled={status.status?.status !== "ready"}
-        />
-        {search.error && (
-          <p className="mt-2 text-sm text-red-700">{search.error.message}</p>
-        )}
-        <div className="mt-3">
-          <SearchResults
-            results={search.results}
-            onSelectResult={(r) => setActivePage(r.pageNumber)}
-            isLoading={search.isSearching}
-          />
-        </div>
-        <h2 className="mb-2 mt-6 font-semibold">Notes</h2>
-        <DocumentNotes documentId={documentId} />
-      </motion.aside>
       <motion.div
         variants={{
           hidden: { opacity: 0, y: 10 },
@@ -141,75 +97,49 @@ export default function WorkspacePage() {
         }}
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
-        <WorkspaceModeBar
-          mode={workspaceMode}
-          onModeChange={setWorkspaceMode}
-        />
         {status.status && status.status.status !== "ready" && (
           <div className="mb-3 rounded border bg-white p-3">
             <IngestionStatus status={status.status} />
           </div>
         )}
-        <div
-          className={
-            workspaceMode === "split"
-              ? "grid gap-3 2xl:grid-cols-2"
-              : "grid grid-cols-1"
-          }
-        >
-          {workspaceMode !== "canvas" && (
-            <PDFViewer
-              fileUrl={getDocumentFileUrl(documentId)}
-              documentTitle={doc.data.name}
-              activePage={activePage}
-              onPageChange={setActivePage}
-              onTextSelected={(s) => {
-                setSelectedText(s.text);
-                setSelectedTexts(s.text ? [s.text] : undefined);
-                setSelectionImage(undefined);
-                setExistingExplanation(undefined);
-                setSelectionAnchors(undefined);
-                setSelectedTextPage(s.pageNumber);
-              }}
-              onRegionAddedToNotes={(region) => {
-                if (canvasEditor) addPdfRegionToCanvas(canvasEditor, region);
-                else queuedPdfRegions.current.push(region);
-              }}
-              onExplanationGenerated={saveExplanationToCanvas}
-            />
-          )}
-          {workspaceMode !== "pdf" && (
-            <WorkspaceCanvas
-              key={documentId}
-              documentId={documentId}
-              onTextSelected={(text) => {
-                setSelectedText(text);
-                setSelectedTexts(text ? [text] : undefined);
-                setSelectionImage(undefined);
-                setExistingExplanation(undefined);
-                setSelectionAnchors(undefined);
-                setSelectedTextPage(null);
-              }}
-              onCanvasSelection={(selection) => {
-                setSelectedText(selection.text);
-                setSelectedTexts(selection.texts);
-                setSelectionImage(selection.imageDataUrl);
-                setExistingExplanation(selection.existingExplanation);
-                setSelectionAnchors(selection.anchors);
-                setSelectedTextPage(null);
-              }}
-              onEditorReady={(editor) => {
-                setCanvasEditor(editor);
-                queuedPdfRegions.current.splice(0).forEach((region) => {
-                  addPdfRegionToCanvas(editor, region);
-                });
-                queuedCanvasExplanations.current.splice(0).forEach((item) => {
-                  addExplanationToCanvas(editor, item);
-                });
-              }}
-            />
-          )}
-        </div>
+        <WorkspaceCanvas
+          key={documentId}
+          documentId={documentId}
+          fileUrl={getDocumentFileUrl(documentId)}
+          activePage={activePage}
+          pageCount={doc.data.pageCount ?? 1}
+          onPageChange={setActivePage}
+          onPdfTextSelected={(text) => {
+            setSelectedText(text);
+            setSelectedTexts([text]);
+            setSelectionImage(undefined);
+            setExistingExplanation(undefined);
+            setSelectionAnchors(undefined);
+            setSelectedTextPage(activePage);
+          }}
+          onTextSelected={(text) => {
+            setSelectedText(text);
+            setSelectedTexts(text ? [text] : undefined);
+            setSelectionImage(undefined);
+            setExistingExplanation(undefined);
+            setSelectionAnchors(undefined);
+            setSelectedTextPage(null);
+          }}
+          onCanvasSelection={(selection) => {
+            setSelectedText(selection.text);
+            setSelectedTexts(selection.texts);
+            setSelectionImage(selection.imageDataUrl);
+            setExistingExplanation(selection.existingExplanation);
+            setSelectionAnchors(selection.anchors);
+            setSelectedTextPage(null);
+          }}
+          onEditorReady={(editor) => {
+            setCanvasEditor(editor);
+            queuedCanvasExplanations.current.splice(0).forEach((item) => {
+              addExplanationToCanvas(editor, item);
+            });
+          }}
+        />
       </motion.div>
       <motion.aside
         className="space-y-4"
@@ -232,6 +162,35 @@ export default function WorkspacePage() {
           }}
           onExplanationGenerated={saveExplanationToCanvas}
         />
+        <DocumentQA
+          documentId={documentId}
+          disabled={status.status?.status !== "ready"}
+          onSourceSelect={setActivePage}
+        />
+        <motion.section layout className="rounded-lg border bg-white p-4">
+          <h2 className="mb-3 font-semibold">Semantic search</h2>
+          <SearchBar
+            query={search.query}
+            onQueryChange={search.setQuery}
+            onSearch={search.search}
+            isSearching={search.isSearching}
+            disabled={status.status?.status !== "ready"}
+          />
+          {search.error && (
+            <p className="mt-2 text-sm text-red-700">{search.error.message}</p>
+          )}
+          <div className="mt-3">
+            <SearchResults
+              results={search.results}
+              onSelectResult={(result) => setActivePage(result.pageNumber)}
+              isLoading={search.isSearching}
+            />
+          </div>
+        </motion.section>
+        <motion.section layout className="rounded-lg border bg-white p-4">
+          <h2 className="mb-3 font-semibold">Notes</h2>
+          <DocumentNotes documentId={documentId} />
+        </motion.section>
         <motion.section layout className="min-w-0 rounded-lg border bg-white p-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="font-semibold">Knowledge graph</h2>
