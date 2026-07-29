@@ -308,8 +308,9 @@ export default function StandaloneCanvasPage() {
             canvasId={canvasId}
             pageNumber={null}
             documentTitle={title.trim() || "Independent canvas"}
-            onPlotGenerated={(plot, equation) => {
-              if (editor) drawMathPlot(editor, plot, equation);
+            onPlotGenerated={(plot, equation, sourceShapeIds) => {
+              if (editor)
+                drawMathPlot(editor, plot, equation, sourceShapeIds);
             }}
             onExplanationGenerated={(input) => {
               if (editor) addExplanationToCanvas(editor, input);

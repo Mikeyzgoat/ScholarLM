@@ -230,9 +230,12 @@ export function KnowledgeGraph({
       labelSize: 12,
       defaultEdgeColor: light ? "#a7d8dc" : "#78350f",
       stagePadding: 60,
+      allowInvalidContainer: true,
     });
     renderer.current = sigma;
     const resizeObserver = new ResizeObserver(() => {
+      const bounds = container.current?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
       sigma.resize();
       sigma.refresh();
     });

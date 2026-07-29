@@ -12,6 +12,8 @@ import {
   Search,
   Sparkles,
   StickyNote,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
@@ -21,9 +23,12 @@ import {
   useKnowledgeGraph,
 } from "../hooks/useKnowledgeGraph";
 import type { GraphNode } from "../lib/types";
-import { getDocument } from "../services/documents";
-import { createNote } from "../services/notes";
+import { deleteDocument, getDocument } from "../services/documents";
+import { createNote, deleteNote } from "../services/notes";
 import { createRandomCanvasName } from "../lib/randomName";
+import { deleteStandaloneCanvas } from "../services/canvases";
+import { removeLocalCanvas } from "../lib/localCanvases";
+import { deleteGraphLeafNode } from "../services/graph";
 
 function fuzzyScore(query: string, value: string): number {
   const needle = query.toLowerCase().trim();
@@ -92,6 +97,7 @@ export default function KnowledgeGraphPage() {
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GraphNode | null>(null);
   const document = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => getDocument(documentId),
@@ -128,6 +134,30 @@ export default function KnowledgeGraphPage() {
         queryKey: ["notes", note.documentId],
       });
       navigate(`/notes/${note.id}`);
+    },
+  });
+  const removeNode = useMutation({
+    mutationFn: async (node: GraphNode) => {
+      if (node.kind === "source" && node.documentId)
+        await deleteDocument(node.documentId);
+      else if (node.kind === "note" && node.noteId)
+        await deleteNote(node.noteId);
+      else if (node.kind === "note" && node.canvasId) {
+        await deleteStandaloneCanvas(node.canvasId);
+        removeLocalCanvas(node.canvasId);
+      } else await deleteGraphLeafNode(node);
+      return node;
+    },
+    onSuccess: async (node) => {
+      setDeleteTarget(null);
+      setSelected(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["graph"] }),
+        queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["notes"] }),
+      ]);
+      if (node.kind === "source" && documentId === node.documentId)
+        navigate("/graph");
     },
   });
   const matches = useMemo(() => {
@@ -369,6 +399,19 @@ export default function KnowledgeGraphPage() {
                 <ArrowUpRight size={14} />
               </button>
             )}
+            {selected.kind !== "hub" && (
+              <button
+                type="button"
+                onClick={() => {
+                  removeNode.reset();
+                  setDeleteTarget(selected);
+                }}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-300 hover:bg-red-500/15"
+              >
+                <Trash2 size={14} />
+                Delete node
+              </button>
+            )}
           </section>
         )}
       </aside>
@@ -386,6 +429,53 @@ export default function KnowledgeGraphPage() {
           className="h-full"
         />
       </section>
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[1200] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-graph-node-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-red-400/20 bg-neutral-950 p-5 shadow-2xl">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+              <AlertTriangle size={20} />
+            </div>
+            <h2 id="delete-graph-node-title" className="font-semibold">
+              Delete “{deleteTarget.label}”?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-400">
+              {deleteTarget.kind === "source"
+                ? "The PDF file, linked notes, concepts, graph edges, indexed content, and explanations will be permanently removed."
+                : deleteTarget.kind === "note"
+                  ? "The canvas, its browser recovery copy, indexed stickies, explanations, and graph connections will be permanently removed."
+                  : "This node and its affiliated graph connections will be permanently removed."}
+            </p>
+            {removeNode.isError && (
+              <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {removeNode.error.message}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={removeNode.isPending}
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={removeNode.isPending}
+                onClick={() => removeNode.mutate(deleteTarget)}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {removeNode.isPending ? "Deleting…" : "Confirm deletion"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

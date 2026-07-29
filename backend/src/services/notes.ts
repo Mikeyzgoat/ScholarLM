@@ -1,6 +1,10 @@
 import { db } from "../db/database";
 import type { NotePageRecord } from "../types";
 import { createId } from "../utils/ids";
+import {
+  deleteScopedExplanations,
+  pruneOrphanedSelectionExplanations,
+} from "./explanationLifecycle";
 interface NoteRow {
   id: string;
   document_id: string;
@@ -80,8 +84,16 @@ export function updateNote(input: {
     new Date().toISOString(),
     input.noteId,
   );
+  if (input.snapshot !== undefined)
+    pruneOrphanedSelectionExplanations({
+      noteId: input.noteId,
+      snapshot: input.snapshot,
+    });
   return getNote(input.noteId)!;
 }
 export function deleteNote(noteId: string): boolean {
-  return db.query("DELETE FROM note_pages WHERE id=?").run(noteId).changes > 0;
+  const removed =
+    db.query("DELETE FROM note_pages WHERE id=?").run(noteId).changes > 0;
+  if (removed) deleteScopedExplanations({ noteId });
+  return removed;
 }

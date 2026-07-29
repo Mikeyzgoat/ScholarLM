@@ -251,8 +251,9 @@ export default function NotesPage() {
           noteId={note.id}
           pageNumber={selectedTextPage}
           documentTitle={note.title}
-          onPlotGenerated={(plot, equation) => {
-            if (editor) drawMathPlot(editor, plot, equation);
+          onPlotGenerated={(plot, equation, sourceShapeIds) => {
+            if (editor)
+              drawMathPlot(editor, plot, equation, sourceShapeIds);
           }}
           onExplanationGenerated={(input) => {
             if (editor) addExplanationToCanvas(editor, input);

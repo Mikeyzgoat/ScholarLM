@@ -34,34 +34,66 @@ async function openRouterGenerate(input: {
         { type: "image_url", image_url: { url: input.imageDataUrl } },
       ]
     : input.prompt;
-  const response = await fetch(`${env.OPENROUTER_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: authorizationHeaders(),
-    body: JSON.stringify({
-      ...(env.OPENROUTER_MODEL === "openrouter/auto"
-        ? { models: env.OPENROUTER_ROUTING_MODELS }
-        : { model: env.OPENROUTER_MODEL }),
-      messages: [
-        ...(input.system ? [{ role: "system", content: input.system }] : []),
-        { role: "user", content },
-      ],
-      stream: true,
-      max_tokens: input.maxTokens ?? 500,
-      temperature: 0.2,
-      provider: {
-        sort: { by: "throughput", partition: "none" },
-        allow_fallbacks: true,
-        require_parameters: input.json === true,
-        max_price: {
-          prompt: env.OPENROUTER_MAX_INPUT_PRICE,
-          completion: env.OPENROUTER_MAX_OUTPUT_PRICE,
+  const request = () =>
+    fetch(`${env.OPENROUTER_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: authorizationHeaders(),
+      body: JSON.stringify({
+        ...(env.OPENROUTER_MODEL === "openrouter/auto"
+          ? { models: env.OPENROUTER_ROUTING_MODELS }
+          : { model: env.OPENROUTER_MODEL }),
+        messages: [
+          ...(input.system ? [{ role: "system", content: input.system }] : []),
+          { role: "user", content },
+        ],
+        stream: true,
+        max_tokens: input.maxTokens ?? 500,
+        temperature: 0.2,
+        provider: {
+          sort: { by: "throughput", partition: "none" },
+          allow_fallbacks: true,
+          require_parameters: input.json === true,
+          max_price: {
+            prompt: env.OPENROUTER_MAX_INPUT_PRICE,
+            completion: env.OPENROUTER_MAX_OUTPUT_PRICE,
+          },
         },
-      },
-      response_format: input.json ? { type: "json_object" } : undefined,
-    }),
-    signal: input.signal,
-  });
-  return readOpenRouterStream(response, input.onToken);
+        response_format: input.json ? { type: "json_object" } : undefined,
+      }),
+      signal: input.signal,
+    });
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let emittedToken = false;
+    try {
+      return await readOpenRouterStream(
+        await request(),
+        (token) => {
+          emittedToken = true;
+          input.onToken?.(token);
+        },
+      );
+    } catch (error) {
+      lastError = error;
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "";
+      const transient =
+        message.includes("provider returned error") ||
+        message.includes("connection was closed") ||
+        message.includes("unable to connect") ||
+        message.includes("returned 429") ||
+        /\b5\d\d\b/.test(message);
+      if (
+        !transient ||
+        emittedToken ||
+        attempt === 1 ||
+        input.signal?.aborted
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  }
+  throw lastError;
 }
 
 async function readOpenRouterStream(

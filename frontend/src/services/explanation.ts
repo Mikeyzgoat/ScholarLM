@@ -2,6 +2,7 @@ import { apiFetch } from "../lib/api";
 import { API_BASE_URL } from "../lib/constants";
 import { ApiError } from "../lib/api";
 import type { ExplanationResponse } from "../lib/types";
+import type { MathPlot } from "../lib/types";
 export async function explainText(input: {
   selectedText?: string;
   selectedTexts?: string[];
@@ -11,6 +12,7 @@ export async function explainText(input: {
   noteId?: string;
   canvasId?: string;
   shapeId?: string;
+  shapeIds?: string[];
   imageInputKind?: "handwriting" | "selection";
   documentTitle?: string;
   pageNumber?: number;
@@ -77,5 +79,42 @@ export async function explainText(input: {
     method: "POST",
     body: JSON.stringify(body),
     signal,
+  });
+}
+
+export async function findExistingExplanation(input: {
+  selectedText: string;
+  imageDataUrl?: string;
+  documentId?: string;
+  canvasId?: string;
+  shapeId?: string;
+  documentTitle?: string;
+  pageNumber?: number;
+  signal?: AbortSignal;
+}): Promise<ExplanationResponse | null> {
+  const { signal, ...body } = input;
+  return (
+    await apiFetch<{ explanation: ExplanationResponse | null }>(
+      "/explain/lookup",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        signal,
+      },
+    )
+  ).explanation;
+}
+
+export async function createDeterministicMathGraph(
+  equation: string,
+): Promise<{
+  normalizedEquation: string;
+  classification: "graph" | "unsupported";
+  plot?: MathPlot;
+  error?: string;
+}> {
+  return await apiFetch("/explain/graph", {
+    method: "POST",
+    body: JSON.stringify({ equation }),
   });
 }

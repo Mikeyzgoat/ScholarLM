@@ -7,17 +7,26 @@ import {
   PencilRuler,
   Plus,
   StickyNote,
+  Trash2,
+  AlertTriangle,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { NotePage } from "../lib/types";
 import { listDocuments } from "../services/documents";
-import { listDocumentNotes, updateNote } from "../services/notes";
+import {
+  deleteNote,
+  listDocumentNotes,
+  updateNote,
+} from "../services/notes";
 import {
   createLocalCanvas,
   listLocalCanvases,
+  removeLocalCanvas,
 } from "../lib/localCanvases";
+import { deleteStandaloneCanvas } from "../services/canvases";
+import { ApiError } from "../lib/api";
 
 interface LibraryNote extends NotePage {
   documentName: string;
@@ -43,9 +52,16 @@ export default function NotesLibraryPage() {
   const reduceMotion = useReducedMotion();
   const navigate = useNavigate();
   const client = useQueryClient();
-  const [localCanvases] = useState(() => listLocalCanvases());
+  const [localCanvases, setLocalCanvases] = useState(() =>
+    listLocalCanvases(),
+  );
   const [renaming, setRenaming] = useState<LibraryNote | null>(null);
   const [nextTitle, setNextTitle] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{
+    kind: "canvas" | "note";
+    id: string;
+    title: string;
+  } | null>(null);
   const notes = useQuery({
     queryKey: ["notes", "library"],
     queryFn: listAllNotes,
@@ -76,6 +92,31 @@ export default function NotesLibraryPage() {
       setNextTitle("");
     },
     onSettled: () => client.invalidateQueries({ queryKey: ["notes"] }),
+  });
+  const remove = useMutation({
+    mutationFn: async (target: NonNullable<typeof deleteTarget>) => {
+      if (target.kind === "note") await deleteNote(target.id);
+      else {
+        try {
+          await deleteStandaloneCanvas(target.id);
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 404) throw error;
+        }
+        removeLocalCanvas(target.id);
+      }
+      return target;
+    },
+    onSuccess: async (target) => {
+      if (target.kind === "canvas")
+        setLocalCanvases((items) =>
+          items.filter((canvas) => canvas.id !== target.id),
+        );
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["notes"] }),
+        client.invalidateQueries({ queryKey: ["graph"] }),
+      ]);
+      setDeleteTarget(null);
+    },
   });
 
   function beginRename(note: LibraryNote) {
@@ -156,6 +197,7 @@ export default function NotesLibraryPage() {
         {localCanvases.map((canvas) => (
           <motion.div
             key={canvas.id}
+            className="relative"
             variants={{
               hidden: { opacity: 0, y: 10 },
               visible: { opacity: 1, y: 0 },
@@ -180,6 +222,21 @@ export default function NotesLibraryPage() {
                 />
               </div>
             </Link>
+            <button
+              type="button"
+              aria-label={`Delete ${canvas.title}`}
+              onClick={() => {
+                remove.reset();
+                setDeleteTarget({
+                  kind: "canvas",
+                  id: canvas.id,
+                  title: canvas.title,
+                });
+              }}
+              className="absolute right-3 top-3 z-10 rounded-lg p-2 text-stone-500 hover:bg-red-500/10 hover:text-red-300"
+            >
+              <Trash2 size={15} />
+            </button>
           </motion.div>
         ))}
 
@@ -224,14 +281,31 @@ export default function NotesLibraryPage() {
             >
               <div className="flex items-center justify-between">
                 <StickyNote size={20} className="text-orange-300" />
-                <button
-                  type="button"
-                  aria-label={`Rename ${note.title}`}
-                  onClick={() => beginRename(note)}
-                  className="rounded-lg p-2 text-stone-500 hover:bg-white/5 hover:text-orange-300"
-                >
-                  <Pencil size={15} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Rename ${note.title}`}
+                    onClick={() => beginRename(note)}
+                    className="rounded-lg p-2 text-stone-500 hover:bg-white/5 hover:text-orange-300"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${note.title}`}
+                    onClick={() => {
+                      remove.reset();
+                      setDeleteTarget({
+                        kind: "note",
+                        id: note.id,
+                        title: note.title,
+                      });
+                    }}
+                    className="rounded-lg p-2 text-stone-500 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
               {renaming?.id === note.id ? (
                 <div className="mt-4">
@@ -310,6 +384,50 @@ export default function NotesLibraryPage() {
         <p className="mt-6 text-sm text-stone-500">
           No document-linked notes yet.
         </p>
+      )}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[1200] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-library-item-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-red-400/20 bg-neutral-950 p-5 shadow-2xl">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+              <AlertTriangle size={20} />
+            </div>
+            <h2 id="delete-library-item-title" className="font-semibold">
+              Delete “{deleteTarget.title}”?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-400">
+              The canvas, its browser-stored recovery copy, indexed content,
+              explanations, and graph connections will be permanently removed.
+            </p>
+            {remove.isError && (
+              <p className="mt-3 text-xs text-red-300">
+                {remove.error.message}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(deleteTarget)}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {remove.isPending ? "Deleting…" : "Confirm deletion"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

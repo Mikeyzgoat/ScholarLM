@@ -9,21 +9,66 @@ function selectionHash(input: {
   documentId?: string;
   canvasId?: string;
   shapeId?: string;
+  imageFingerprint?: string;
   documentTitle?: string;
   pageNumber?: number;
 }): string {
+  const parts: Array<string | number> = [
+    input.documentId?.trim() ?? "",
+    input.canvasId?.trim() ?? "",
+    input.shapeId?.trim() ?? "",
+    input.documentTitle?.trim() ?? "",
+    input.pageNumber ?? "",
+    input.selectedText.trim().replace(/\s+/g, " "),
+  ];
+  if (input.imageFingerprint) parts.push(input.imageFingerprint.trim());
   return createHash("sha256")
-    .update(
-      [
-        input.documentId?.trim() ?? "",
-        input.canvasId?.trim() ?? "",
-        input.shapeId?.trim() ?? "",
-        input.documentTitle?.trim() ?? "",
-        input.pageNumber ?? "",
-        input.selectedText.trim().replace(/\s+/g, " "),
-      ].join("\u001f"),
-    )
+    .update(parts.join("\u001f"))
     .digest("hex");
+}
+
+export function findLatestExplanation(input: {
+  selectedText: string;
+  documentId?: string;
+  canvasId?: string;
+  shapeId?: string;
+  imageFingerprint?: string;
+  documentTitle?: string;
+  pageNumber?: number;
+}): {
+  explanation: string;
+  recognizedEquation?: string;
+  historyId: string;
+  revisionCount: number;
+} | null {
+  const hash = selectionHash(input);
+  const row = db
+    .query(
+      `SELECT id historyId,explanation,recognized_text recognizedEquation
+       FROM explanation_history
+       WHERE selection_hash=?
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    )
+    .get(hash) as {
+    historyId: string;
+    explanation: string;
+    recognizedEquation: string | null;
+  } | null;
+  if (!row) return null;
+  const revisionCount = (
+    db
+      .query(
+        "SELECT COUNT(*) count FROM explanation_history WHERE selection_hash=?",
+      )
+      .get(hash) as { count: number }
+  ).count;
+  return {
+    explanation: row.explanation,
+    recognizedEquation: row.recognizedEquation ?? undefined,
+    historyId: row.historyId,
+    revisionCount,
+  };
 }
 
 export function storeExplanationRevision(input: {
@@ -32,6 +77,8 @@ export function storeExplanationRevision(input: {
   noteId?: string;
   canvasId?: string;
   shapeId?: string;
+  shapeIds?: string[];
+  imageFingerprint?: string;
   documentTitle?: string;
   pageNumber?: number;
   mode: ExplanationMode;
@@ -69,6 +116,25 @@ export function storeExplanationRevision(input: {
     input.shapeId?.trim() || null,
     historyId,
   );
+  const sourceShapeIds = [
+    ...new Set(
+      [input.shapeId, ...(input.shapeIds ?? [])].filter(
+        (value): value is string => Boolean(value?.trim()),
+      ),
+    ),
+  ];
+  sourceShapeIds.forEach((shapeId) => {
+    db.query(
+      `INSERT OR IGNORE INTO explanation_sources
+       (explanation_id,shape_id,note_id,canvas_id)
+       VALUES (?,?,?,?)`,
+    ).run(
+      historyId,
+      shapeId,
+      input.noteId?.trim() || null,
+      input.canvasId?.trim() || null,
+    );
+  });
   const revisionCount = (
     db
       .query(

@@ -203,7 +203,11 @@ export function useSpeech() {
       setPaused(false);
       setActiveWordIndex(-1);
       if (event.error !== "canceled" && event.error !== "interrupted")
-        setError(new Error(`Browser speech failed: ${event.error}`));
+        setError(
+          new Error(
+            "Voice playback is unavailable on this device. The written explanation is unaffected.",
+          ),
+        );
     };
     globalThis.speechSynthesis.speak(utterance);
   }, []);
@@ -298,7 +302,7 @@ export function useSpeech() {
       audioUrl.current = URL.createObjectURL(wav);
       setReady(true);
       if (autoRead) playAudio();
-    } catch (kokoroError) {
+    } catch {
       if (next.signal.aborted) return;
       try {
         fallbackActive.current = true;
@@ -306,10 +310,13 @@ export function useSpeech() {
         setReady(true);
         if (autoRead) playFallback(text);
       } catch {
+        fallbackActive.current = false;
+        setUsingFallback(false);
+        setReady(false);
         setError(
-          kokoroError instanceof Error
-            ? kokoroError
-            : new Error("Speech generation failed"),
+          new Error(
+            "Voice playback is unavailable on this device. The written explanation is unaffected.",
+          ),
         );
       }
     } finally {

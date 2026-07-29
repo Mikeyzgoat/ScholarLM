@@ -51,7 +51,7 @@ function canvasDrawingNodes(canvases: DrawingCanvasSource[]) {
       }) as Array<{ id: string; parentId: string }>;
       const byPage = new Map<
         string,
-        { pageName: string; count: number; shapeId: string }
+        { pageName: string; count: number; shapeIds: string[] }
       >();
       drawings.forEach((drawing) => {
         let parentId = drawing.parentId;
@@ -69,7 +69,7 @@ function canvasDrawingNodes(canvases: DrawingCanvasSource[]) {
               pageName:
                 typeof parent.name === "string" ? parent.name : "Canvas page",
               count: (current?.count ?? 0) + 1,
-              shapeId: current?.shapeId ?? drawing.id,
+              shapeIds: [...(current?.shapeIds ?? []), drawing.id],
             });
             break;
           }
@@ -85,7 +85,8 @@ function canvasDrawingNodes(canvases: DrawingCanvasSource[]) {
         kind: "handwriting" as const,
         noteId: canvas.noteId,
         canvasId: canvas.canvasId,
-        shapeId: page.shapeId,
+        shapeId: page.shapeIds[0],
+        shapeIds: page.shapeIds,
       }));
     } catch {
       return [];
@@ -114,14 +115,24 @@ function handwritingNodes(rows: HandwritingRow[]) {
 function getHandwritingRows(documentId?: string): HandwritingRow[] {
   return db
     .query(
-      `SELECT id,document_id documentId,note_id noteId,
-              canvas_id canvasId,shape_id shapeId,
-              document_title canvasTitle,
-              COALESCE(NULLIF(recognized_text,''),selected_text) label,
-              explanation description,page_number pageNumber
-       FROM explanation_history
-       WHERE input_kind='handwriting'
-         ${documentId ? "AND document_id=?" : ""}
+      `SELECT id,documentId,noteId,canvasId,shapeId,canvasTitle,
+              label,description,pageNumber
+       FROM (
+         SELECT id,document_id documentId,note_id noteId,
+                canvas_id canvasId,shape_id shapeId,
+                document_title canvasTitle,
+                COALESCE(NULLIF(recognized_text,''),selected_text) label,
+                explanation description,page_number pageNumber,created_at,
+                ROW_NUMBER() OVER (
+                  PARTITION BY COALESCE(note_id,''),COALESCE(canvas_id,''),
+                               COALESCE(shape_id,id)
+                  ORDER BY created_at DESC,id DESC
+                ) sourceRank
+         FROM explanation_history
+         WHERE input_kind='handwriting'
+           ${documentId ? "AND document_id=?" : ""}
+       )
+       WHERE sourceRank=1
        ORDER BY created_at DESC`,
     )
     .all(...(documentId ? [documentId] : [])) as HandwritingRow[];

@@ -61,6 +61,7 @@ export interface GraphNode {
   noteId?: string;
   canvasId?: string;
   shapeId?: string;
+  shapeIds?: string[];
   stickyKind?: "explanation" | "note";
   explanationId?: string;
 }
@@ -81,12 +82,14 @@ export interface ExplanationResponse {
   plot?: MathPlot;
   historyId?: string;
   revisionCount?: number;
+  cached?: boolean;
 }
 export interface MathPlot {
   title: string;
   xLabel: string;
   yLabel: string;
   points: Array<{ x: number; y: number }>;
+  segments?: Array<Array<{ x: number; y: number }>>;
 }
 export interface CanvasSelection {
   text: string;

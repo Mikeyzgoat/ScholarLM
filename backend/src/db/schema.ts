@@ -15,6 +15,9 @@ CREATE INDEX IF NOT EXISTS idx_sticky_note_index_document ON sticky_note_index(d
 CREATE TABLE IF NOT EXISTS speech_cache (text_hash TEXT PRIMARY KEY,source_text TEXT,text TEXT NOT NULL,audio BLOB NOT NULL,byte_size INTEGER NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS generated_output_audio (source_hash TEXT NOT NULL,text_hash TEXT NOT NULL,source_text TEXT NOT NULL,output_text TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,PRIMARY KEY(source_hash,text_hash),FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS explanation_history (id TEXT PRIMARY KEY,selection_hash TEXT NOT NULL,selected_text TEXT NOT NULL,document_id TEXT,note_id TEXT,document_title TEXT,page_number INTEGER,prompt_mode TEXT NOT NULL,explanation TEXT NOT NULL,created_at TEXT NOT NULL,recognized_text TEXT,input_kind TEXT NOT NULL DEFAULT 'text',canvas_id TEXT,shape_id TEXT);
+CREATE TABLE IF NOT EXISTS explanation_sources (explanation_id TEXT NOT NULL,shape_id TEXT NOT NULL,note_id TEXT,canvas_id TEXT,PRIMARY KEY(explanation_id,shape_id),FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_explanation_sources_note ON explanation_sources(note_id);
+CREATE INDEX IF NOT EXISTS idx_explanation_sources_canvas ON explanation_sources(canvas_id);
 CREATE INDEX IF NOT EXISTS idx_explanation_history_selection_created ON explanation_history(selection_hash,created_at DESC);
 CREATE TABLE IF NOT EXISTS openrouter_requests (id TEXT PRIMARY KEY,operation TEXT NOT NULL,model TEXT NOT NULL,status TEXT NOT NULL,http_status INTEGER,error_code TEXT,error_message TEXT,created_at TEXT NOT NULL,completed_at TEXT);
 CREATE INDEX IF NOT EXISTS idx_openrouter_requests_created ON openrouter_requests(created_at DESC);
@@ -66,6 +69,13 @@ CREATE TABLE IF NOT EXISTS runtime_metadata (key TEXT PRIMARY KEY,value TEXT NOT
   );
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_explanation_history_canvas_created ON explanation_history(canvas_id,created_at DESC);",
+  );
+  db.exec(
+    `INSERT OR IGNORE INTO explanation_sources
+     (explanation_id,shape_id,note_id,canvas_id)
+     SELECT id,shape_id,note_id,canvas_id
+     FROM explanation_history
+     WHERE shape_id IS NOT NULL AND shape_id<>''`,
   );
   db.exec(
     `UPDATE explanation_history

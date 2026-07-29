@@ -102,6 +102,7 @@ export interface ExplainResponse {
     xLabel: string;
     yLabel: string;
     points: Array<{ x: number; y: number }>;
+    segments?: Array<Array<{ x: number; y: number }>>;
   };
 }
 export interface GraphResponse {
@@ -121,6 +122,7 @@ export interface GraphResponse {
     noteId?: string;
     canvasId?: string;
     shapeId?: string;
+    shapeIds?: string[];
     stickyKind?: "explanation" | "note";
     explanationId?: string;
   }>;

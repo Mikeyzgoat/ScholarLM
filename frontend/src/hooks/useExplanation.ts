@@ -25,6 +25,7 @@ export function useExplanation() {
       noteId?: string;
       canvasId?: string;
       shapeId?: string;
+      shapeIds?: string[];
       imageInputKind?: "handwriting" | "selection";
       documentTitle?: string;
       pageNumber?: number;

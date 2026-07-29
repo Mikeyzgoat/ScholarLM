@@ -5,6 +5,7 @@ import type {
   DocumentStatusResponse,
   DocumentSummary,
 } from "../lib/types";
+import { removeLocalNoteDraft } from "../lib/noteStorage";
 export async function uploadDocument(file: File): Promise<DocumentSummary> {
   const body = new FormData();
   body.append("file", file);
@@ -36,6 +37,13 @@ export async function retryDocumentIngestion(documentId: string): Promise<void> 
 }
 export async function reindexDocument(documentId: string): Promise<void> {
   await apiFetch(`/documents/${documentId}/reindex`, { method: "POST" });
+}
+export async function deleteDocument(documentId: string): Promise<void> {
+  const result = await apiFetch<{ deletedNoteIds: string[] }>(
+    `/documents/${documentId}`,
+    { method: "DELETE" },
+  );
+  result.deletedNoteIds.forEach(removeLocalNoteDraft);
 }
 export function getDocumentFileUrl(documentId: string): string {
   return `${API_BASE_URL}/documents/${documentId}/file`;

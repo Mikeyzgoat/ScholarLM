@@ -8,6 +8,10 @@ import { AudioControls } from "./AudioControls";
 import type { CanvasSelectionAnchor, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
 import {
+  createDeterministicMathGraph,
+  findExistingExplanation,
+} from "../../services/explanation";
+import {
   ChartSpline,
   ClipboardPaste,
   FilePlus2,
@@ -61,7 +65,11 @@ export function ExplainPanel({
   canvasId?: string;
   pageNumber: number | null;
   documentTitle: string;
-  onPlotGenerated?: (plot: MathPlot, equation?: string) => void;
+  onPlotGenerated?: (
+    plot: MathPlot,
+    equation?: string,
+    sourceShapeIds?: string[],
+  ) => void;
   onExplanationGenerated?: (input: {
     selectedText: string;
     explanation: string;
@@ -82,6 +90,9 @@ export function ExplainPanel({
   );
   const [pastedImage, setPastedImage] = useState<string>();
   const [pasteError, setPasteError] = useState("");
+  const [recognizedEquation, setRecognizedEquation] = useState("");
+  const [graphError, setGraphError] = useState("");
+  const [isGraphing, setIsGraphing] = useState(false);
   const screenshotInput = useRef<HTMLInputElement>(null);
   const [canvasInput, setCanvasInput] = useState<Parameters<
     NonNullable<typeof onExplanationGenerated>
@@ -92,6 +103,11 @@ export function ExplainPanel({
   const acceptClipboardImage = useCallback(async (blob: Blob) => {
     if (!blob.type.startsWith("image/")) return;
     setPasteError("");
+    setInputMode("screenshot");
+    if (blob.size > 4_000_000) {
+      setPasteError("Screenshot must be smaller than 4 MB");
+      return;
+    }
     try {
       setPastedImage(await toDataUrl(blob));
     } catch (error) {
@@ -163,6 +179,10 @@ export function ExplainPanel({
         activeImage && !pastedImage
           ? selectionAnchors?.[0]?.shapeId
           : undefined,
+      shapeIds:
+        activeImage && !pastedImage
+          ? selectionAnchors?.map((anchor) => anchor.shapeId)
+          : undefined,
       documentTitle,
       pageNumber: pageNumber ?? undefined,
       mode,
@@ -170,7 +190,14 @@ export function ExplainPanel({
         mode === "explain" ? undefined : state.explanation || undefined,
     });
     if (value) {
-      if (value.plot) onPlotGenerated?.(value.plot, value.recognizedEquation);
+      setRecognizedEquation(value.recognizedEquation ?? "");
+      setGraphError("");
+      if (value.plot)
+        onPlotGenerated?.(
+          value.plot,
+          value.recognizedEquation,
+          selectionAnchors?.map((anchor) => anchor.shapeId),
+        );
       setCanvasInput({
         selectedText: activeText,
         explanation: value.explanation,
@@ -184,11 +211,38 @@ export function ExplainPanel({
       await speech.speak(value.explanation, activeText, value.historyId);
     }
   }
+  async function insertVerifiedGraph() {
+    const equation = recognizedEquation.trim() || activeText.trim();
+    if (!equation || isGraphing) return;
+    setGraphError("");
+    setIsGraphing(true);
+    try {
+      const result = await createDeterministicMathGraph(equation);
+      setRecognizedEquation(result.normalizedEquation);
+      if (!result.plot) {
+        setGraphError(result.error ?? "This equation cannot be graphed yet");
+        return;
+      }
+      onPlotGenerated?.(
+        result.plot,
+        result.normalizedEquation,
+        selectionAnchors?.map((anchor) => anchor.shapeId),
+      );
+    } catch (error) {
+      setGraphError(
+        error instanceof Error ? error.message : "Graph generation failed",
+      );
+    } finally {
+      setIsGraphing(false);
+    }
+  }
   useEffect(() => {
     speech.stop();
     if (!activeText && !activeImage) {
       state.clear();
       setCanvasInput(undefined);
+      setRecognizedEquation("");
+      setGraphError("");
       return;
     }
     const existing =
@@ -211,6 +265,8 @@ export function ExplainPanel({
     } else {
       state.clear();
       setCanvasInput(undefined);
+      setRecognizedEquation("");
+      setGraphError("");
     }
   }, [
     activeText,
@@ -219,6 +275,64 @@ export function ExplainPanel({
     existingExplanation,
     existingExplanationId,
     selectionAnchors,
+  ]);
+  useEffect(() => {
+    if (
+      (!activeText && !activeImage) ||
+      existingExplanation ||
+      state.explanation ||
+      state.isExplaining
+    )
+      return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void findExistingExplanation({
+        selectedText: activeText,
+        imageDataUrl: activeImage,
+        documentId,
+        canvasId,
+        shapeId:
+          activeImage && !pastedImage
+            ? selectionAnchors?.[0]?.shapeId
+            : undefined,
+        documentTitle,
+        pageNumber: pageNumber ?? undefined,
+        signal: controller.signal,
+      })
+        .then((cached) => {
+          if (!cached || controller.signal.aborted) return;
+          state.load(cached.explanation);
+          setRecognizedEquation(cached.recognizedEquation ?? "");
+          setCanvasInput({
+            selectedText: activeText,
+            explanation: cached.explanation,
+            mode: "explain",
+            anchors: selectionAnchors,
+            explanationId: cached.historyId,
+            pageNumber: pageNumber ?? undefined,
+          });
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted)
+            console.warn("Could not restore the saved explanation", error);
+        });
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    activeText,
+    activeImage,
+    canvasId,
+    documentId,
+    documentTitle,
+    existingExplanation,
+    pageNumber,
+    pastedImage,
+    selectionAnchors,
+    state.explanation,
+    state.isExplaining,
   ]);
   return (
     <motion.section
@@ -240,8 +354,8 @@ export function ExplainPanel({
               }}
               className={`rounded-md px-2 py-1.5 text-[11px] transition ${
                 inputMode === "selection"
-                  ? "bg-white font-medium shadow-sm"
-                  : "text-stone-500"
+                  ? "bg-orange-500 font-semibold text-white shadow-sm shadow-orange-500/25"
+                  : "text-stone-500 hover:bg-orange-500/10 hover:text-orange-500"
               }`}
             >
               Explain selection
@@ -255,8 +369,8 @@ export function ExplainPanel({
               }}
               className={`rounded-md px-2 py-1.5 text-[11px] transition ${
                 inputMode === "screenshot"
-                  ? "bg-white font-medium shadow-sm"
-                  : "text-stone-500"
+                  ? "bg-sky-600 font-semibold text-white shadow-sm shadow-sky-600/25"
+                  : "text-stone-500 hover:bg-sky-500/10 hover:text-sky-500"
               }`}
             >
               Upload screenshot
@@ -296,19 +410,19 @@ export function ExplainPanel({
               </p>
             </>
           )}
-          <input
-            ref={screenshotInput}
-            hidden
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void acceptClipboardImage(file);
-              event.currentTarget.value = "";
-            }}
-          />
         </div>
       )}
+      <input
+        ref={screenshotInput}
+        hidden
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void acceptClipboardImage(file);
+          event.currentTarget.value = "";
+        }}
+      />
       {pasteError && <p className="text-xs text-red-400">{pasteError}</p>}
       <AnimatePresence mode="popLayout">
         {activeText && !state.explanation && (
@@ -351,10 +465,62 @@ export function ExplainPanel({
         activeWordIndex={speech.activeWordIndex}
       />
       {speech.error && (
-        <p className="text-xs text-red-700">{speech.error.message}</p>
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+          {speech.error.message}
+        </p>
       )}
       {state.explanation && (
         <>
+          {recognizedEquation && (
+            <div className="rounded-lg border border-orange-400/20 bg-orange-500/[0.05] p-3">
+              <label
+                htmlFor="recognized-equation"
+                className="text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-500"
+              >
+                Recognized equation · editable
+              </label>
+              <input
+                id="recognized-equation"
+                value={recognizedEquation}
+                onChange={(event) => {
+                  setRecognizedEquation(event.target.value);
+                  setGraphError("");
+                }}
+                className="mt-2 w-full rounded-md border bg-white/60 px-3 py-2 font-mono text-sm outline-none focus:border-orange-400/50"
+              />
+            </div>
+          )}
+          {pastedImage && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  speech.stop();
+                  state.clear();
+                  setCanvasInput(undefined);
+                  setPastedImage(undefined);
+                  setInputMode("selection");
+                }}
+                className="scholar-secondary-action rounded-lg border px-3 py-2 text-xs"
+              >
+                Explain another selection
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  speech.stop();
+                  state.clear();
+                  setCanvasInput(undefined);
+                  setPastedImage(undefined);
+                  setInputMode("screenshot");
+                  screenshotInput.current?.click();
+                }}
+                className="scholar-secondary-action rounded-lg border px-3 py-2 text-xs"
+              >
+                Upload another screenshot
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -401,13 +567,16 @@ export function ExplainPanel({
             <button
               type="button"
               className="scholar-secondary-action flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs"
-              disabled={state.isExplaining}
-              onClick={() => void explain("regenerate", true)}
+              disabled={state.isExplaining || isGraphing}
+              onClick={() => void insertVerifiedGraph()}
             >
               <ChartSpline size={15} />
-              {state.isExplaining ? "Generating graph…" : "Add graph to canvas"}
+              {isGraphing
+                ? "Drawing verified graph…"
+                : "Insert / replace graph"}
             </button>
           )}
+          {graphError && <p className="text-xs text-red-400">{graphError}</p>}
           <AudioControls
             isLoading={speech.isLoading}
             isPlaying={speech.isPlaying}

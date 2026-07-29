@@ -259,8 +259,14 @@ export default function WorkspacePage() {
               documentId={documentId}
               pageNumber={selectedTextPage}
               documentTitle={doc.data.name}
-              onPlotGenerated={(plot, equation) => {
-                if (canvasEditor) drawMathPlot(canvasEditor, plot, equation);
+              onPlotGenerated={(plot, equation, sourceShapeIds) => {
+                if (canvasEditor)
+                  drawMathPlot(
+                    canvasEditor,
+                    plot,
+                    equation,
+                    sourceShapeIds,
+                  );
               }}
               onExplanationGenerated={saveExplanationToCanvas}
               onExplanationStickyRequested={(input) => {

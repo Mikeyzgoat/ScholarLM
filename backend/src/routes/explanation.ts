@@ -5,9 +5,12 @@ import {
   explainSelectedText,
 } from "../services/openRouter";
 import {
+  findLatestExplanation,
   storeExplanationRevision,
   type ExplanationMode,
 } from "../services/explanationHistory";
+import { createHash } from "node:crypto";
+import { buildDeterministicMathGraph } from "../services/mathGraph";
 import {
   beginOpenRouterRequest,
   failOpenRouterRequest,
@@ -15,6 +18,78 @@ import {
 } from "../services/providerTelemetry";
 import { db } from "../db/database";
 const explanation = new Hono();
+explanation.post("/graph", async (c) => {
+  const body = (await c.req.json<unknown>().catch(() => null)) as {
+    equation?: unknown;
+  } | null;
+  if (
+    !body ||
+    typeof body.equation !== "string" ||
+    body.equation.trim().length < 3 ||
+    body.equation.length > 500
+  )
+    return c.json(
+      { error: { message: "A valid equation is required", code: "INVALID_INPUT" } },
+      400,
+    );
+  return c.json(buildDeterministicMathGraph(body.equation));
+});
+explanation.post("/lookup", async (c) => {
+  const body = (await c.req.json<unknown>().catch(() => null)) as {
+    selectedText?: unknown;
+    imageDataUrl?: unknown;
+    documentId?: unknown;
+    canvasId?: unknown;
+    shapeId?: unknown;
+    documentTitle?: unknown;
+    pageNumber?: unknown;
+  } | null;
+  if (
+    !body ||
+    typeof body.selectedText !== "string" ||
+    !body.selectedText.trim() ||
+    (body.imageDataUrl !== undefined &&
+      (typeof body.imageDataUrl !== "string" ||
+        body.imageDataUrl.length > 6_000_000 ||
+        !/^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(
+          body.imageDataUrl,
+        ))) ||
+    (body.documentId !== undefined &&
+      typeof body.documentId !== "string") ||
+    (body.canvasId !== undefined && typeof body.canvasId !== "string") ||
+    (body.shapeId !== undefined && typeof body.shapeId !== "string") ||
+    (body.documentTitle !== undefined &&
+      typeof body.documentTitle !== "string") ||
+    (body.pageNumber !== undefined &&
+      (!Number.isInteger(body.pageNumber) || Number(body.pageNumber) < 1))
+  )
+    return c.json(
+      { error: { message: "Invalid explanation lookup", code: "INVALID_INPUT" } },
+      400,
+    );
+  const imageFingerprint =
+    typeof body.imageDataUrl === "string"
+      ? createHash("sha256").update(body.imageDataUrl).digest("hex")
+      : undefined;
+  const cached = findLatestExplanation({
+    selectedText: body.selectedText.trim(),
+    documentId:
+      typeof body.documentId === "string"
+        ? body.documentId.trim()
+        : undefined,
+    canvasId:
+      typeof body.canvasId === "string" ? body.canvasId.trim() : undefined,
+    shapeId:
+      typeof body.shapeId === "string" ? body.shapeId.trim() : undefined,
+    imageFingerprint,
+    documentTitle:
+      typeof body.documentTitle === "string"
+        ? body.documentTitle.trim()
+        : undefined,
+    pageNumber: body.pageNumber as number | undefined,
+  });
+  return c.json({ explanation: cached });
+});
 explanation.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
   if (!body || typeof body !== "object")
@@ -31,6 +106,7 @@ explanation.post("/", async (c) => {
     noteId?: unknown;
     canvasId?: unknown;
     shapeId?: unknown;
+    shapeIds?: unknown;
     imageInputKind?: unknown;
     documentTitle?: unknown;
     pageNumber?: unknown;
@@ -74,6 +150,12 @@ explanation.post("/", async (c) => {
       (typeof b.canvasId !== "string" || !b.canvasId.trim())) ||
     (b.shapeId !== undefined &&
       (typeof b.shapeId !== "string" || !b.shapeId.trim())) ||
+    (b.shapeIds !== undefined &&
+      (!Array.isArray(b.shapeIds) ||
+        b.shapeIds.length > 100 ||
+        b.shapeIds.some(
+          (value) => typeof value !== "string" || !value.trim(),
+        ))) ||
     (b.imageInputKind !== undefined &&
       !["handwriting", "selection"].includes(String(b.imageInputKind))) ||
     (b.documentTitle !== undefined && typeof b.documentTitle !== "string") ||
@@ -102,6 +184,9 @@ explanation.post("/", async (c) => {
     typeof b.canvasId === "string" ? b.canvasId.trim() : undefined;
   const shapeId =
     typeof b.shapeId === "string" ? b.shapeId.trim() : undefined;
+  const shapeIds = Array.isArray(b.shapeIds)
+    ? [...new Set(b.shapeIds.map((value) => String(value).trim()))]
+    : undefined;
   const document = documentId
     ? (db
         .query("SELECT name FROM documents WHERE id=?")
@@ -144,6 +229,23 @@ explanation.post("/", async (c) => {
     : hasText
       ? (b.selectedText as string).trim()
       : "Handwritten canvas selection";
+  const imageFingerprint = hasImage
+    ? createHash("sha256")
+        .update(b.imageDataUrl as string)
+        .digest("hex")
+    : undefined;
+  if (mode === "explain" && b.graphRequested !== true) {
+    const cached = findLatestExplanation({
+      selectedText: historySelection,
+      documentId,
+      canvasId,
+      shapeId,
+      imageFingerprint,
+      documentTitle: context.documentTitle,
+      pageNumber: context.pageNumber,
+    });
+    if (cached) return c.json({ ...cached, cached: true });
+  }
   const requestId = beginOpenRouterRequest("explanation");
   try {
     if (hasImage || b.graphRequested === true) {
@@ -156,12 +258,22 @@ explanation.post("/", async (c) => {
         mode,
         previousExplanation,
       });
+      if (b.graphRequested === true) {
+        const verifiedGraph = buildDeterministicMathGraph(
+          result.recognizedEquation || historySelection,
+        );
+        result.plot = verifiedGraph.plot;
+        if (!verifiedGraph.plot)
+          result.explanation = `${result.explanation}\n\nGraph not inserted: ${verifiedGraph.error ?? "unsupported equation"}`;
+      }
       const history = storeExplanationRevision({
         selectedText: historySelection,
         documentId,
         noteId,
         canvasId,
         shapeId,
+        shapeIds,
+        imageFingerprint,
         documentTitle: context.documentTitle,
         pageNumber: context.pageNumber,
         mode,
@@ -203,6 +315,7 @@ explanation.post("/", async (c) => {
             noteId,
             canvasId,
             shapeId,
+            shapeIds,
             documentTitle: context.documentTitle,
             pageNumber: context.pageNumber,
             mode,
@@ -240,6 +353,7 @@ explanation.post("/", async (c) => {
       noteId,
       canvasId,
       shapeId,
+      shapeIds,
       documentTitle: context.documentTitle,
       pageNumber: context.pageNumber,
       mode,
@@ -256,15 +370,23 @@ explanation.post("/", async (c) => {
     const timedOut =
       (error instanceof DOMException && error.name === "TimeoutError") ||
       message.toLowerCase().includes("timed out");
+    const providerUnavailable =
+      message.toLowerCase().includes("provider returned error") ||
+      message.toLowerCase().includes("connection was closed") ||
+      message.toLowerCase().includes("unable to connect");
     return c.json(
       {
         error: {
           message: timedOut
             ? "The AI provider took too long to respond. Try a shorter selection."
-            : message,
+            : providerUnavailable
+              ? "The AI provider is temporarily unavailable. Your selection is preserved—please retry."
+              : message,
           code: timedOut
             ? "AI_INFERENCE_TIMEOUT"
-            : "AI_INFERENCE_UNAVAILABLE",
+            : providerUnavailable
+              ? "AI_PROVIDER_TEMPORARILY_UNAVAILABLE"
+              : "AI_INFERENCE_UNAVAILABLE",
         },
       },
       503,

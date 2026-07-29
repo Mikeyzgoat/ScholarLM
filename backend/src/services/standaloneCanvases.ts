@@ -1,4 +1,8 @@
 import { db } from "../db/database";
+import {
+  deleteScopedExplanations,
+  pruneOrphanedSelectionExplanations,
+} from "./explanationLifecycle";
 
 interface StandaloneCanvasRow {
   id: string;
@@ -86,12 +90,17 @@ export function saveStandaloneCanvas(input: {
       now,
       input.canvasId,
     );
+  pruneOrphanedSelectionExplanations({
+    canvasId: input.canvasId,
+    snapshot: input.snapshot,
+  });
   return getStandaloneCanvas(input.canvasId)!;
 }
 
 export function deleteStandaloneCanvas(canvasId: string): boolean {
-  return (
+  const removed =
     db.query("DELETE FROM standalone_canvases WHERE id=?").run(canvasId)
-      .changes > 0
-  );
+      .changes > 0;
+  if (removed) deleteScopedExplanations({ canvasId });
+  return removed;
 }

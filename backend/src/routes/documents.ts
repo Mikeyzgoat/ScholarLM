@@ -212,4 +212,30 @@ documents.get("/:id", (c) => {
         404,
       );
 });
+documents.delete("/:id", async (c) => {
+  const id = c.req.param("id");
+  const document = db
+    .query("SELECT * FROM documents WHERE id=?")
+    .get(id) as DocumentRecord | null;
+  if (!document)
+    return c.json(
+      { error: { message: "Document not found", code: "NOT_FOUND" } },
+      404,
+    );
+  const deletedNoteIds = (
+    db
+      .query("SELECT id FROM note_pages WHERE document_id=?")
+      .all(id) as Array<{ id: string }>
+  ).map((note) => note.id);
+  await deleteFileIfExists(document.file_path);
+  db.transaction(() => {
+    db.query(
+      `DELETE FROM explanation_history
+       WHERE document_id=?
+          OR note_id IN (SELECT id FROM note_pages WHERE document_id=?)`,
+    ).run(id, id);
+    db.query("DELETE FROM documents WHERE id=?").run(id);
+  })();
+  return c.json({ deletedNoteIds });
+});
 export default documents;

@@ -16,6 +16,7 @@ import {
 import { useTheme } from "../../lib/theme";
 import { pdfPageShapeUtils } from "./PdfPageShape";
 import { explanationStickyShapeUtils } from "./ExplanationStickyShape";
+import { removeInvalidatedMathGraphs } from "../../lib/drawMathPlot";
 
 function shapesWithDescendants(editor: Editor, shapes: TLShape[]): TLShape[] {
   if (!shapes.length) return [];
@@ -38,6 +39,14 @@ function selectionSignature(editor: Editor, shapes: TLShape[]): string {
       ]),
     )
     .join("\u001e");
+}
+
+function isGeneratedMathGraphShape(shape: TLShape): boolean {
+  const meta = shape.meta as Record<string, unknown>;
+  return (
+    meta.scholarLmGenerated === true &&
+    meta.scholarLmOutputKind === "math-graph"
+  );
 }
 
 export function NotesCanvas({
@@ -156,7 +165,8 @@ export function NotesCanvas({
       }
       onEditorReady(editor);
       selectionCleanup.current?.();
-      selectionCleanup.current = editor.store.listen(
+      let invalidationQueued = false;
+      const selectionListener = editor.store.listen(
         () => {
           if (!onTextSelected && !onCanvasSelection) return;
           const selectedShapes = editor.getSelectedShapes();
@@ -164,8 +174,11 @@ export function NotesCanvas({
             isGeneratedExplanationShape,
           );
           const inputShapes = selectedShapes.filter(
-            (shape) => !isGeneratedExplanationShape(shape),
+            (shape) =>
+              !isGeneratedExplanationShape(shape) &&
+              !isGeneratedMathGraphShape(shape),
           );
+          const selectionShapes = shapesWithDescendants(editor, inputShapes);
           const collectText = (value: unknown, parts: string[]): void => {
             if (Array.isArray(value)) {
               value.forEach((child) => collectText(child, parts));
@@ -180,7 +193,7 @@ export function NotesCanvas({
                 .forEach(([, child]) => collectText(child, parts));
             }
           };
-          const texts = inputShapes.flatMap((shape) => {
+          const texts = selectionShapes.flatMap((shape) => {
             const parts: string[] = [];
             const props = shape.props as Record<string, unknown>;
             if (typeof props.text === "string" && props.text.trim())
@@ -189,7 +202,7 @@ export function NotesCanvas({
             const value = [...new Set(parts)].join(" ").trim();
             return value ? [value] : [];
           });
-          const anchors = inputShapes.flatMap((shape) => {
+          const anchors = selectionShapes.flatMap((shape) => {
             const bounds = editor.getShapePageBounds(shape);
             if (!bounds) return [];
             const props = shape.props as Record<string, unknown>;
@@ -198,18 +211,14 @@ export function NotesCanvas({
               parts.push(props.text.trim());
             if (props.richText) collectText(props.richText, parts);
             const anchorText = [...new Set(parts)].join(" ").trim();
-            return anchorText
-              ? [
-                  {
-                    shapeId: shape.id,
-                    text: anchorText,
-                    x: bounds.x,
-                    y: bounds.y,
-                    width: bounds.w,
-                    height: bounds.h,
-                  },
-                ]
-              : [];
+            return [{
+              shapeId: shape.id,
+              text: anchorText || "Canvas selection",
+              x: bounds.x,
+              y: bounds.y,
+              width: bounds.w,
+              height: bounds.h,
+            }];
           });
           const text = texts
             .map((value, index) =>
@@ -292,10 +301,7 @@ export function NotesCanvas({
             return;
           }
           if (text) onTextSelected?.(text);
-          const containsDrawing = shapesWithDescendants(
-            editor,
-            inputShapes,
-          ).some((shape) =>
+          const containsDrawing = selectionShapes.some((shape) =>
             ["draw", "line", "arrow"].includes(shape.type),
           );
           if (!containsDrawing)
@@ -346,6 +352,21 @@ export function NotesCanvas({
         },
         { scope: "all" },
       );
+      const graphInvalidationListener = editor.store.listen(
+        () => {
+          if (invalidationQueued) return;
+          invalidationQueued = true;
+          queueMicrotask(() => {
+            invalidationQueued = false;
+            removeInvalidatedMathGraphs(editor);
+          });
+        },
+        { scope: "document" },
+      );
+      selectionCleanup.current = () => {
+        selectionListener();
+        graphInvalidationListener();
+      };
     },
     [note.id, onEditorReady, onTextSelected, onCanvasSelection],
   );

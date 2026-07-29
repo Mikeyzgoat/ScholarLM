@@ -110,3 +110,8 @@ export function saveLocalCanvasSnapshot(id: string, snapshot: unknown): void {
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
   );
 }
+
+export function removeLocalCanvas(id: string): void {
+  localStorage.removeItem(snapshotKey(id));
+  writeIndex(listLocalCanvases().filter((canvas) => canvas.id !== id));
+}

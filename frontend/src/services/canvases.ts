@@ -26,3 +26,9 @@ export async function saveStandaloneCanvas(input: {
     )
   ).canvas;
 }
+
+export async function deleteStandaloneCanvas(
+  canvasId: string,
+): Promise<void> {
+  await apiFetch(`/canvases/${canvasId}`, { method: "DELETE" });
+}
