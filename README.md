@@ -94,9 +94,9 @@ The database and uploaded PDFs are ignored by Git.
   region to the linked notes canvas first, then optionally request a streamed
   explanation.
 - Select a tldraw text shape to explain its content live.
-- OpenRouter Auto selects the generation model per task and routes requests to
-  high-throughput providers. Its default allowlist favors Qwen 3.5 Flash,
-  Gemma 4 26B, Seed 1.6 Flash, and Mistral Small 3.2, with hard price ceilings
-  of $0.20/M input tokens and $0.40/M output tokens.
+- OpenRouter routes each generation across Qwen 3.5 Flash, free and paid
+  Gemma 4 26B, Seed 1.6 Flash, and Mistral Small 3.2 endpoints. Compatible
+  endpoints are ranked by throughput under hard price ceilings of $0.20/M
+  input tokens and $0.40/M output tokens.
 - Embeddings use OpenRouter's hosted embeddings API and are stored locally.
 - Kokoro TTS remains local and uses the compact INT8 model.

@@ -38,7 +38,9 @@ async function openRouterGenerate(input: {
     method: "POST",
     headers: authorizationHeaders(),
     body: JSON.stringify({
-      model: env.OPENROUTER_MODEL,
+      ...(env.OPENROUTER_MODEL === "openrouter/auto"
+        ? { models: env.OPENROUTER_ROUTING_MODELS }
+        : { model: env.OPENROUTER_MODEL }),
       messages: [
         ...(input.system ? [{ role: "system", content: input.system }] : []),
         { role: "user", content },
@@ -47,7 +49,7 @@ async function openRouterGenerate(input: {
       max_tokens: input.maxTokens ?? 500,
       temperature: 0.2,
       provider: {
-        sort: "throughput",
+        sort: { by: "throughput", partition: "none" },
         allow_fallbacks: true,
         require_parameters: input.json === true,
         max_price: {
@@ -56,16 +58,6 @@ async function openRouterGenerate(input: {
         },
       },
       response_format: input.json ? { type: "json_object" } : undefined,
-      plugins:
-        env.OPENROUTER_MODEL === "openrouter/auto"
-          ? [
-              {
-                id: "auto-router",
-                cost_quality_tradeoff: 9,
-                allowed_models: env.OPENROUTER_ALLOWED_MODELS,
-              },
-            ]
-          : undefined,
     }),
     signal: input.signal,
   });

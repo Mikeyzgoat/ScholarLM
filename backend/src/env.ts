@@ -8,7 +8,7 @@ export const env: {
   OPENROUTER_BASE_URL: string;
   OPENROUTER_MODEL: string;
   OPENROUTER_EMBEDDING_MODEL: string;
-  OPENROUTER_ALLOWED_MODELS: string[];
+  OPENROUTER_ROUTING_MODELS: string[];
   OPENROUTER_MAX_INPUT_PRICE: number;
   OPENROUTER_MAX_OUTPUT_PRICE: number;
 } = {
@@ -23,9 +23,9 @@ export const env: {
   OPENROUTER_EMBEDDING_MODEL:
     Bun.env.OPENROUTER_EMBEDDING_MODEL?.trim() ||
     "openai/text-embedding-3-small",
-  OPENROUTER_ALLOWED_MODELS: (
-    Bun.env.OPENROUTER_ALLOWED_MODELS ||
-    "qwen/qwen3.5-flash*,google/gemma-4-26b-a4b-it*,bytedance-seed/seed-1.6-flash,mistralai/mistral-small-3.2-24b-instruct"
+  OPENROUTER_ROUTING_MODELS: (
+    Bun.env.OPENROUTER_ROUTING_MODELS ||
+    "qwen/qwen3.5-flash-02-23,google/gemma-4-26b-a4b-it:free,google/gemma-4-26b-a4b-it,bytedance-seed/seed-1.6-flash,mistralai/mistral-small-3.2-24b-instruct"
   )
     .split(",")
     .map((model) => model.trim())
