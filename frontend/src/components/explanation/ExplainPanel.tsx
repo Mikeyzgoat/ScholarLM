@@ -209,7 +209,7 @@ export function ExplainPanel({
             isPlaying={speech.isPlaying}
             isPaused={speech.isPaused}
             isReady={speech.isReady}
-            canLoad={Boolean(existingExplanationId)}
+            canLoad={Boolean(state.explanation)}
             usingFallback={speech.usingFallback}
             autoRead={speech.autoRead}
             onPause={speech.pause}

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { cleanExplanation } from "../../lib/plainExplanation";
 
 export function HighlightedSpeechText({
@@ -7,6 +8,15 @@ export function HighlightedSpeechText({
   text: string;
   activeWordIndex: number;
 }) {
+  const activeWord = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (activeWordIndex >= 0)
+      activeWord.current?.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+  }, [activeWordIndex]);
   let wordIndex = -1;
   return cleanExplanation(text)
     .split(/(\s+)/)
@@ -15,10 +25,11 @@ export function HighlightedSpeechText({
       wordIndex += 1;
       return (
         <span
+          ref={wordIndex === activeWordIndex ? activeWord : undefined}
           key={`${index}:${part}`}
           className={
             wordIndex === activeWordIndex
-              ? "rounded bg-orange-400/25 text-orange-100 transition-colors"
+              ? "rounded bg-orange-400/30 px-0.5 text-orange-100 shadow-[0_0_0_1px_rgba(251,146,60,0.18)] transition-colors"
               : undefined
           }
         >

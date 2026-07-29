@@ -5,6 +5,28 @@ const key = "scholarlm-auto-read";
 const silentWav =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
+function wordIndexAtProgress(text: string, progress: number): number {
+  const words = text.match(/\S+/g) ?? [];
+  if (!words.length) return -1;
+  const weights = words.map((word) => {
+    const punctuationPause = /[.!?]$/.test(word)
+      ? 6
+      : /[,;:]$/.test(word)
+        ? 3
+        : 0;
+    return Math.max(2, Math.sqrt(word.length) + punctuationPause);
+  });
+  const target =
+    Math.max(0, Math.min(1, progress)) *
+    weights.reduce((sum, weight) => sum + weight, 0);
+  let elapsed = 0;
+  for (let index = 0; index < weights.length; index += 1) {
+    elapsed += weights[index];
+    if (elapsed >= target) return index;
+  }
+  return words.length - 1;
+}
+
 export function useSpeech() {
   const audio = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useRef("");
@@ -30,17 +52,15 @@ export function useSpeech() {
 
   const trackProgress = useCallback(() => {
     const player = audio.current;
-    const wordCount = latestText.current.match(/\S+/g)?.length ?? 0;
     if (
       player &&
-      wordCount &&
       Number.isFinite(player.duration) &&
       player.duration > 0
     ) {
       setActiveWordIndex(
-        Math.min(
-          wordCount - 1,
-          Math.floor((player.currentTime / player.duration) * wordCount),
+        wordIndexAtProgress(
+          latestText.current,
+          player.currentTime / player.duration,
         ),
       );
     }
@@ -75,7 +95,13 @@ export function useSpeech() {
     };
     player.onerror = () =>
       setError(new Error("The browser could not decode Kokoro audio"));
-    void player.play().catch(() => setPaused(true));
+    void player.play().catch((cause: unknown) => {
+      setPaused(true);
+      if (!(cause instanceof DOMException && cause.name === "AbortError"))
+        setError(
+          cause instanceof Error ? cause : new Error("Audio playback failed"),
+        );
+    });
   }, [stopProgress, trackProgress]);
 
   const playFallback = useCallback((text: string) => {
