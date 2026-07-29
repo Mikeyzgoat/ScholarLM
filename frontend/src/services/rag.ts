@@ -5,6 +5,7 @@ import type { RagAnswer } from "../lib/types";
 export function askDocument(input: {
   documentId: string;
   question: string;
+  pageNumber?: number;
   onToken?: (token: string) => void;
   signal?: AbortSignal;
 }): Promise<RagAnswer> {
@@ -13,7 +14,7 @@ export function askDocument(input: {
 }
 
 async function streamDocumentAnswer(
-  body: { documentId: string; question: string },
+  body: { documentId: string; question: string; pageNumber?: number },
   onToken?: (token: string) => void,
   signal?: AbortSignal,
 ): Promise<RagAnswer> {

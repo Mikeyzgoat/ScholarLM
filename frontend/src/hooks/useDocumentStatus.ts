@@ -18,5 +18,6 @@ export function useDocumentStatus(documentId: string | undefined) {
     isLoading: q.isLoading,
     isError: q.isError,
     error: q.error,
+    refetch: q.refetch,
   };
 }

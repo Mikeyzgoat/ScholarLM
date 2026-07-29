@@ -47,13 +47,19 @@ rag.post("/", async (c) => {
       { error: { message: "Invalid JSON body", code: "INVALID_INPUT" } },
       400,
     );
-  const input = body as { documentId?: unknown; question?: unknown };
+  const input = body as {
+    documentId?: unknown;
+    question?: unknown;
+    pageNumber?: unknown;
+  };
   if (
     typeof input.documentId !== "string" ||
     !input.documentId.trim() ||
     typeof input.question !== "string" ||
     input.question.trim().length < 3 ||
-    input.question.length > 2000
+    input.question.length > 2000 ||
+    (input.pageNumber !== undefined &&
+      (!Number.isInteger(input.pageNumber) || Number(input.pageNumber) < 1))
   )
     return c.json(
       {
@@ -99,6 +105,7 @@ rag.post("/", async (c) => {
           const result = await answerDocumentQuestion({
             documentId: input.documentId as string,
             question: (input.question as string).trim(),
+            currentPage: input.pageNumber as number | undefined,
             signal: c.req.raw.signal,
             onToken: (token) => send({ type: "token", token }),
           });
@@ -119,6 +126,7 @@ rag.post("/", async (c) => {
       await answerDocumentQuestion({
         documentId: input.documentId,
         question: input.question.trim(),
+        currentPage: input.pageNumber as number | undefined,
         signal: c.req.raw.signal,
       }),
     );

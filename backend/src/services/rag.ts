@@ -13,6 +13,7 @@ const refusal =
 export async function answerDocumentQuestion(input: {
   documentId: string;
   question: string;
+  currentPage?: number;
   signal?: AbortSignal;
   onToken?: (token: string) => void;
 }): Promise<RagAnswer> {
@@ -25,9 +26,11 @@ export async function answerDocumentQuestion(input: {
     documentId: input.documentId,
     question: input.question,
     limit: 6,
+    currentPage: input.currentPage,
   });
   const sources: RagSource[] = retrieved.map((result, index) => ({
     ...result,
+    pageNumber: result.pageNumber ?? 1,
     sourceId: `S${index + 1}`,
   }));
   if (!sources.length)

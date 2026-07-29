@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { BookOpenCheck, Send } from "lucide-react";
+import { BookOpenCheck, Check, Plus, Send } from "lucide-react";
 import type { RagAnswer } from "../../lib/types";
 import { askDocument } from "../../services/rag";
 
@@ -12,19 +12,29 @@ export function DocumentQA({
   documentId,
   disabled,
   onSourceSelect,
+  activePage,
+  onAddSticky,
 }: {
   documentId: string;
   disabled: boolean;
   onSourceSelect: (pageNumber: number) => void;
+  activePage?: number;
+  onAddSticky?: (input: {
+    question: string;
+    answer: string;
+    pageNumber: number;
+  }) => void;
 }) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<QuestionTurn[]>([]);
   const [draftAnswer, setDraftAnswer] = useState("");
+  const [savedTurns, setSavedTurns] = useState<Set<number>>(() => new Set());
   const ask = useMutation({
     mutationFn: (value: string) =>
       askDocument({
         documentId,
         question: value,
+        pageNumber: activePage,
         onToken: (token) =>
           setDraftAnswer((current) => current + token),
       }),
@@ -60,9 +70,35 @@ export function DocumentQA({
             key={`${turn.question}:${index}`}
             className="rounded-lg border border-white/10 bg-white/[0.035] p-3"
           >
-            <p className="text-xs font-medium text-orange-200">
-              {turn.question}
-            </p>
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 flex-1 text-xs font-medium text-orange-200">
+                {turn.question}
+              </p>
+              {onAddSticky && (
+                <button
+                  type="button"
+                  disabled={savedTurns.has(index)}
+                  title="Add this answer as a sticky on the PDF canvas"
+                  aria-label="Add answer as sticky note"
+                  onClick={() => {
+                    onAddSticky({
+                      question: turn.question,
+                      answer: turn.answer,
+                      pageNumber:
+                        activePage ?? turn.sources[0]?.pageNumber ?? 1,
+                    });
+                    setSavedTurns((current) => new Set(current).add(index));
+                  }}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-orange-400/20 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 disabled:text-emerald-300 disabled:opacity-80"
+                >
+                  {savedTurns.has(index) ? (
+                    <Check size={14} />
+                  ) : (
+                    <Plus size={14} />
+                  )}
+                </button>
+              )}
+            </div>
             <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-300">
               {turn.answer}
             </p>

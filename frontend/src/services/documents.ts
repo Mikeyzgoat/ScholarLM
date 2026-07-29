@@ -31,6 +31,12 @@ export async function getDocumentStatus(
 ): Promise<DocumentStatusResponse> {
   return apiFetch(`/documents/${documentId}/status`);
 }
+export async function retryDocumentIngestion(documentId: string): Promise<void> {
+  await apiFetch(`/documents/${documentId}/retry`, { method: "POST" });
+}
+export async function reindexDocument(documentId: string): Promise<void> {
+  await apiFetch(`/documents/${documentId}/reindex`, { method: "POST" });
+}
 export function getDocumentFileUrl(documentId: string): string {
   return `${API_BASE_URL}/documents/${documentId}/file`;
 }

@@ -8,6 +8,7 @@ import {
   NoteRevisionConflictError,
   updateNote,
 } from "../services/notes";
+import { indexNoteStickies } from "../services/stickyNotes";
 const notes = new Hono();
 const invalid = (c: Context, message: string) =>
   c.json({ error: { message, code: "INVALID_INPUT" } }, 400);
@@ -37,17 +38,18 @@ notes.post("/", async (c) => {
       { error: { message: "Document not found", code: "NOT_FOUND" } },
       404,
     );
-  return c.json(
-    {
-      note: createNote({
-        documentId: b.documentId,
-        title: b.title.trim(),
-        metadata: b.metadata,
-        snapshot: b.snapshot,
-      }),
-    },
-    201,
-  );
+  const note = createNote({
+    documentId: b.documentId,
+    title: b.title.trim(),
+    metadata: b.metadata,
+    snapshot: b.snapshot,
+  });
+  void indexNoteStickies({
+    noteId: note.id,
+    documentId: note.documentId,
+    snapshot: note.snapshot,
+  }).catch((error) => console.warn("[stickies] Initial indexing failed", error));
+  return c.json({ note }, 201);
 });
 notes.get("/document/:documentId", (c) => {
   const id = c.req.param("documentId");
@@ -85,14 +87,21 @@ notes.put("/:noteId", async (c) => {
       404,
     );
   try {
+    const note = updateNote({
+      noteId: id,
+      title: b.title as string | undefined,
+      metadata: b.metadata,
+      snapshot: b.snapshot,
+      expectedRevision: b.expectedRevision as number | undefined,
+    });
+    if (b.snapshot !== undefined)
+      void indexNoteStickies({
+        noteId: note.id,
+        documentId: note.documentId,
+        snapshot: note.snapshot,
+      }).catch((error) => console.warn("[stickies] Reindexing failed", error));
     return c.json({
-      note: updateNote({
-        noteId: id,
-        title: b.title as string | undefined,
-        metadata: b.metadata,
-        snapshot: b.snapshot,
-        expectedRevision: b.expectedRevision as number | undefined,
-      }),
+      note,
     });
   } catch (e) {
     if (e instanceof NoteRevisionConflictError)

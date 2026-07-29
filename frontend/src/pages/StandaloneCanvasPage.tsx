@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileUp, LayoutDashboard, Save } from "lucide-react";
 import { Link } from "react-router";
-import { Navigate, useParams } from "react-router";
+import { Navigate, useNavigate, useParams } from "react-router";
 import { getSnapshot, type Editor } from "tldraw";
 import type { CanvasSelectionAnchor, NotePage, SaveState } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
@@ -19,9 +19,12 @@ import {
   addExplanationToCanvas,
 } from "../lib/addExplanationToCanvas";
 import { ThemeSelector } from "../components/layout/ThemeSelector";
+import { uploadDocument } from "../services/documents";
+import { createNote } from "../services/notes";
 
 export default function StandaloneCanvasPage() {
   const { canvasId = "" } = useParams();
+  const navigate = useNavigate();
   const canvas = getLocalCanvas(canvasId);
   const [selectedText, setSelectedText] = useState("");
   const [selectedTexts, setSelectedTexts] = useState<string[]>();
@@ -34,6 +37,9 @@ export default function StandaloneCanvasPage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [title, setTitle] = useState(canvas?.title ?? "");
   const unsubscribe = useRef<(() => void) | null>(null);
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [note] = useState<NotePage>(() => ({
     id: canvasId,
     documentId: "",
@@ -109,6 +115,30 @@ export default function StandaloneCanvasPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function attachPdf(file?: File) {
+    if (!file || !editor || isUploading) return;
+    setUploadError("");
+    setIsUploading(true);
+    try {
+      saveCanvas(editor);
+      const document = await uploadDocument(file);
+      await createNote({
+        documentId: document.id,
+        title: title.trim() || canvas?.title || "Imported canvas",
+        metadata: { page: 1, importedFromCanvas: canvasId },
+        snapshot: getSnapshot(editor.store),
+      });
+      navigate(`/workspace/${document.id}`);
+    } catch (error) {
+      setUploadError(
+        error instanceof Error ? error.message : "Could not attach the PDF",
+      );
+    } finally {
+      setIsUploading(false);
+      if (uploadInput.current) uploadInput.current.value = "";
+    }
+  }
+
   if (!canvas) return <Navigate to="/notes" replace />;
 
   return (
@@ -159,14 +189,28 @@ export default function StandaloneCanvasPage() {
           <LayoutDashboard size={16} />
           Workspace
         </Link>
-        <Link
-          to="/upload"
+        <button
+          type="button"
+          disabled={!editor || isUploading}
+          onClick={() => uploadInput.current?.click()}
           className="flex items-center gap-2 rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-1.5 text-sm text-orange-300"
         >
           <FileUp size={16} />
-          Upload PDF
-        </Link>
+          {isUploading ? "Attaching…" : "Attach PDF"}
+        </button>
+        <input
+          ref={uploadInput}
+          hidden
+          type="file"
+          accept="application/pdf,.pdf"
+          onChange={(event) => void attachPdf(event.target.files?.[0])}
+        />
       </header>
+      {uploadError && (
+        <div className="absolute right-4 top-16 z-50 rounded-lg border border-red-400/20 bg-red-950/90 px-3 py-2 text-xs text-red-200 shadow-xl">
+          {uploadError}
+        </div>
+      )}
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(360px,24rem)]">
         <NotesCanvas
           note={note}

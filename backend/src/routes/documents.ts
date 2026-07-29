@@ -110,6 +110,58 @@ documents.get("/", (c) => {
     .all() as DocumentRecord[];
   return c.json({ documents: rows.map(summary) });
 });
+documents.post("/:id/retry", (c) => {
+  const id = c.req.param("id");
+  const document = db
+    .query("SELECT * FROM documents WHERE id=?")
+    .get(id) as DocumentRecord | null;
+  if (!document)
+    return c.json(
+      { error: { message: "Document not found", code: "NOT_FOUND" } },
+      404,
+    );
+  if (document.status !== "failed")
+    return c.json(
+      {
+        error: {
+          message: "Only failed ingestion jobs can be retried",
+          code: "INVALID_STATE",
+        },
+      },
+      409,
+    );
+  db.query(
+    "UPDATE documents SET status='uploaded',error_message=NULL,updated_at=? WHERE id=?",
+  ).run(new Date().toISOString(), id);
+  setTimeout(() => void ingestDocument(id), 100);
+  return c.json({ accepted: true }, 202);
+});
+documents.post("/:id/reindex", (c) => {
+  const id = c.req.param("id");
+  const document = db
+    .query("SELECT * FROM documents WHERE id=?")
+    .get(id) as DocumentRecord | null;
+  if (!document)
+    return c.json(
+      { error: { message: "Document not found", code: "NOT_FOUND" } },
+      404,
+    );
+  if (!["ready", "failed"].includes(document.status))
+    return c.json(
+      {
+        error: {
+          message: "Document ingestion is already in progress",
+          code: "INVALID_STATE",
+        },
+      },
+      409,
+    );
+  db.query(
+    "UPDATE documents SET status='uploaded',error_message=NULL,updated_at=? WHERE id=?",
+  ).run(new Date().toISOString(), id);
+  setTimeout(() => void ingestDocument(id), 100);
+  return c.json({ accepted: true }, 202);
+});
 documents.get("/:id/status", (c) => {
   const id = c.req.param("id");
   if (!id)

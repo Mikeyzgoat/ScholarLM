@@ -2,6 +2,7 @@ import { db } from "../db/database";
 import type { ChunkRecord, DocumentRecord, GraphResponse } from "../types";
 import { createId } from "../utils/ids";
 import { extractConceptGraph } from "./openRouter";
+import { extractStickies } from "./stickyNotes";
 
 interface GraphNote {
   id: string;
@@ -11,51 +12,21 @@ interface GraphNote {
 }
 
 function stickyNodes(notes: GraphNote[]) {
-  return notes.flatMap((note) => {
-    try {
-      const snapshot = JSON.parse(note.snapshot) as {
-        document?: { store?: Record<string, unknown> };
-      };
-      return Object.values(snapshot.document?.store ?? {}).flatMap((record) => {
-        if (!record || typeof record !== "object") return [];
-        const shape = record as {
-          id?: unknown;
-          type?: unknown;
-          props?: {
-            question?: unknown;
-            explanation?: unknown;
-          };
-        };
-        if (
-          shape.type !== "scholar-explanation-sticky" ||
-          typeof shape.id !== "string"
-        )
-          return [];
-        const question =
-          typeof shape.props?.question === "string"
-            ? shape.props.question.trim()
-            : "Explanation";
-        const explanation =
-          typeof shape.props?.explanation === "string"
-            ? shape.props.explanation.trim()
-            : "";
-        return [
-          {
-            id: `sticky:${note.id}:${shape.id}`,
-            label:
-              question.length > 80 ? `${question.slice(0, 77)}…` : question,
-            description: explanation || "Expandable explanation sticky note",
-            pageNumber: null,
-            kind: "sticky" as const,
-            documentId: note.documentId,
-            noteId: note.id,
-          },
-        ];
-      });
-    } catch {
-      return [];
-    }
-  });
+  return notes.flatMap((note) =>
+    extractStickies({
+      noteId: note.id,
+      documentId: note.documentId ?? "",
+      snapshot: note.snapshot,
+    }).map((sticky) => ({
+      id: sticky.id,
+      label: sticky.label,
+      description: sticky.content,
+      pageNumber: null,
+      kind: "sticky" as const,
+      documentId: note.documentId,
+      noteId: note.id,
+    })),
+  );
 }
 export async function buildKnowledgeGraph(documentId: string): Promise<void> {
   const doc = db
@@ -137,7 +108,7 @@ export async function buildKnowledgeGraph(documentId: string): Promise<void> {
       const source = normalized.get(e.source.trim().toLowerCase()),
         target = normalized.get(e.target.trim().toLowerCase());
       if (source && target && source.id !== target.id)
-        db.query("INSERT INTO concept_edges VALUES (?,?,?,?,?,?,?)").run(
+        db.query("INSERT INTO concept_edges VALUES (?,?,?,?,?,?)").run(
           createId(),
           documentId,
           source.id,

@@ -27,7 +27,7 @@ export function SearchBar({
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           disabled={disabled || isSearching}
-          placeholder="Search concepts…"
+          placeholder="Search PDF and sticky notes…"
           className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 focus:outline-2 focus:outline-teal-600"
         />
       </label>

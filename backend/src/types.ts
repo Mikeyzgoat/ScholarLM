@@ -69,12 +69,16 @@ export interface SearchRequest {
 }
 export interface SearchResult {
   chunkId: string;
-  pageNumber: number;
+  pageNumber: number | null;
   content: string;
   score: number;
+  kind?: "pdf" | "sticky";
+  label?: string;
+  noteId?: string;
 }
-export interface RagSource extends SearchResult {
+export interface RagSource extends Omit<SearchResult, "pageNumber"> {
   sourceId: string;
+  pageNumber: number;
 }
 export interface RagAnswer {
   answer: string;

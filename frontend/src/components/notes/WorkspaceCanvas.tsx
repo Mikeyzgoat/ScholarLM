@@ -83,7 +83,10 @@ export function WorkspaceCanvas({
   const autosave = useNoteAutosave({
     note,
     editor,
-    onServerNoteUpdated: setNote,
+    onServerNoteUpdated: (updated) => {
+      setNote(updated);
+      void client.invalidateQueries({ queryKey: ["graph"] });
+    },
   });
 
   useEffect(() => {
@@ -122,7 +125,7 @@ export function WorkspaceCanvas({
     );
 
   return (
-    <section className="overflow-hidden rounded-lg border bg-white">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border bg-white">
       <header className="flex h-11 items-center border-b px-3">
         <span className="truncate text-sm font-medium">{note.title}</span>
         <div className="ml-auto flex items-center gap-1">
@@ -178,18 +181,20 @@ export function WorkspaceCanvas({
           <ExternalLink size={16} />
         </Link>
       </header>
-      <NotesCanvas
-        key={note.id}
-        note={note}
-        embedded
-        onEditorReady={(nextEditor) => {
-          setEditor(nextEditor);
-          onEditorReady?.(nextEditor);
-        }}
-        onTextSelected={onTextSelected}
-        onCanvasSelection={onCanvasSelection}
-        onPdfTextSelected={onPdfTextSelected}
-      />
+      <div className="min-h-0 flex-1">
+        <NotesCanvas
+          key={note.id}
+          note={note}
+          embedded
+          onEditorReady={(nextEditor) => {
+            setEditor(nextEditor);
+            onEditorReady?.(nextEditor);
+          }}
+          onTextSelected={onTextSelected}
+          onCanvasSelection={onCanvasSelection}
+          onPdfTextSelected={onPdfTextSelected}
+        />
+      </div>
     </section>
   );
 }

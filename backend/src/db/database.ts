@@ -29,6 +29,7 @@ export function prepareEmbeddingModel(model: string): void {
   db.transaction(() => {
     if (hasEmbeddings) {
       db.exec("UPDATE chunks SET embedding=NULL;");
+      db.exec("DELETE FROM sticky_note_index;");
       db.query(
         "UPDATE documents SET status='embedding',error_message=NULL,updated_at=? WHERE status='ready'",
       ).run(new Date().toISOString());

@@ -28,6 +28,7 @@ export function NotesCanvas({
   const { resolvedTheme } = useTheme();
   const selectionCleanup = useRef<(() => void) | null>(null);
   const lastSelection = useRef("");
+  const lastPdfSelection = useRef(0);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const host = root.current;
@@ -95,8 +96,10 @@ export function NotesCanvas({
   useEffect(() => {
     const selected = (event: Event) => {
       const text = (event as CustomEvent<unknown>).detail;
-      if (typeof text === "string" && text.trim())
+      if (typeof text === "string" && text.trim()) {
+        lastPdfSelection.current = Date.now();
         onPdfTextSelected?.(text.trim());
+      }
     };
     window.addEventListener("scholarlm:pdf-selection", selected);
     return () =>
@@ -200,6 +203,12 @@ export function NotesCanvas({
             .sort()
             .join(",");
           if (!signature) {
+            const browserSelection = getSelection()?.toString().trim() ?? "";
+            if (
+              browserSelection ||
+              Date.now() - lastPdfSelection.current < 1500
+            )
+              return;
             lastSelection.current = "";
             onTextSelected?.("");
             onCanvasSelection?.({ text: "" });
@@ -287,10 +296,13 @@ export function NotesCanvas({
       ref={root}
       onMouseUp={() => {
         const text = getSelection()?.toString().trim() ?? "";
-        if (text) onPdfTextSelected?.(text);
+        if (text) {
+          lastPdfSelection.current = Date.now();
+          onPdfTextSelected?.(text);
+        }
       }}
       className={
-        embedded ? "relative h-full min-h-[576px]" : "absolute inset-0 top-14"
+        embedded ? "relative h-full min-h-0" : "absolute inset-0 top-14"
       }
     >
       <Tldraw

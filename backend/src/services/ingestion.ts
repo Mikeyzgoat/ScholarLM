@@ -7,6 +7,7 @@ import { chunkPages } from "./chunking";
 import { embedDocumentChunks } from "./embeddings";
 import { buildKnowledgeGraph } from "./knowledgeGraph";
 import { createId } from "../utils/ids";
+import { preparePagesForIndexing } from "./indexText";
 async function updateDocumentStatus(
   documentId: string,
   status: DocumentStatus,
@@ -65,7 +66,10 @@ export async function ingestDocument(documentId: string): Promise<void> {
       documentId,
     );
     await updateDocumentStatus(documentId, "chunking");
-    await saveChunks(documentId, chunkPages(extracted.pages));
+    await saveChunks(
+      documentId,
+      chunkPages(preparePagesForIndexing(extracted.pages)),
+    );
     await updateDocumentStatus(documentId, "embedding");
     await embedDocumentChunks(documentId);
     await updateDocumentStatus(documentId, "graphing");
