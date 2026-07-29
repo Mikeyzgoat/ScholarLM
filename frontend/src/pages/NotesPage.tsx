@@ -12,7 +12,11 @@ import { NotesHeader } from "../components/notes/NotesHeader";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
-import { focusPdfPage } from "../lib/pdfAnnotationCanvas";
+import {
+  focusPdfPage,
+  showPdfPageOnCanvas,
+} from "../lib/pdfAnnotationCanvas";
+import { getDocument, getDocumentFileUrl } from "../services/documents";
 export default function NotesPage() {
   const { noteId = "" } = useParams();
   const nav = useNavigate();
@@ -20,6 +24,11 @@ export default function NotesPage() {
     queryKey: ["note", noteId],
     queryFn: () => getNote(noteId),
     enabled: !!noteId,
+  });
+  const document = useQuery({
+    queryKey: ["document", q.data?.documentId],
+    queryFn: () => getDocument(q.data!.documentId),
+    enabled: Boolean(q.data?.documentId),
   });
   const [editor, setEditor] = useState<Editor | null>(null),
     [note, setNote] = useState<NotePage | undefined>(),
@@ -60,11 +69,17 @@ export default function NotesPage() {
     if (!editor) return;
     const syncPage = () => {
       const pages = editor.getPages();
-      const current = Math.max(
+      const pageIndex = Math.max(
         0,
         pages.findIndex((page) => page.id === editor.getCurrentPageId()),
       );
-      setCanvasPage({ current: current + 1, total: Math.max(1, pages.length) });
+      const pageName = pages[pageIndex]?.name ?? "";
+      const pdfPage = Number(pageName.match(/^PDF · Page (\d+)$/)?.[1]);
+      setCanvasPage({
+        current:
+          Number.isInteger(pdfPage) && pdfPage > 0 ? pdfPage : pageIndex + 1,
+        total: Math.max(1, document.data?.pageCount ?? pages.length),
+      });
     };
     syncPage();
     const frame = requestAnimationFrame(() => focusPdfPage(editor));
@@ -73,19 +88,22 @@ export default function NotesPage() {
       cancelAnimationFrame(frame);
       unsubscribe();
     };
-  }, [editor]);
+  }, [editor, document.data?.pageCount]);
 
   const moveCanvasPage = (offset: number) => {
-    if (!editor) return;
-    const pages = editor.getPages();
-    const current = pages.findIndex(
-      (page) => page.id === editor.getCurrentPageId(),
+    if (!editor || !note) return;
+    const pageNumber = Math.max(
+      1,
+      Math.min(canvasPage.total, canvasPage.current + offset),
     );
-    const target = pages[current + offset];
-    if (target) {
-      editor.setCurrentPage(target.id);
-      focusPdfPage(editor);
-    }
+    showPdfPageOnCanvas({
+      editor,
+      documentId: note.documentId,
+      fileUrl: getDocumentFileUrl(note.documentId),
+      pageNumber,
+      textSelectionEnabled: false,
+    });
+    setCanvasPage((current) => ({ ...current, current: pageNumber }));
   };
   useEffect(() => {
     if (!note || !title.trim() || title === note.title) return;
