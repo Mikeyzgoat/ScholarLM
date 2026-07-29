@@ -94,9 +94,10 @@ The database and uploaded PDFs are ignored by Git.
   region to the linked notes canvas first, then optionally request a streamed
   explanation.
 - Select a tldraw text shape to explain its content live.
-- OpenRouter routes each generation across Qwen 3.5 Flash, free and paid
-  Gemma 4 26B, Seed 1.6 Flash, and Mistral Small 3.2 endpoints. Compatible
-  endpoints are ranked by throughput under hard price ceilings of $0.20/M
-  input tokens and $0.40/M output tokens.
-- Embeddings use OpenRouter's hosted embeddings API and are stored locally.
+- OpenRouter's free router selects compatible generation models by request
+  capabilities, including image input and structured output. A curated,
+  throughput-ranked paid pool can be enabled later with
+  `OPENROUTER_MODEL=openrouter/auto`.
+- Embeddings use OpenRouter's free Nemotron embedding endpoint and are stored
+  locally.
 - Kokoro TTS remains local and uses the compact INT8 model.

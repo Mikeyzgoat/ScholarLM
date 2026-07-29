@@ -19,10 +19,10 @@ export const env: {
     Bun.env.OPENROUTER_BASE_URL?.trim().replace(/\/$/, "") ||
     "https://openrouter.ai/api/v1",
   OPENROUTER_MODEL:
-    Bun.env.OPENROUTER_MODEL?.trim() || "openrouter/auto",
+    Bun.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
   OPENROUTER_EMBEDDING_MODEL:
     Bun.env.OPENROUTER_EMBEDDING_MODEL?.trim() ||
-    "openai/text-embedding-3-small",
+    "nvidia/nemotron-3-embed-1b:free",
   OPENROUTER_ROUTING_MODELS: (
     Bun.env.OPENROUTER_ROUTING_MODELS ||
     "qwen/qwen3.5-flash-02-23,google/gemma-4-26b-a4b-it:free,google/gemma-4-26b-a4b-it,bytedance-seed/seed-1.6-flash,mistralai/mistral-small-3.2-24b-instruct"
