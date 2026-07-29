@@ -7,7 +7,7 @@ import {
   Home,
   StickyNote,
 } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { useEffect, useRef } from "react";
 import { listDocuments } from "../../services/documents";
 import sidebarLogo from "../../assets/sidebar-logo.png";
@@ -21,8 +21,15 @@ export function Sidebar({
   onCollapse: () => void;
 }) {
   const { documentId } = useParams();
+  const location = useLocation();
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
   const sidebar = useRef<HTMLElement>(null);
+  const navClass = (active: boolean, spaced = false) =>
+    `${spaced ? "mt-1 " : ""}flex rounded p-2 ${
+      active
+        ? "bg-stone-700 text-white"
+        : "text-stone-400 hover:bg-stone-800 hover:text-stone-200"
+    } ${collapsed ? "justify-center" : "gap-2"}`;
   useEffect(() => {
     if (collapsed) return;
     const closeFromOutside = (event: PointerEvent) => {
@@ -78,7 +85,7 @@ export function Sidebar({
         <Link
           to="/"
           title="Home"
-          className={`flex rounded p-2 hover:bg-stone-800 ${collapsed ? "justify-center" : "gap-2"}`}
+          className={navClass(location.pathname === "/")}
         >
           <Home size={18} />
           {!collapsed && "Home"}
@@ -86,7 +93,7 @@ export function Sidebar({
         <Link
           to="/notes"
           title="Notes"
-          className={`mt-1 flex rounded p-2 hover:bg-stone-800 ${collapsed ? "justify-center" : "gap-2"}`}
+          className={navClass(location.pathname === "/notes", true)}
         >
           <StickyNote size={18} />
           {!collapsed && "Notes"}
@@ -94,7 +101,11 @@ export function Sidebar({
         <Link
           to="/upload"
           title="Documents"
-          className={`mt-1 flex rounded p-2 hover:bg-stone-800 ${collapsed ? "justify-center" : "gap-2"}`}
+          className={navClass(
+            location.pathname === "/upload" ||
+              location.pathname.startsWith("/workspace/"),
+            true,
+          )}
         >
           <Files size={18} />
           {!collapsed && "Documents"}
@@ -102,7 +113,7 @@ export function Sidebar({
         <Link
           to="/graph"
           title="Knowledge graph"
-          className={`mt-1 flex rounded p-2 hover:bg-stone-800 ${collapsed ? "justify-center" : "gap-2"}`}
+          className={navClass(location.pathname.startsWith("/graph"), true)}
         >
           <GitFork size={18} />
           {!collapsed && "Knowledge graph"}

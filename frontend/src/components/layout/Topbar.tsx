@@ -14,7 +14,9 @@ export function Topbar() {
   return (
     <header className="flex h-14 items-center border-b bg-white px-5">
       <span className="mr-2 h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_16px_rgba(249,115,22,0.9)]" />
-      <span className="font-semibold tracking-tight lg:hidden">ScholarLM</span>
+      <Link to="/" className="font-semibold tracking-tight lg:hidden">
+        ScholarLM
+      </Link>
       {q.data && (
         <>
           <span className="ml-1 max-w-[40vw] truncate text-sm font-medium text-stone-300">
