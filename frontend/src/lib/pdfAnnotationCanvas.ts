@@ -43,7 +43,7 @@ export function showPdfPageOnCanvas(input: {
       type: PDF_PAGE_SHAPE_TYPE,
       x: 0,
       y: 0,
-      isLocked: true,
+      isLocked: false,
       props: {
         w: 816,
         h: 1056,
@@ -53,16 +53,32 @@ export function showPdfPageOnCanvas(input: {
       },
     });
     editor.sendToBack([shapeId]);
+    editor.updateShape<PdfPageShape>({
+      id: shapeId,
+      type: PDF_PAGE_SHAPE_TYPE,
+      isLocked: true,
+    });
     editor.zoomToBounds(
       { x: 0, y: 0, w: 816, h: 1056 },
       { inset: 48, animation: { duration: 180 } },
     );
     return;
   }
+  editor.updateShape<PdfPageShape>({
+    id: shapeId,
+    type: PDF_PAGE_SHAPE_TYPE,
+    isLocked: false,
+  });
+  editor.sendToBack([shapeId]);
   if (existing.props.textSelectionEnabled !== textSelectionEnabled)
     editor.updateShape<PdfPageShape>({
       id: shapeId,
       type: PDF_PAGE_SHAPE_TYPE,
       props: { textSelectionEnabled },
     });
+  editor.updateShape<PdfPageShape>({
+    id: shapeId,
+    type: PDF_PAGE_SHAPE_TYPE,
+    isLocked: true,
+  });
 }

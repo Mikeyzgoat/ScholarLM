@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
 import { AnimatePresence, motion } from "framer-motion";
@@ -7,7 +7,7 @@ import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
 import type { CanvasSelectionAnchor, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
-import { ChartSpline } from "lucide-react";
+import { ChartSpline, FilePlus2 } from "lucide-react";
 export function ExplainPanel({
   selectedText,
   selectedTexts,
@@ -37,6 +37,9 @@ export function ExplainPanel({
 }) {
   const state = useExplanation(),
     speech = useSpeech();
+  const [canvasInput, setCanvasInput] = useState<Parameters<
+    NonNullable<typeof onExplanationGenerated>
+  >[0]>();
   async function explain(
     mode: "explain" | "regenerate" | "simplify" = "explain",
     requestGraph = false,
@@ -55,7 +58,7 @@ export function ExplainPanel({
     });
     if (value) {
       if (value.plot) onPlotGenerated?.(value.plot, value.recognizedEquation);
-      onExplanationGenerated?.({
+      setCanvasInput({
         selectedText,
         explanation: value.explanation,
         mode,
@@ -69,6 +72,7 @@ export function ExplainPanel({
     speech.stop();
     if (!selectedText.trim() && !selectionImage) {
       state.clear();
+      setCanvasInput(undefined);
       return;
     }
     const existing =
@@ -139,6 +143,17 @@ export function ExplainPanel({
               Simplify
             </button>
           </div>
+          <button
+            type="button"
+            disabled={!canvasInput || state.isExplaining}
+            onClick={() => {
+              if (canvasInput) onExplanationGenerated?.(canvasInput);
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-medium text-white hover:bg-orange-400 disabled:opacity-50"
+          >
+            <FilePlus2 size={15} />
+            Add explanation to canvas
+          </button>
           {selectedText && (
             <button
               type="button"
