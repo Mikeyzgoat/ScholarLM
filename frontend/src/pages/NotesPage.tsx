@@ -12,6 +12,7 @@ import { NotesHeader } from "../components/notes/NotesHeader";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
 import { addExplanationToCanvas } from "../lib/addExplanationToCanvas";
+import { focusPdfPage } from "../lib/pdfAnnotationCanvas";
 export default function NotesPage() {
   const { noteId = "" } = useParams();
   const nav = useNavigate();
@@ -78,10 +79,7 @@ export default function NotesPage() {
     const target = pages[current + offset];
     if (target) {
       editor.setCurrentPage(target.id);
-      editor.zoomToBounds(
-        { x: 0, y: 0, w: 816, h: 1056 },
-        { inset: 48, animation: { duration: 180 } },
-      );
+      focusPdfPage(editor);
     }
   };
   useEffect(() => {

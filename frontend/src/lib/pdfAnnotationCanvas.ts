@@ -10,6 +10,25 @@ import {
 } from "../components/notes/PdfPageShape";
 
 const pageName = (pageNumber: number) => `PDF · Page ${pageNumber}`;
+const PDF_WIDTH = 816;
+const PDF_HEIGHT = 1056;
+const PDF_DEFAULT_ZOOM = 0.9;
+
+export function focusPdfPage(editor: Editor): void {
+  const viewport = editor.getViewportScreenBounds();
+  editor.setCamera(
+    {
+      x: (viewport.width - PDF_WIDTH * PDF_DEFAULT_ZOOM) /
+        2 /
+        PDF_DEFAULT_ZOOM,
+      y: (viewport.height - PDF_HEIGHT * PDF_DEFAULT_ZOOM) /
+        2 /
+        PDF_DEFAULT_ZOOM,
+      z: PDF_DEFAULT_ZOOM,
+    },
+    { animation: { duration: 180 } },
+  );
+}
 
 export function showPdfPageOnCanvas(input: {
   editor: Editor;
@@ -58,10 +77,7 @@ export function showPdfPageOnCanvas(input: {
       type: PDF_PAGE_SHAPE_TYPE,
       isLocked: true,
     });
-    editor.zoomToBounds(
-      { x: 0, y: 0, w: 816, h: 1056 },
-      { inset: 48, animation: { duration: 180 } },
-    );
+    focusPdfPage(editor);
     return;
   }
   editor.updateShape<PdfPageShape>({
@@ -81,8 +97,5 @@ export function showPdfPageOnCanvas(input: {
     type: PDF_PAGE_SHAPE_TYPE,
     isLocked: true,
   });
-  editor.zoomToBounds(
-    { x: 0, y: 0, w: 816, h: 1056 },
-    { inset: 48, animation: { duration: 180 } },
-  );
+  focusPdfPage(editor);
 }
