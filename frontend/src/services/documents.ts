@@ -44,6 +44,9 @@ export async function deleteDocument(documentId: string): Promise<void> {
     { method: "DELETE" },
   );
   result.deletedNoteIds.forEach(removeLocalNoteDraft);
+  sessionStorage.removeItem(`scholarlm-document-qa:${documentId}`);
+  sessionStorage.removeItem(`scholarlm-document-inspector:${documentId}`);
+  sessionStorage.removeItem(`scholarlm-document-search:${documentId}`);
 }
 export function getDocumentFileUrl(documentId: string): string {
   return `${API_BASE_URL}/documents/${documentId}/file`;

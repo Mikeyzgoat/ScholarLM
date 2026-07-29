@@ -52,10 +52,12 @@ export function Sidebar({
   return (
     <aside
       ref={sidebar}
-      className="relative hidden w-[72px] shrink-0 lg:block"
+      className={`relative hidden shrink-0 overflow-visible transition-[width] duration-300 ease-out will-change-[width] lg:block ${
+        collapsed ? "w-[72px]" : "w-56"
+      }`}
     >
       <div
-        className={`${collapsed ? "w-[72px] px-3" : "w-56 px-4"} absolute inset-y-0 left-0 z-40 border-r bg-stone-900 py-4 text-stone-200 shadow-[16px_0_40px_rgba(0,0,0,0.16)] transition-[width,padding] duration-300 ease-out will-change-[width]`}
+        className={`${collapsed ? "px-3" : "px-4"} absolute inset-y-0 left-0 z-40 w-full border-r bg-stone-900 py-4 text-stone-200 shadow-[16px_0_40px_rgba(0,0,0,0.16)] transition-[padding] duration-300 ease-out`}
       >
         <button
           type="button"

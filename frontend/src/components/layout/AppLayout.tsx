@@ -24,7 +24,7 @@ export function AppLayout() {
         onToggle={toggleSidebar}
         onCollapse={collapseSidebar}
       />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 transition-[width] duration-300 ease-out">
         <Topbar />
         <Outlet />
       </div>

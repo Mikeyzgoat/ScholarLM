@@ -39,6 +39,17 @@ import {
 
 type InspectorTab = "explain" | "ask" | "search" | "notes" | "graph";
 
+function restoreInspectorTab(documentId: string): InspectorTab {
+  const value = sessionStorage.getItem(
+    `scholarlm-document-inspector:${documentId}`,
+  );
+  return ["explain", "ask", "search", "notes", "graph"].includes(
+    value ?? "",
+  )
+    ? (value as InspectorTab)
+    : "explain";
+}
+
 export default function WorkspacePage() {
   const { documentId = "" } = useParams();
   const navigate = useNavigate();
@@ -57,8 +68,9 @@ export default function WorkspacePage() {
   const [selectionAnchors, setSelectionAnchors] =
     useState<CanvasSelectionAnchor[]>();
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
-  const [inspectorTab, setInspectorTab] =
-    useState<InspectorTab>("explain");
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() =>
+    restoreInspectorTab(documentId),
+  );
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
   const [isReindexing, setIsReindexing] = useState(false);
@@ -80,6 +92,12 @@ export default function WorkspacePage() {
   const status = useDocumentStatus(documentId);
   const search = useSemanticSearch(documentId);
   const graph = useKnowledgeGraph(documentId, status.status?.status);
+  useEffect(() => {
+    sessionStorage.setItem(
+      `scholarlm-document-inspector:${documentId}`,
+      inspectorTab,
+    );
+  }, [documentId, inspectorTab]);
   useEffect(() => {
     if (!documentId || status.status?.status !== "ready") return;
     void activateDocumentIndex(documentId).catch((error) => {
@@ -248,7 +266,7 @@ export default function WorkspacePage() {
           ))}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {inspectorTab === "explain" && (
+          <div className={inspectorTab === "explain" ? "block" : "hidden"}>
             <ExplainPanel
               selectedText={selectedText}
               selectedTexts={selectedTexts}
@@ -274,12 +292,15 @@ export default function WorkspacePage() {
                   addExplanationStickyToCanvas(canvasEditor, input);
               }}
             />
-          )}
-          {inspectorTab === "ask" && (
+          </div>
+          <div className={inspectorTab === "ask" ? "block" : "hidden"}>
             <DocumentQA
               documentId={documentId}
               disabled={status.status?.status !== "ready"}
-              onSourceSelect={setActivePage}
+              onSourceSelect={(pageNumber) => {
+                setActivePage(pageNumber);
+                setInspectorTab("ask");
+              }}
               activePage={activePage}
               onAddSticky={({ question, answer, pageNumber }) => {
                 setActivePage(pageNumber);
@@ -301,9 +322,10 @@ export default function WorkspacePage() {
                 );
               }}
             />
-          )}
-          {inspectorTab === "search" && (
-            <section className="p-1">
+          </div>
+          <section
+            className={`${inspectorTab === "search" ? "block" : "hidden"} p-1`}
+          >
               <div className="mb-4 flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <h2 className="font-semibold">Search your workspace</h2>
@@ -376,19 +398,19 @@ export default function WorkspacePage() {
                   isLoading={search.isSearching}
                 />
               </div>
-            </section>
-          )}
-          {inspectorTab === "notes" && (
-            <section className="p-1">
+          </section>
+          <section
+            className={`${inspectorTab === "notes" ? "block" : "hidden"} p-1`}
+          >
               <h2 className="mb-1 font-semibold">Canvas spaces</h2>
               <p className="mb-4 text-xs leading-5 text-stone-500">
                 Keep separate thought spaces without moving your PDF around.
               </p>
               <DocumentNotes documentId={documentId} />
-            </section>
-          )}
-          {inspectorTab === "graph" && (
-            <section className="min-w-0 p-1">
+          </section>
+          <section
+            className={`${inspectorTab === "graph" ? "block" : "hidden"} min-w-0 p-1`}
+          >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">Knowledge graph</h2>
@@ -412,8 +434,7 @@ export default function WorkspacePage() {
                 onNodeSelect={selectNode}
                 className="h-[min(62vh,36rem)] min-h-80 w-full rounded-xl"
               />
-            </section>
-          )}
+          </section>
         </div>
       </motion.aside>
     </motion.main>

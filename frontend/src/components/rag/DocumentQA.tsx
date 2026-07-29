@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { BookOpenCheck, Check, Plus, Send } from "lucide-react";
 import type { RagAnswer } from "../../lib/types";
@@ -6,6 +6,49 @@ import { askDocument } from "../../services/rag";
 
 interface QuestionTurn extends RagAnswer {
   question: string;
+}
+
+function storageKey(documentId: string): string {
+  return `scholarlm-document-qa:${documentId}`;
+}
+
+function restoreState(documentId: string): {
+  question: string;
+  turns: QuestionTurn[];
+  savedTurns: Set<number>;
+} {
+  try {
+    const value = JSON.parse(
+      sessionStorage.getItem(storageKey(documentId)) ?? "{}",
+    ) as {
+      question?: unknown;
+      turns?: unknown;
+      savedTurns?: unknown;
+    };
+    return {
+      question: typeof value.question === "string" ? value.question : "",
+      turns: Array.isArray(value.turns)
+        ? value.turns.filter(
+            (turn): turn is QuestionTurn =>
+              Boolean(turn) &&
+              typeof turn === "object" &&
+              typeof (turn as QuestionTurn).question === "string" &&
+              typeof (turn as QuestionTurn).answer === "string" &&
+              Array.isArray((turn as QuestionTurn).sources),
+          )
+        : [],
+      savedTurns: new Set(
+        Array.isArray(value.savedTurns)
+          ? value.savedTurns.filter(
+              (index): index is number =>
+                Number.isInteger(index) && index >= 0,
+            )
+          : [],
+      ),
+    };
+  } catch {
+    return { question: "", turns: [], savedTurns: new Set() };
+  }
 }
 
 export function DocumentQA({
@@ -25,10 +68,23 @@ export function DocumentQA({
     pageNumber: number;
   }) => void;
 }) {
-  const [question, setQuestion] = useState("");
-  const [turns, setTurns] = useState<QuestionTurn[]>([]);
+  const [restored] = useState(() => restoreState(documentId));
+  const [question, setQuestion] = useState(restored.question);
+  const [turns, setTurns] = useState<QuestionTurn[]>(restored.turns);
   const [draftAnswer, setDraftAnswer] = useState("");
-  const [savedTurns, setSavedTurns] = useState<Set<number>>(() => new Set());
+  const [savedTurns, setSavedTurns] = useState<Set<number>>(
+    restored.savedTurns,
+  );
+  useEffect(() => {
+    sessionStorage.setItem(
+      storageKey(documentId),
+      JSON.stringify({
+        question,
+        turns,
+        savedTurns: [...savedTurns],
+      }),
+    );
+  }, [documentId, question, savedTurns, turns]);
   const ask = useMutation({
     mutationFn: (value: string) =>
       askDocument({
