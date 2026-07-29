@@ -8,7 +8,28 @@ import {
   normalizeSpeechText,
   storeCachedSpeech,
 } from "../services/speechCache";
+import { backfillMissingExplanationAudio } from "../services/speechBackfill";
 const speech = new Hono();
+speech.post("/backfill", async (c) => {
+  const body = await c.req.json<unknown>().catch(() => null);
+  const requested =
+    body && typeof body === "object"
+      ? (body as { limit?: unknown }).limit
+      : undefined;
+  if (
+    requested !== undefined &&
+    (!Number.isInteger(requested) || Number(requested) < 1)
+  )
+    return c.json(
+      { error: { message: "Limit must be a positive integer", code: "INVALID_INPUT" } },
+      400,
+    );
+  return c.json({
+    backfill: await backfillMissingExplanationAudio(
+      requested === undefined ? 10 : Number(requested),
+    ),
+  });
+});
 speech.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
   const text =

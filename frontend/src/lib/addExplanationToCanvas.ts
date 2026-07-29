@@ -43,7 +43,9 @@ export function addExplanationStickyToCanvas(
       scholarLmOutputId: output.id,
       scholarLmSourceText: input.selectedText,
       scholarLmExplanation: input.explanation,
-      scholarLmExplanationId: input.explanationId,
+      ...(input.explanationId
+        ? { scholarLmExplanationId: input.explanationId }
+        : {}),
     },
     props: {
       w: width,
