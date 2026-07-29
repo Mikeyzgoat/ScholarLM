@@ -90,7 +90,7 @@ function PdfPageContent({
     <>
       <canvas ref={canvas} className="block bg-white" />
       {selectable && !error && (
-        <div className="absolute inset-0">
+        <div className="pdf-text-selection-layer absolute inset-0">
           <Document file={fileUrl} loading={null}>
             <Page
               pageNumber={pageNumber}

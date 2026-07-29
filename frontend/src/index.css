@@ -433,6 +433,22 @@ input::placeholder {
   background: white;
 }
 
+/* The PDF is already painted by PdfPageContent. In selection mode React-PDF
+   contributes only its text layer; its second canvas must not cover the page. */
+.pdf-text-selection-layer .react-pdf__Page,
+.pdf-text-selection-layer .react-pdf__Document {
+  background: transparent !important;
+}
+
+.pdf-text-selection-layer .react-pdf__Page__canvas {
+  visibility: hidden !important;
+}
+
+.pdf-text-selection-layer .react-pdf__Page__textContent,
+.pdf-text-selection-layer .textLayer {
+  z-index: 2;
+}
+
 #root .tl-container {
   --tl-font-draw: "Google Sans Flex", "Google Sans", sans-serif !important;
   --tl-font-sans: "Google Sans Flex", "Google Sans", sans-serif !important;
