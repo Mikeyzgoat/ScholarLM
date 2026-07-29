@@ -78,6 +78,7 @@ export function drawMathPlot(
         (shape.meta as Record<string, unknown>).scholarLmGraphSourceKey ===
         graphSourceKey,
     );
+  const createdShapeIds: TLShapeId[] = [];
   const bounds = editor.getSelectionPageBounds();
   const originX = (bounds?.maxX ?? editor.getViewportPageBounds().center.x) + 80;
   const originY = bounds?.minY ?? editor.getViewportPageBounds().center.y - 140;
@@ -121,6 +122,7 @@ export function drawMathPlot(
         dash: "solid",
       },
     });
+    createdShapeIds.push(id);
   };
   const xAxisY =
     originY + height - ((Math.min(Math.max(0, minY), maxY) - minY) / yRange) * height;
@@ -142,7 +144,9 @@ export function drawMathPlot(
         }
       },
     );
+    const titleId = createShapeId();
     editor.createShape({
+      id: titleId,
       type: "text",
       x: originX,
       y: originY - 48,
@@ -155,19 +159,33 @@ export function drawMathPlot(
         size: "m",
       },
     });
+    createdShapeIds.push(titleId);
+    const xLabelId = createShapeId();
     editor.createShape({
+      id: xLabelId,
       type: "text",
       x: originX + width + 10,
       y: xAxisY - 12,
       meta: graphMeta,
       props: { richText: toRichText(plot.xLabel), size: "s" },
     });
+    createdShapeIds.push(xLabelId);
+    const yLabelId = createShapeId();
     editor.createShape({
+      id: yLabelId,
       type: "text",
       x: yAxisX + 8,
       y: originY - 24,
       meta: graphMeta,
       props: { richText: toRichText(plot.yLabel), size: "s" },
+    });
+    createdShapeIds.push(yLabelId);
+    const groupId = createShapeId();
+    editor.groupShapes(createdShapeIds, { groupId, select: true });
+    editor.updateShape({
+      id: groupId,
+      type: "group",
+      meta: graphMeta,
     });
   });
 }
