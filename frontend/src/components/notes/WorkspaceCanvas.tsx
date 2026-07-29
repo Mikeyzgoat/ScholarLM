@@ -63,6 +63,7 @@ export function WorkspaceCanvas({
       .then((created) => {
         setNote(created);
         void client.invalidateQueries({ queryKey: ["notes", documentId] });
+        void client.invalidateQueries({ queryKey: ["graph"] });
       })
       .catch((error: unknown) =>
         setCreateError(

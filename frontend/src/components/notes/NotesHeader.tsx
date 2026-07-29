@@ -1,4 +1,4 @@
-import { ArrowLeft, FileUp } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, FileUp } from "lucide-react";
 import { Link } from "react-router";
 import type { SaveState } from "../../lib/types";
 import { SaveStatus } from "./SaveStatus";
@@ -9,12 +9,19 @@ export function NotesHeader({
   onTitleChange,
   onBack,
   lastSavedAt = null,
+  pageNavigation,
 }: {
   title: string;
   saveState: SaveState;
   onTitleChange: (t: string) => void;
   onBack: () => void;
   lastSavedAt?: string | null;
+  pageNavigation?: {
+    current: number;
+    total: number;
+    onPrevious: () => void;
+    onNext: () => void;
+  };
 }) {
   return (
     <header className="relative z-10 flex h-14 items-center gap-3 border-b bg-white px-4">
@@ -28,6 +35,31 @@ export function NotesHeader({
         onChange={(e) => onTitleChange(e.target.value)}
         className="min-w-0 flex-1 rounded px-2 py-1 font-semibold focus:outline-2"
       />
+      {pageNavigation && pageNavigation.total > 0 && (
+        <div className="flex items-center gap-1 rounded-lg border px-1.5 py-1">
+          <button
+            type="button"
+            aria-label="Previous PDF page"
+            disabled={pageNavigation.current <= 1}
+            onClick={pageNavigation.onPrevious}
+            className="rounded p-1 hover:bg-white/5 disabled:opacity-30"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="min-w-20 text-center text-xs text-stone-400">
+            Page {pageNavigation.current} / {pageNavigation.total}
+          </span>
+          <button
+            type="button"
+            aria-label="Next PDF page"
+            disabled={pageNavigation.current >= pageNavigation.total}
+            onClick={pageNavigation.onNext}
+            className="rounded p-1 hover:bg-white/5 disabled:opacity-30"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
       <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
       <ThemeSelector compact />
       <Link

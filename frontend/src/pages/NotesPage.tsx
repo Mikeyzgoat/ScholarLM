@@ -29,6 +29,7 @@ export default function NotesPage() {
     [selectionAnchors, setSelectionAnchors] =
       useState<CanvasSelectionAnchor[]>(),
     [title, setTitle] = useState(""),
+    [canvasPage, setCanvasPage] = useState({ current: 1, total: 1 }),
     [titleSaveState, setTitleSaveState] = useState<SaveState | null>(null);
   const recovered = useMemo(
     () => (q.data ? getLocalNoteDraft(q.data.id) : null),
@@ -54,6 +55,35 @@ export default function NotesPage() {
     editor,
     onServerNoteUpdated: setNote,
   });
+  useEffect(() => {
+    if (!editor) return;
+    const syncPage = () => {
+      const pages = editor.getPages();
+      const current = Math.max(
+        0,
+        pages.findIndex((page) => page.id === editor.getCurrentPageId()),
+      );
+      setCanvasPage({ current: current + 1, total: Math.max(1, pages.length) });
+    };
+    syncPage();
+    return editor.store.listen(syncPage, { scope: "session" });
+  }, [editor]);
+
+  const moveCanvasPage = (offset: number) => {
+    if (!editor) return;
+    const pages = editor.getPages();
+    const current = pages.findIndex(
+      (page) => page.id === editor.getCurrentPageId(),
+    );
+    const target = pages[current + offset];
+    if (target) {
+      editor.setCurrentPage(target.id);
+      editor.zoomToBounds(
+        { x: 0, y: 0, w: 816, h: 1056 },
+        { inset: 48, animation: { duration: 180 } },
+      );
+    }
+  };
   useEffect(() => {
     if (!note || !title.trim() || title === note.title) return;
     setTitleSaveState("unsaved");
@@ -85,6 +115,11 @@ export default function NotesPage() {
         lastSavedAt={autosave.lastSavedAt}
         onTitleChange={setTitle}
         onBack={() => nav(`/workspace/${note.documentId}`)}
+        pageNavigation={{
+          ...canvasPage,
+          onPrevious: () => moveCanvasPage(-1),
+          onNext: () => moveCanvasPage(1),
+        }}
       />
       <AnimatePresence>
         {recovered &&

@@ -28,7 +28,11 @@ export function DocumentNotes({ documentId }: { documentId: string }) {
         metadata: {},
         snapshot: {},
       }),
-    onSuccess: (n) => nav(`/notes/${n.id}`),
+    onSuccess: async (n) => {
+      await client.invalidateQueries({ queryKey: ["graph"] });
+      await client.invalidateQueries({ queryKey: ["notes", documentId] });
+      nav(`/notes/${n.id}`);
+    },
   });
   const remove = useMutation({
     mutationFn: deleteNote,
