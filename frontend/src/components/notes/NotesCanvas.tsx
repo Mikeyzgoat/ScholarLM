@@ -172,7 +172,7 @@ export function NotesCanvas({
             .join("\n\n");
           const selectedBounds = editor.getSelectionPageBounds();
           const relevantAnchors =
-            anchors.length || !selectedBounds
+            anchors.length || !selectedBounds || !inputShapes.length
               ? anchors
               : [
                   {
