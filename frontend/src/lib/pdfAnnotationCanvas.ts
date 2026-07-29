@@ -15,19 +15,25 @@ const PDF_HEIGHT = 1056;
 const PDF_DEFAULT_ZOOM = 0.9;
 
 export function focusPdfPage(editor: Editor): void {
-  const viewport = editor.getViewportScreenBounds();
-  editor.setCamera(
-    {
-      x: (viewport.width - PDF_WIDTH * PDF_DEFAULT_ZOOM) /
-        2 /
-        PDF_DEFAULT_ZOOM,
-      y: (viewport.height - PDF_HEIGHT * PDF_DEFAULT_ZOOM) /
-        2 /
-        PDF_DEFAULT_ZOOM,
-      z: PDF_DEFAULT_ZOOM,
-    },
-    { animation: { duration: 180 } },
-  );
+  const apply = () => {
+    const viewport = editor.getViewportScreenBounds();
+    editor.setCamera(
+      {
+        x:
+          (viewport.width - PDF_WIDTH * PDF_DEFAULT_ZOOM) /
+          2 /
+          PDF_DEFAULT_ZOOM,
+        y:
+          (viewport.height - PDF_HEIGHT * PDF_DEFAULT_ZOOM) /
+          2 /
+          PDF_DEFAULT_ZOOM,
+        z: PDF_DEFAULT_ZOOM,
+      },
+      { animation: { duration: 180 }, force: true },
+    );
+  };
+  apply();
+  requestAnimationFrame(apply);
 }
 
 export function showPdfPageOnCanvas(input: {

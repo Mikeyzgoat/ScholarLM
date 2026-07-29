@@ -67,7 +67,12 @@ export default function NotesPage() {
       setCanvasPage({ current: current + 1, total: Math.max(1, pages.length) });
     };
     syncPage();
-    return editor.store.listen(syncPage, { scope: "session" });
+    const frame = requestAnimationFrame(() => focusPdfPage(editor));
+    const unsubscribe = editor.store.listen(syncPage, { scope: "session" });
+    return () => {
+      cancelAnimationFrame(frame);
+      unsubscribe();
+    };
   }, [editor]);
 
   const moveCanvasPage = (offset: number) => {
