@@ -29,7 +29,7 @@ export function HighlightedSpeechText({
           key={`${index}:${part}`}
           className={
             wordIndex === activeWordIndex
-              ? "rounded bg-orange-400/30 px-0.5 text-orange-100 shadow-[0_0_0_1px_rgba(251,146,60,0.18)] transition-colors"
+              ? "scroll-mt-20 rounded bg-orange-400/30 px-0.5 text-orange-100 shadow-[0_0_0_1px_rgba(251,146,60,0.18)] transition-colors"
               : undefined
           }
         >

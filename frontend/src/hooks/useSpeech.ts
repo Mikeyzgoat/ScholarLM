@@ -3,6 +3,7 @@ import { combineWavChunks, getWavDuration } from "../lib/audio";
 import { streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
+const playbackRateKey = "scholarlm-speech-rate";
 const silentWav =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
@@ -107,6 +108,10 @@ export function useSpeech() {
   const [autoRead, setAutoReadState] = useState(
     () => localStorage.getItem(key) !== "false",
   );
+  const [playbackRate, setPlaybackRateState] = useState(() => {
+    const saved = Number(localStorage.getItem(playbackRateKey));
+    return [0.75, 1, 1.25, 1.5, 2].includes(saved) ? saved : 1;
+  });
 
   const stopProgress = useCallback(() => {
     cancelAnimationFrame(progressFrame.current);
@@ -141,6 +146,7 @@ export function useSpeech() {
       player.src = audioUrl.current;
       player.load();
     }
+    player.playbackRate = playbackRate;
     player.onplay = () => {
       setPlaying(true);
       setPaused(false);
@@ -167,14 +173,14 @@ export function useSpeech() {
           cause instanceof Error ? cause : new Error("Audio playback failed"),
         );
     });
-  }, [stopProgress, trackProgress]);
+  }, [playbackRate, stopProgress, trackProgress]);
 
   const playFallback = useCallback((text: string) => {
     if (!globalThis.speechSynthesis || !globalThis.SpeechSynthesisUtterance)
       throw new Error("No local browser speech engine is available");
     globalThis.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.96;
+    utterance.rate = playbackRate;
     utterance.onstart = () => {
       setPlaying(true);
       setPaused(false);
@@ -210,7 +216,7 @@ export function useSpeech() {
         );
     };
     globalThis.speechSynthesis.speak(utterance);
-  }, []);
+  }, [playbackRate]);
 
   const stop = useCallback(() => {
     controller.current?.abort();
@@ -260,10 +266,11 @@ export function useSpeech() {
     [clearAudio, stop],
   );
 
-  const speak = async (
+  const loadSpeech = async (
     text: string,
     sourceText?: string,
     explanationId?: string,
+    playWhenReady = autoRead,
   ) => {
     stop();
     clearAudio();
@@ -301,14 +308,14 @@ export function useSpeech() {
       wordCueEnds.current = buildWordCueEnds(timedChunks);
       audioUrl.current = URL.createObjectURL(wav);
       setReady(true);
-      if (autoRead) playAudio();
+      if (playWhenReady) playAudio();
     } catch {
       if (next.signal.aborted) return;
       try {
         fallbackActive.current = true;
         setUsingFallback(true);
         setReady(true);
-        if (autoRead) playFallback(text);
+        if (playWhenReady) playFallback(text);
       } catch {
         fallbackActive.current = false;
         setUsingFallback(false);
@@ -328,7 +335,21 @@ export function useSpeech() {
   };
 
   return {
-    speak,
+    speak: (
+      text: string,
+      sourceText?: string,
+      explanationId?: string,
+    ) => loadSpeech(text, sourceText, explanationId, autoRead),
+    prepare: (
+      text: string,
+      sourceText?: string,
+      explanationId?: string,
+    ) => loadSpeech(text, sourceText, explanationId, false),
+    play: (
+      text: string,
+      sourceText?: string,
+      explanationId?: string,
+    ) => loadSpeech(text, sourceText, explanationId, true),
     pause: () => {
       if (fallbackActive.current) globalThis.speechSynthesis?.pause();
       else audio.current?.pause();
@@ -359,6 +380,13 @@ export function useSpeech() {
     usingFallback,
     activeWordIndex,
     autoRead,
+    playbackRate,
+    setPlaybackRate: (value: number) => {
+      const next = [0.75, 1, 1.25, 1.5, 2].includes(value) ? value : 1;
+      setPlaybackRateState(next);
+      localStorage.setItem(playbackRateKey, String(next));
+      if (audio.current) audio.current.playbackRate = next;
+    },
     setAutoRead: (value: boolean) => {
       setAutoReadState(value);
       localStorage.setItem(key, String(value));

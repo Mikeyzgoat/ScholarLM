@@ -254,6 +254,11 @@ export function ExplainPanel({
         : undefined);
     if (existing) {
       state.load(existing);
+      void speech.prepare(
+        existing,
+        activeText,
+        existingExplanationId,
+      );
       setCanvasInput({
         selectedText: activeText,
         explanation: existing,
@@ -302,6 +307,11 @@ export function ExplainPanel({
         .then((cached) => {
           if (!cached || controller.signal.aborted) return;
           state.load(cached.explanation);
+          void speech.prepare(
+            cached.explanation,
+            activeText,
+            cached.historyId,
+          );
           setRecognizedEquation(cached.recognizedEquation ?? "");
           setCanvasInput({
             selectedText: activeText,
@@ -457,6 +467,32 @@ export function ExplainPanel({
           </motion.div>
         )}
       </AnimatePresence>
+      {state.explanation && (
+        <AudioControls
+          isLoading={speech.isLoading}
+          isPlaying={speech.isPlaying}
+          isPaused={speech.isPaused}
+          isReady={speech.isReady}
+          canLoad={Boolean(state.explanation)}
+          usingFallback={speech.usingFallback}
+          autoRead={speech.autoRead}
+          playbackRate={speech.playbackRate}
+          onPause={speech.pause}
+          onResume={() => {
+            if (speech.isReady) speech.resume();
+            else
+              void speech.play(
+                state.explanation,
+                activeText,
+                canvasInput?.explanationId ?? existingExplanationId,
+              );
+          }}
+          onReplay={speech.replay}
+          onStop={speech.stop}
+          onAutoReadChange={speech.setAutoRead}
+          onPlaybackRateChange={speech.setPlaybackRate}
+        />
+      )}
       <ExplanationContent
         selectedText={activeText}
         explanation={state.explanation}
@@ -577,28 +613,6 @@ export function ExplainPanel({
             </button>
           )}
           {graphError && <p className="text-xs text-red-400">{graphError}</p>}
-          <AudioControls
-            isLoading={speech.isLoading}
-            isPlaying={speech.isPlaying}
-            isPaused={speech.isPaused}
-            isReady={speech.isReady}
-            canLoad={Boolean(state.explanation)}
-            usingFallback={speech.usingFallback}
-            autoRead={speech.autoRead}
-            onPause={speech.pause}
-            onResume={() => {
-              if (speech.isReady) speech.resume();
-              else
-                void speech.speak(
-                  state.explanation,
-                  activeText,
-                  canvasInput?.explanationId ?? existingExplanationId,
-                );
-            }}
-            onReplay={speech.replay}
-            onStop={speech.stop}
-            onAutoReadChange={speech.setAutoRead}
-          />
         </>
       )}
     </motion.section>

@@ -312,6 +312,36 @@ input::placeholder {
   background: rgba(249, 115, 22, 0.18);
 }
 
+.scholar-audio-controls {
+  border-color: var(--scholar-line);
+  color: var(--scholar-text);
+  background: var(--scholar-panel-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+.scholar-audio-button,
+.scholar-speed-select {
+  border-color: var(--scholar-line);
+  color: var(--scholar-text);
+  background: var(--scholar-panel);
+}
+
+.scholar-audio-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--scholar-orange) 48%, transparent);
+  color: var(--scholar-orange);
+  background: color-mix(in srgb, var(--scholar-orange) 12%, transparent);
+}
+
+.scholar-speed-select {
+  color-scheme: inherit;
+}
+
+.scholar-audio-controls input[type="checkbox"] {
+  accent-color: var(--scholar-orange);
+}
+
 .scholar-purple-action {
   color: #d8b4fe;
   border-color: rgba(192, 132, 252, 0.3);
