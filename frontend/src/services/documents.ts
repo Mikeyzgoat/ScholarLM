@@ -27,6 +27,25 @@ export async function getDocument(
     await apiFetch<{ document: DocumentDetails }>(`/documents/${documentId}`)
   ).document;
 }
+export interface DocumentGroupDetails {
+  id: string;
+  name: string;
+  color: string;
+  pageCount: number;
+  documents: DocumentSummary[];
+}
+export async function getDocumentGroup(
+  groupId: string,
+): Promise<DocumentGroupDetails> {
+  return (
+    await apiFetch<{ group: DocumentGroupDetails }>(
+      `/documents/groups/${encodeURIComponent(groupId)}`,
+    )
+  ).group;
+}
+export function getDocumentGroupFileUrl(groupId: string): string {
+  return `${API_BASE_URL}/documents/groups/${encodeURIComponent(groupId)}/file`;
+}
 export async function getDocumentStatus(
   documentId: string,
 ): Promise<DocumentStatusResponse> {

@@ -5,6 +5,7 @@ import { deleteFileIfExists, saveUploadedPdf } from "../utils/files";
 import type { DocumentRecord } from "../types";
 import { ingestDocument } from "../services/ingestion";
 import { createHash } from "node:crypto";
+import { PDFDocument } from "pdf-lib";
 import { getKnowledgeGraph } from "../services/knowledgeGraph";
 import { removeManualGraphNodes } from "../services/manualGraph";
 const documents = new Hono();
@@ -111,6 +112,73 @@ documents.get("/", (c) => {
     .query("SELECT * FROM documents ORDER BY created_at DESC")
     .all() as DocumentRecord[];
   return c.json({ documents: rows.map(summary) });
+});
+function getGroupedDocuments(groupId: string) {
+  return db
+    .query(
+      `SELECT d.*
+       FROM manual_graph_group_members m
+       JOIN manual_graph_groups g ON g.id=m.group_id
+       JOIN documents d ON d.id=substr(m.node_id,8)
+       WHERE m.group_id=? AND g.scope_key='global'
+         AND m.node_id LIKE 'source:%'
+       ORDER BY m.rowid`,
+    )
+    .all(groupId) as DocumentRecord[];
+}
+documents.get("/groups/:groupId", (c) => {
+  const groupId = c.req.param("groupId");
+  const group = db
+    .query(
+      "SELECT id,name,color FROM manual_graph_groups WHERE id=? AND scope_key='global'",
+    )
+    .get(groupId) as { id: string; name: string; color: string } | null;
+  const groupedDocuments = getGroupedDocuments(groupId);
+  if (!group || groupedDocuments.length < 2)
+    return c.json(
+      { error: { message: "Document group not found", code: "NOT_FOUND" } },
+      404,
+    );
+  return c.json({
+    group: {
+      ...group,
+      pageCount: groupedDocuments.reduce(
+        (total, document) => total + (document.page_count ?? 0),
+        0,
+      ),
+      documents: groupedDocuments.map(summary),
+    },
+  });
+});
+documents.get("/groups/:groupId/file", async (c) => {
+  const groupId = c.req.param("groupId");
+  const group = db
+    .query(
+      "SELECT name FROM manual_graph_groups WHERE id=? AND scope_key='global'",
+    )
+    .get(groupId) as { name: string } | null;
+  const groupedDocuments = getGroupedDocuments(groupId);
+  if (!group || groupedDocuments.length < 2)
+    return c.json(
+      { error: { message: "Document group not found", code: "NOT_FOUND" } },
+      404,
+    );
+  const combined = await PDFDocument.create();
+  for (const document of groupedDocuments) {
+    const source = await PDFDocument.load(
+      await Bun.file(document.file_path).arrayBuffer(),
+    );
+    const pages = await combined.copyPages(source, source.getPageIndices());
+    pages.forEach((page) => combined.addPage(page));
+  }
+  const bytes = await combined.save();
+  return new Response(Uint8Array.from(bytes).buffer, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${group.name.replaceAll('"', "")}.pdf"`,
+      "Cache-Control": "private, max-age=60",
+    },
+  });
 });
 documents.post("/:id/retry", (c) => {
   const id = c.req.param("id");

@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, BookOpenCheck, Send } from "lucide-react";
+import { AlertTriangle, FolderOpen } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { UploadBox } from "../components/documents/UploadBox";
@@ -12,81 +12,7 @@ import { DocumentCard } from "../components/documents/DocumentCard";
 import { deleteDocument, listDocuments } from "../services/documents";
 import type { DocumentSummary } from "../lib/types";
 import { getDocumentLibraryGroups } from "../services/graph";
-import { askDocumentGroup } from "../services/rag";
 
-function DocumentGroupAsk({
-  groupId,
-  groupName,
-  onCitation,
-}: {
-  groupId: string;
-  groupName: string;
-  onCitation: (documentId: string, pageNumber: number) => void;
-}) {
-  const [question, setQuestion] = useState("");
-  const ask = useMutation({
-    mutationFn: (value: string) =>
-      askDocumentGroup({ groupId, question: value }),
-    onSuccess: () => setQuestion(""),
-  });
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-      <div className="flex items-center gap-2 text-xs font-medium">
-        <BookOpenCheck size={14} className="text-orange-400" />
-        Ask “{groupName}”
-      </div>
-      {ask.data && (
-        <div className="mt-3 rounded-lg bg-black/10 p-3">
-          <p className="text-xs leading-5 text-stone-400">{ask.data.answer}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {ask.data.sources.map((source) => (
-              <button
-                key={source.sourceId}
-                type="button"
-                disabled={!source.documentId}
-                title={source.content}
-                onClick={() => {
-                  if (source.documentId)
-                    onCitation(source.documentId, source.pageNumber);
-                }}
-                className="rounded-md border border-orange-400/20 bg-orange-500/10 px-2 py-1 font-mono text-[10px] text-orange-300"
-              >
-                {source.documentName ?? "PDF"} · p.{source.pageNumber}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const value = question.trim();
-          if (value.length >= 3 && !ask.isPending) ask.mutate(value);
-        }}
-      >
-        <input
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask across these PDFs…"
-          maxLength={2000}
-          className="min-w-0 flex-1 rounded-lg border border-white/10 px-3 py-2 text-xs"
-        />
-        <button
-          type="submit"
-          disabled={question.trim().length < 3 || ask.isPending}
-          className="grid w-10 place-items-center rounded-lg bg-orange-500/15 text-orange-300 disabled:opacity-40"
-          aria-label="Ask grouped PDFs"
-        >
-          <Send size={14} />
-        </button>
-      </form>
-      {ask.isError && (
-        <p className="mt-2 text-xs text-red-400">{ask.error.message}</p>
-      )}
-    </div>
-  );
-}
 export default function HomePage() {
   const nav = useNavigate();
   const client = useQueryClient();
@@ -233,26 +159,33 @@ export default function HomePage() {
                     )}{" "}
                     pages
                   </p>
-                  <DocumentGroupAsk
-                    groupId={section.id}
-                    groupName={section.name}
-                    onCitation={(documentId, pageNumber) =>
-                      nav(`/workspace/${documentId}?page=${pageNumber}`)
-                    }
-                  />
+                  <button
+                    type="button"
+                    onClick={() => nav(`/groups/${section.id}`)}
+                    className="flex w-full items-center justify-between rounded-xl border border-orange-400/20 bg-orange-500/10 px-4 py-3 text-left text-sm font-medium text-orange-200 transition hover:border-orange-400/40 hover:bg-orange-500/15"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FolderOpen size={16} />
+                      Open group
+                    </span>
+                    <span className="text-xs text-orange-300/70">
+                      {section.documents.length} combined PDFs
+                    </span>
+                  </button>
                 </>
               )}
-              {section.documents.map((document) => (
-                <DocumentCard
-                  key={document.id}
-                  document={document}
-                  onOpen={openDocument}
-                  onDelete={(target) => {
-                    remove.reset();
-                    setDeleteTarget(target);
-                  }}
-                />
-              ))}
+              {!section.color &&
+                section.documents.map((document) => (
+                  <DocumentCard
+                    key={document.id}
+                    document={document}
+                    onOpen={openDocument}
+                    onDelete={(target) => {
+                      remove.reset();
+                      setDeleteTarget(target);
+                    }}
+                  />
+                ))}
             </Fragment>
           ))}
         </motion.div>

@@ -27,6 +27,8 @@ export function WorkspaceCanvas({
   pageCount,
   onPageChange,
   onPdfTextSelected,
+  groupId,
+  groupName,
 }: {
   documentId: string;
   onTextSelected?: (text: string) => void;
@@ -37,6 +39,8 @@ export function WorkspaceCanvas({
   pageCount: number;
   onPageChange: (page: number) => void;
   onPdfTextSelected?: (text: string) => void;
+  groupId?: string;
+  groupName?: string;
 }) {
   const client = useQueryClient();
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -47,17 +51,26 @@ export function WorkspaceCanvas({
     queryKey: ["notes", documentId],
     queryFn: () => listDocumentNotes(documentId),
   });
+  const scopedNote = notes.data?.find((candidate) => {
+    const metadata =
+      candidate.metadata && typeof candidate.metadata === "object"
+        ? (candidate.metadata as Record<string, unknown>)
+        : {};
+    return groupId
+      ? metadata.groupId === groupId
+      : typeof metadata.groupId !== "string";
+  });
 
   useEffect(() => {
-    if (notes.data?.[0] && !note) {
-      setNote(notes.data[0]);
+    if (scopedNote && !note) {
+      setNote(scopedNote);
       return;
     }
     if (notes.isLoading || notes.isError || note || createError) return;
     void createNote({
       documentId,
-      title: createRandomCanvasName(),
-      metadata: { page: 1 },
+      title: groupId && groupName ? `${groupName} canvas` : createRandomCanvasName(),
+      metadata: { page: 1, ...(groupId ? { groupId } : {}) },
       snapshot: {},
     })
       .then((created) => {
@@ -72,12 +85,14 @@ export function WorkspaceCanvas({
       );
   }, [
     documentId,
-    notes.data,
+    scopedNote,
     notes.isLoading,
     notes.isError,
     note,
     createError,
     client,
+    groupId,
+    groupName,
   ]);
 
   const autosave = useNoteAutosave({

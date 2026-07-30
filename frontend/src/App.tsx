@@ -6,6 +6,7 @@ import NotesPage from "./pages/NotesPage";
 import StandaloneCanvasPage from "./pages/StandaloneCanvasPage";
 import KnowledgeGraphPage from "./pages/KnowledgeGraphPage";
 import NotesLibraryPage from "./pages/NotesLibraryPage";
+import GroupWorkspacePage from "./pages/GroupWorkspacePage";
 import { AppLayout } from "./components/layout/AppLayout";
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/" element={<DefaultPage />} />
         <Route path="/upload" element={<HomePage />} />
         <Route path="/workspace/:documentId" element={<WorkspacePage />} />
+        <Route path="/groups/:groupId" element={<GroupWorkspacePage />} />
         <Route path="/graph" element={<KnowledgeGraphPage />} />
         <Route path="/graph/:documentId" element={<KnowledgeGraphPage />} />
         <Route path="/notes" element={<NotesLibraryPage />} />
