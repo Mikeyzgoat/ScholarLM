@@ -140,6 +140,11 @@ function nodeColor(node: GraphNode, light: boolean): string {
   return light ? "#64748b" : "#a8a29e";
 }
 
+function graphLabel(node: GraphNode): string {
+  const label = node.label.trim();
+  return label.length > 46 ? `${label.slice(0, 43)}…` : label;
+}
+
 export function KnowledgeGraph({
   graph,
   isLoading,
@@ -170,8 +175,8 @@ export function KnowledgeGraph({
         iterations: Math.min(2, remaining),
         settings: {
           ...forceAtlas2.inferSettings(activeGraph),
-          gravity: 1.3,
-          scalingRatio: 1.55,
+          gravity: 1.05,
+          scalingRatio: 2.15,
           slowDown: 7,
           edgeWeightInfluence: 1.2,
         },
@@ -190,17 +195,14 @@ export function KnowledgeGraph({
     const positions = groupedPositions(graph);
     graph.nodes.forEach((n, i) =>
       g.addNode(n.id, {
-        label: n.label,
+        label: graphLabel(n),
         x: positions.get(n.id)?.x ?? Math.cos(i) * 4,
         y: positions.get(n.id)?.y ?? Math.sin(i) * 4,
         size: nodeSize(n),
         color: nodeColor(n, light),
         forceLabel:
           n.kind === "hub" ||
-          n.kind === "source" ||
-          n.kind === "note" ||
-          n.kind === "sticky" ||
-          n.kind === "handwriting",
+          n.kind === "source",
         fixed: n.kind === "hub",
       }),
     );
@@ -227,7 +229,10 @@ export function KnowledgeGraph({
       renderEdgeLabels: false,
       labelColor: { color: light ? "#26333c" : "#d6d3d1" },
       labelFont: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      labelSize: 12,
+      labelSize: 11,
+      labelDensity: 0.65,
+      labelGridCellSize: 120,
+      labelRenderedSizeThreshold: 6.5,
       defaultEdgeColor: light ? "#a7d8dc" : "#78350f",
       stagePadding: 60,
       allowInvalidContainer: true,
@@ -275,7 +280,24 @@ export function KnowledgeGraph({
       renderer.current = null;
       model.current = null;
     };
-  }, [graph, onNodeSelect, runPhysics, light]);
+  }, [graph, onNodeSelect, runPhysics]);
+  useEffect(() => {
+    const g = model.current;
+    const sigma = renderer.current;
+    if (!g || !sigma || !graph) return;
+    graph.nodes.forEach((node) => {
+      if (g.hasNode(node.id))
+        g.setNodeAttribute(node.id, "color", nodeColor(node, light));
+    });
+    g.forEachEdge((edge) => {
+      g.setEdgeAttribute(edge, "color", light ? "#a7d8dc" : "#78350f");
+    });
+    sigma.setSetting("labelColor", {
+      color: light ? "#26333c" : "#d6d3d1",
+    });
+    sigma.setSetting("defaultEdgeColor", light ? "#a7d8dc" : "#78350f");
+    sigma.refresh();
+  }, [graph, light]);
   useEffect(() => {
     const g = model.current;
     const sigma = renderer.current;
@@ -287,6 +309,13 @@ export function KnowledgeGraph({
         node.id,
         "size",
         node.id === focusedNodeId ? normalSize + 5 : normalSize,
+      );
+      g.setNodeAttribute(
+        node.id,
+        "forceLabel",
+        node.id === focusedNodeId ||
+          node.kind === "hub" ||
+          node.kind === "source",
       );
       g.setNodeAttribute(node.id, "color", nodeColor(node, light));
     });
