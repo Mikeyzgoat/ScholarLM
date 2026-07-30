@@ -13,6 +13,16 @@ export function askDocument(input: {
   return streamDocumentAnswer(body, onToken, signal);
 }
 
+export function askDocumentGroup(input: {
+  groupId: string;
+  question: string;
+}): Promise<RagAnswer> {
+  return apiFetch(`/qa/group/${encodeURIComponent(input.groupId)}`, {
+    method: "POST",
+    body: JSON.stringify({ question: input.question }),
+  });
+}
+
 async function streamDocumentAnswer(
   body: { documentId: string; question: string; pageNumber?: number },
   onToken?: (token: string) => void,

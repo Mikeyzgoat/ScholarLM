@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { stream } from "hono/streaming";
 import { db } from "../db/database";
 import type { DocumentRecord } from "../types";
-import { answerDocumentQuestion } from "../services/rag";
+import {
+  answerDocumentGroupQuestion,
+  answerDocumentQuestion,
+} from "../services/rag";
 import { activateDocumentVectorIndex } from "../services/vectorIndex";
 
 const rag = new Hono();
@@ -38,6 +41,49 @@ rag.post("/activate", async (c) => {
     );
   const chunkCount = activateDocumentVectorIndex(documentId);
   return c.json({ documentId, chunkCount, active: true });
+});
+
+rag.post("/group/:groupId", async (c) => {
+  const body = (await c.req.json<unknown>().catch(() => null)) as {
+    question?: unknown;
+  } | null;
+  if (
+    !body ||
+    typeof body.question !== "string" ||
+    body.question.trim().length < 3 ||
+    body.question.length > 2000
+  )
+    return c.json(
+      {
+        error: {
+          message: "A 3–2000 character question is required",
+          code: "INVALID_INPUT",
+        },
+      },
+      400,
+    );
+  try {
+    return c.json(
+      await answerDocumentGroupQuestion({
+        groupId: c.req.param("groupId"),
+        question: body.question.trim(),
+        signal: c.req.raw.signal,
+      }),
+    );
+  } catch (error) {
+    return c.json(
+      {
+        error: {
+          message:
+            error instanceof Error
+              ? error.message
+              : "PDF group question failed",
+          code: "GROUP_RAG_FAILED",
+        },
+      },
+      503,
+    );
+  }
 });
 
 rag.post("/", async (c) => {

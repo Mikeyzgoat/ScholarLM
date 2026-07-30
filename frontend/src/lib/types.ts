@@ -39,6 +39,8 @@ export interface SearchResult {
 export interface RagSource extends Omit<SearchResult, "pageNumber"> {
   sourceId: string;
   pageNumber: number;
+  documentId?: string;
+  documentName?: string;
 }
 export interface RagAnswer {
   answer: string;

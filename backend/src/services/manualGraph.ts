@@ -135,6 +135,41 @@ export function getLibraryGraphGroups(): GraphResponse["groups"] {
     group.memberNodeIds.push(row.nodeId);
     groups.set(row.id, group);
   });
+  const inheritedRows = db
+    .query(
+      `SELECT g.id,g.name,g.color,i.status indexStatus,
+              i.candidate_count candidateCount,'note:' || n.id nodeId
+       FROM manual_graph_groups g
+       JOIN manual_graph_group_members m
+         ON m.group_id=g.id AND m.node_id LIKE 'source:%'
+       JOIN note_pages n ON m.node_id='source:' || n.document_id
+       LEFT JOIN manual_graph_group_index i ON i.group_id=g.id
+       WHERE g.scope_key='global'
+       ORDER BY g.created_at,n.updated_at DESC`,
+    )
+    .all() as Array<{
+    id: string;
+    name: string;
+    color: string;
+    indexStatus: "indexed" | "empty" | "stale" | null;
+    candidateCount: number | null;
+    nodeId: string;
+  }>;
+  inheritedRows.forEach((row) => {
+    if (assigned.has(row.nodeId)) return;
+    assigned.add(row.nodeId);
+    const group = groups.get(row.id) ?? {
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      memberNodeIds: [],
+      scope: "global" as const,
+      indexStatus: row.indexStatus ?? "stale",
+      indexedCandidateCount: row.candidateCount ?? 0,
+    };
+    group.memberNodeIds.push(row.nodeId);
+    groups.set(row.id, group);
+  });
   return [...groups.values()];
 }
 
@@ -409,9 +444,10 @@ function groupCandidates(groupId: string): Candidate[] {
     rows.forEach((item) => candidates.set(`sticky:${item.id}`, item));
   };
   members.forEach((nodeId) => {
-    if (nodeId.startsWith("source:"))
+    if (nodeId.startsWith("source:")) {
       addChunks("document_id=?", nodeId.slice(7));
-    else if (nodeId.startsWith("note:"))
+      addStickies("document_id=?", nodeId.slice(7));
+    } else if (nodeId.startsWith("note:"))
       addStickies("note_id=?", nodeId.slice(5));
     else if (nodeId.startsWith("sticky:"))
       addStickies("id=?", nodeId);
