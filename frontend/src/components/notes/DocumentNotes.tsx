@@ -9,7 +9,13 @@ import {
   listDocumentNotes,
 } from "../../services/notes";
 import { NotesList } from "./NotesList";
-export function DocumentNotes({ documentId }: { documentId: string }) {
+export function DocumentNotes({
+  documentId,
+  groupId,
+}: {
+  documentId: string;
+  groupId?: string;
+}) {
   const nav = useNavigate(),
     client = useQueryClient();
   const [noteToDelete, setNoteToDelete] = useState<{
@@ -20,12 +26,21 @@ export function DocumentNotes({ documentId }: { documentId: string }) {
     queryKey: ["notes", documentId],
     queryFn: () => listDocumentNotes(documentId),
   });
+  const scopedNotes = (q.data ?? []).filter((note) => {
+    const metadata =
+      note.metadata && typeof note.metadata === "object"
+        ? (note.metadata as Record<string, unknown>)
+        : {};
+    return groupId
+      ? metadata.groupId === groupId
+      : typeof metadata.groupId !== "string";
+  });
   const create = useMutation({
     mutationFn: () =>
       createNote({
         documentId,
         title: "Untitled note",
-        metadata: {},
+        metadata: groupId ? { groupId } : {},
         snapshot: {},
       }),
     onSuccess: async (n) => {
@@ -64,11 +79,11 @@ export function DocumentNotes({ documentId }: { documentId: string }) {
   return (
     <>
       <NotesList
-        notes={q.data ?? []}
+        notes={scopedNotes}
         onOpen={(id) => nav(`/notes/${id}`)}
         onCreate={() => create.mutate()}
         onDelete={(id) => {
-          const note = q.data?.find((item) => item.id === id);
+          const note = scopedNotes.find((item) => item.id === id);
           if (note) setNoteToDelete({ id: note.id, title: note.title });
         }}
       />

@@ -21,6 +21,8 @@ export interface ExplanationCanvasInput {
     documentId: string;
     documentName: string;
     pageNumber: number;
+    groupId?: string;
+    combinedPageNumber?: number;
   }>;
 }
 

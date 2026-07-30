@@ -57,6 +57,12 @@ function StickyContent({ shape }: { shape: ExplanationStickyShape }) {
           documentId: source.documentId,
           documentName: source.documentName,
           pageNumber: source.pageNumber,
+          groupId:
+            typeof source.groupId === "string" ? source.groupId : undefined,
+          combinedPageNumber:
+            typeof source.combinedPageNumber === "number"
+              ? source.combinedPageNumber
+              : undefined,
         }];
       })
     : [];
@@ -140,7 +146,11 @@ function StickyContent({ shape }: { shape: ExplanationStickyShape }) {
                 {sources.map((source) => (
                   <a
                     key={`${source.documentId}:${source.pageNumber}`}
-                    href={`/workspace/${encodeURIComponent(source.documentId)}?page=${source.pageNumber}`}
+                    href={
+                      source.groupId && source.combinedPageNumber
+                        ? `/groups/${encodeURIComponent(source.groupId)}?page=${source.combinedPageNumber}`
+                        : `/workspace/${encodeURIComponent(source.documentId)}?page=${source.pageNumber}`
+                    }
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                     className="rounded-md border border-current/20 px-2 py-1 text-[11px] font-medium underline decoration-current/40 underline-offset-2 hover:bg-amber-500/15"

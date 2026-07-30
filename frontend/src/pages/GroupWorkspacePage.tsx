@@ -4,11 +4,13 @@ import {
   ArrowLeft,
   BookOpenCheck,
   Check,
-  ExternalLink,
+  GitFork,
+  MessageSquareText,
   Plus,
   Send,
+  StickyNote,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import type { Editor } from "tldraw";
 import {
   getDocumentGroup,
@@ -17,17 +19,32 @@ import {
 import { askDocumentGroup } from "../services/rag";
 import type { RagSource } from "../lib/types";
 import { WorkspaceCanvas } from "../components/notes/WorkspaceCanvas";
-import { addExplanationStickyToCanvas } from "../lib/addExplanationToCanvas";
+import {
+  addExplanationStickyToCanvas,
+  addExplanationToCanvas,
+} from "../lib/addExplanationToCanvas";
+import { ExplainPanel } from "../components/explanation/ExplainPanel";
+import { DocumentNotes } from "../components/notes/DocumentNotes";
+import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
+import { getGlobalGraph } from "../services/graph";
+
+type GroupInspectorTab = "explain" | "ask" | "notes" | "graph";
 
 export default function GroupWorkspacePage() {
   const { groupId = "" } = useParams();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [question, setQuestion] = useState("");
   const [askedQuestion, setAskedQuestion] = useState("");
-  const [activePage, setActivePage] = useState(1);
+  const [activePage, setActivePage] = useState(() => {
+    const requested = Number(searchParams.get("page"));
+    return Number.isInteger(requested) && requested > 0 ? requested : 1;
+  });
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
   const [saved, setSaved] = useState(false);
   const [stickySources, setStickySources] = useState<RagSource[] | null>(null);
+  const [inspectorTab, setInspectorTab] =
+    useState<GroupInspectorTab>("explain");
+  const [selectedText, setSelectedText] = useState("");
   const group = useQuery({
     queryKey: ["document-group", groupId],
     queryFn: () => getDocumentGroup(groupId),
@@ -40,6 +57,10 @@ export default function GroupWorkspacePage() {
       setQuestion("");
       setSaved(false);
     },
+  });
+  const graph = useQuery({
+    queryKey: ["graph", "global"],
+    queryFn: getGlobalGraph,
   });
 
   if (group.isLoading)
@@ -56,7 +77,10 @@ export default function GroupWorkspacePage() {
       </main>
     );
 
-  const combinedPageFor = (source: RagSource) => {
+  const combinedPageFor = (source: {
+    documentId?: string;
+    pageNumber: number;
+  }) => {
     let offset = 0;
     for (const document of group.data.documents) {
       if (document.id === source.documentId)
@@ -65,6 +89,42 @@ export default function GroupWorkspacePage() {
     }
     return source.pageNumber;
   };
+  const activeSource = (() => {
+    let offset = 0;
+    for (const document of group.data.documents) {
+      const end = offset + (document.pageCount ?? 0);
+      if (activePage <= end)
+        return {
+          document,
+          pageNumber: Math.max(1, activePage - offset),
+        };
+      offset = end;
+    }
+    return { document: group.data.documents[0], pageNumber: 1 };
+  })();
+  const groupGraph = (() => {
+    if (!graph.data) return undefined;
+    const documentIds = new Set(
+      group.data.documents.map((document) => document.id),
+    );
+    const nodeIds = new Set(
+      graph.data.nodes
+        .filter(
+          (node) =>
+            (node.documentId && documentIds.has(node.documentId)) ||
+            (node.kind === "source" &&
+              documentIds.has(node.id.replace(/^source:/, ""))),
+        )
+        .map((node) => node.id),
+    );
+    return {
+      nodes: graph.data.nodes.filter((node) => nodeIds.has(node.id)),
+      edges: graph.data.edges.filter(
+        (edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target),
+      ),
+      groups: graph.data.groups.filter((item) => item.id === groupId),
+    };
+  })();
   const saveAnswer = (placement: RagSource) => {
     if (!ask.data || !canvasEditor) return;
     const pageNumber = combinedPageFor(placement);
@@ -81,6 +141,8 @@ export default function GroupWorkspacePage() {
                 documentId: source.documentId,
                 documentName: source.documentName ?? "PDF",
                 pageNumber: source.pageNumber,
+                groupId,
+                combinedPageNumber: combinedPageFor(source),
               }]
             : [],
         ),
@@ -130,9 +192,71 @@ export default function GroupWorkspacePage() {
             pageCount={group.data.pageCount}
             onPageChange={setActivePage}
             onEditorReady={setCanvasEditor}
+            onPdfTextSelected={(text) => {
+              setSelectedText(text);
+              setInspectorTab("explain");
+            }}
+            onTextSelected={(text) => {
+              setSelectedText(text);
+              if (text) setInspectorTab("explain");
+            }}
+            onCanvasSelection={(selection) => {
+              setSelectedText(selection.text);
+              if (selection.text) setInspectorTab("explain");
+            }}
           />
         </section>
-        <aside className="flex min-h-[620px] flex-col rounded-2xl border border-orange-400/15 bg-neutral-950/70 p-4">
+        <aside className="flex min-h-[620px] min-w-0 flex-col overflow-hidden rounded-2xl border border-orange-400/15 bg-neutral-950/70">
+          <div className="grid grid-cols-4 gap-1 border-b border-white/10 p-2">
+            {([
+              ["explain", MessageSquareText, "Explain"],
+              ["ask", BookOpenCheck, "Ask"],
+              ["notes", StickyNote, "Notes"],
+              ["graph", GitFork, "Graph"],
+            ] as const).map(([tab, Icon, label]) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setInspectorTab(tab)}
+                className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs ${
+                  inspectorTab === tab
+                    ? "bg-orange-500/15 text-orange-300"
+                    : "text-stone-500 hover:bg-white/5"
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
+            className={`${inspectorTab === "explain" ? "block" : "hidden"} min-h-0 overflow-y-auto p-4`}
+          >
+            <ExplainPanel
+              selectedText={selectedText}
+              selectedTexts={selectedText ? [selectedText] : undefined}
+              documentId={activeSource.document.id}
+              pageNumber={activeSource.pageNumber}
+              documentTitle={activeSource.document.name}
+              onExplanationGenerated={(input) => {
+                if (canvasEditor)
+                  addExplanationToCanvas(canvasEditor, {
+                    ...input,
+                    pageNumber: activePage,
+                  });
+              }}
+              onExplanationStickyRequested={(input) => {
+                if (canvasEditor)
+                  addExplanationStickyToCanvas(canvasEditor, {
+                    ...input,
+                    pageNumber: activePage,
+                  });
+              }}
+            />
+          </div>
+          <div
+            className={`${inspectorTab === "ask" ? "flex" : "hidden"} min-h-0 flex-1 flex-col overflow-y-auto p-4`}
+          >
           <div className="flex items-center gap-2">
             <BookOpenCheck size={17} className="text-orange-400" />
             <h2 className="font-semibold">Ask the group</h2>
@@ -176,15 +300,11 @@ export default function GroupWorkspacePage() {
                     type="button"
                     disabled={!source.documentId}
                     onClick={() => {
-                      if (source.documentId)
-                        navigate(
-                          `/workspace/${source.documentId}?page=${source.pageNumber}`,
-                        );
+                      setActivePage(combinedPageFor(source));
                     }}
                     className="flex items-center gap-1 rounded-lg border border-orange-400/20 bg-orange-500/10 px-2.5 py-1.5 text-xs text-orange-300 disabled:opacity-50"
                   >
                     {source.documentName ?? "PDF"} · p.{source.pageNumber}
-                    <ExternalLink size={11} />
                   </button>
                 ))}
               </div>
@@ -221,6 +341,46 @@ export default function GroupWorkspacePage() {
           {ask.isError && (
             <p className="mt-3 text-xs text-red-400">{ask.error.message}</p>
           )}
+          </div>
+          <section
+            className={`${inspectorTab === "notes" ? "block" : "hidden"} min-h-0 overflow-y-auto p-4`}
+          >
+            <h2 className="mb-1 font-semibold">Group canvas spaces</h2>
+            <p className="mb-4 text-xs leading-5 text-stone-500">
+              Notes here stay affiliated with this PDF group.
+            </p>
+            <DocumentNotes
+              documentId={group.data.documents[0].id}
+              groupId={groupId}
+            />
+          </section>
+          <section
+            className={`${inspectorTab === "graph" ? "block" : "hidden"} min-h-0 p-4`}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-semibold">Group knowledge graph</h2>
+              <Link to="/graph" className="text-xs text-orange-300">
+                Open atlas ↗
+              </Link>
+            </div>
+            {graph.isError && (
+              <p className="text-xs text-red-400">{graph.error.message}</p>
+            )}
+            <KnowledgeGraph
+              graph={groupGraph}
+              isLoading={graph.isLoading}
+              onNodeSelect={(node) => {
+                if (!node.documentId || !node.pageNumber) return;
+                setActivePage(
+                  combinedPageFor({
+                    documentId: node.documentId,
+                    pageNumber: node.pageNumber,
+                  }),
+                );
+              }}
+              className="h-[min(62vh,36rem)] min-h-80 w-full rounded-xl"
+            />
+          </section>
         </aside>
       </div>
       {stickySources && (
