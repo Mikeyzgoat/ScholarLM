@@ -23,7 +23,7 @@ export const env: {
     Bun.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
   OPENROUTER_VISION_MODEL:
     Bun.env.OPENROUTER_VISION_MODEL?.trim() ||
-    "mistralai/ministral-8b-2512",
+    "google/gemma-4-31b-it:free",
   OPENROUTER_EMBEDDING_MODEL:
     Bun.env.OPENROUTER_EMBEDDING_MODEL?.trim() ||
     "nvidia/nemotron-3-embed-1b:free",

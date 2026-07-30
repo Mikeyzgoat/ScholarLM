@@ -84,7 +84,7 @@ async function openRouterGenerate(input: {
         error instanceof Error ? error.message.toLowerCase() : "";
       const transient =
         message.includes("provider returned error") ||
-        message.includes("rate limit") ||
+        (message.includes("rate limit") && !message.includes("per-day")) ||
         message.includes("connection was closed") ||
         message.includes("unable to connect") ||
         message.includes("returned 429") ||
