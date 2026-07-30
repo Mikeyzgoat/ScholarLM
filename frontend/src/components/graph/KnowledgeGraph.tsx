@@ -163,7 +163,11 @@ export function KnowledgeGraph({
   const container = useRef<HTMLDivElement>(null),
     renderer = useRef<Sigma | null>(null),
     model = useRef<Graph | null>(null),
+    focusedNode = useRef<string | null>(null),
+    lightTheme = useRef(light),
     physicsFrame = useRef(0);
+  focusedNode.current = focusedNodeId ?? null;
+  lightTheme.current = light;
   const runPhysics = useCallback((steps = 72) => {
     cancelAnimationFrame(physicsFrame.current);
     let remaining = steps;
@@ -185,10 +189,31 @@ export function KnowledgeGraph({
       activeRenderer.refresh();
       if (remaining > 0)
         physicsFrame.current = requestAnimationFrame(tick);
+      else if (!focusedNode.current)
+        activeRenderer.getCamera().animatedReset({ duration: 320 });
     };
     physicsFrame.current = requestAnimationFrame(tick);
   }, []);
   const layout = useCallback(() => runPhysics(90), [runPhysics]);
+  const zoomAroundCenter = useCallback(
+    (direction: "in" | "out") => {
+      const g = model.current;
+      const sigma = renderer.current;
+      if (!g || !sigma || !graph) return;
+      const anchor =
+        graph.nodes.find((node) => node.kind === "hub") ??
+        graph.nodes.find((node) => node.kind === "source");
+      if (!anchor || !g.hasNode(anchor.id)) return;
+      const camera = sigma.getCamera();
+      const { x, y } = g.getNodeAttributes(anchor.id);
+      const ratio =
+        direction === "in"
+          ? Math.max(0.35, camera.ratio / 1.5)
+          : Math.min(1.15, camera.ratio * 1.5);
+      camera.animate({ x, y, ratio }, { duration: 240 });
+    },
+    [graph],
+  );
   useEffect(() => {
     if (!container.current || !graph?.nodes.length) return;
     const g = new Graph({ multi: true });
@@ -196,6 +221,7 @@ export function KnowledgeGraph({
     graph.nodes.forEach((n, i) =>
       g.addNode(n.id, {
         label: graphLabel(n),
+        fullLabel: n.label.trim(),
         x: positions.get(n.id)?.x ?? Math.cos(i) * 4,
         y: positions.get(n.id)?.y ?? Math.sin(i) * 4,
         size: nodeSize(n),
@@ -211,7 +237,9 @@ export function KnowledgeGraph({
         g.addEdgeWithKey(e.id, e.source, e.target, {
           label: e.relationship,
           color: light ? "#a7d8dc" : "#78350f",
+          baseColor: light ? "#a7d8dc" : "#78350f",
           size: 1.4,
+          baseSize: 1.4,
           weight:
             e.relationship === "explanation"
               ? 4
@@ -235,6 +263,10 @@ export function KnowledgeGraph({
       labelRenderedSizeThreshold: 6.5,
       defaultEdgeColor: light ? "#a7d8dc" : "#78350f",
       stagePadding: 60,
+      minCameraRatio: 0.35,
+      maxCameraRatio: 1.15,
+      cameraPanBoundaries: true,
+      enableCameraRotation: false,
       allowInvalidContainer: true,
     });
     renderer.current = sigma;
@@ -251,9 +283,61 @@ export function KnowledgeGraph({
       const found = graph.nodes.find((n) => n.id === node);
       if (found) onNodeSelect(found);
     });
+    sigma.on("enterNode", ({ node }) => {
+      const found = graph.nodes.find((item) => item.id === node);
+      g.setNodeAttribute(node, "label", g.getNodeAttribute(node, "fullLabel"));
+      g.setNodeAttribute(node, "forceLabel", true);
+      if (found)
+        g.setNodeAttribute(
+          node,
+          "size",
+          nodeSize(found) + (g.getNodeAttribute(node, "focused") ? 5 : 2),
+        );
+      g.edges(node).forEach((edge) => {
+        g.setEdgeAttribute(edge, "size", 2.8);
+        g.setEdgeAttribute(
+          edge,
+          "color",
+          lightTheme.current ? "#149da5" : "#f97316",
+        );
+      });
+      if (container.current) container.current.style.cursor = "pointer";
+      sigma.refresh();
+    });
+    sigma.on("leaveNode", ({ node }) => {
+      const found = graph.nodes.find((item) => item.id === node);
+      if (!found) return;
+      const isFocused = g.getNodeAttribute(node, "focused") === true;
+      g.setNodeAttribute(
+        node,
+        "label",
+        isFocused ? found.label.trim() : graphLabel(found),
+      );
+      g.setNodeAttribute(
+        node,
+        "forceLabel",
+        isFocused || found.kind === "hub" || found.kind === "source",
+      );
+      g.setNodeAttribute(
+        node,
+        "size",
+        nodeSize(found) + (isFocused ? 5 : 0),
+      );
+      g.edges(node).forEach((edge) => {
+        g.setEdgeAttribute(edge, "size", g.getEdgeAttribute(edge, "baseSize"));
+        g.setEdgeAttribute(
+          edge,
+          "color",
+          g.getEdgeAttribute(edge, "baseColor"),
+        );
+      });
+      if (container.current) container.current.style.cursor = "grab";
+      sigma.refresh();
+    });
     sigma.on("downNode", ({ node, event }) => {
       if (g.getNodeAttribute(node, "fixed")) return;
       draggedNode = node;
+      if (container.current) container.current.style.cursor = "grabbing";
       g.setNodeAttribute(node, "highlighted", true);
       g.setNodeAttribute(node, "fixed", true);
       event.preventSigmaDefault();
@@ -271,6 +355,7 @@ export function KnowledgeGraph({
       g.setNodeAttribute(draggedNode, "highlighted", false);
       g.setNodeAttribute(draggedNode, "fixed", false);
       draggedNode = null;
+      if (container.current) container.current.style.cursor = "grab";
       runPhysics(24);
     });
     return () => {
@@ -290,7 +375,9 @@ export function KnowledgeGraph({
         g.setNodeAttribute(node.id, "color", nodeColor(node, light));
     });
     g.forEachEdge((edge) => {
-      g.setEdgeAttribute(edge, "color", light ? "#a7d8dc" : "#78350f");
+      const color = light ? "#a7d8dc" : "#78350f";
+      g.setEdgeAttribute(edge, "color", color);
+      g.setEdgeAttribute(edge, "baseColor", color);
     });
     sigma.setSetting("labelColor", {
       color: light ? "#26333c" : "#d6d3d1",
@@ -301,26 +388,36 @@ export function KnowledgeGraph({
   useEffect(() => {
     const g = model.current;
     const sigma = renderer.current;
-    if (!g || !sigma || !focusedNodeId || !g.hasNode(focusedNodeId)) return;
+    if (!g || !sigma || !graph) return;
+    const hasFocus = Boolean(focusedNodeId && g.hasNode(focusedNodeId));
     graph?.nodes.forEach((node) => {
       if (!g.hasNode(node.id)) return;
       const normalSize = nodeSize(node);
+      const isFocused = hasFocus && node.id === focusedNodeId;
       g.setNodeAttribute(
         node.id,
         "size",
-        node.id === focusedNodeId ? normalSize + 5 : normalSize,
+        isFocused ? normalSize + 5 : normalSize,
+      );
+      g.setNodeAttribute(node.id, "focused", isFocused);
+      g.setNodeAttribute(
+        node.id,
+        "label",
+        isFocused ? node.label.trim() : graphLabel(node),
       );
       g.setNodeAttribute(
         node.id,
         "forceLabel",
-        node.id === focusedNodeId ||
+        isFocused ||
           node.kind === "hub" ||
           node.kind === "source",
       );
       g.setNodeAttribute(node.id, "color", nodeColor(node, light));
     });
-    const { x, y } = g.getNodeAttributes(focusedNodeId);
-    sigma.getCamera().animate({ x, y, ratio: 0.18 }, { duration: 420 });
+    if (hasFocus) {
+      const { x, y } = g.getNodeAttributes(focusedNodeId!);
+      sigma.getCamera().animate({ x, y, ratio: 0.42 }, { duration: 420 });
+    }
     sigma.refresh();
   }, [focusedNodeId, graph, light]);
   if (isLoading) return <p className="text-sm">Loading graph…</p>;
@@ -342,8 +439,8 @@ export function KnowledgeGraph({
         }`}
       />
       <GraphControls
-        onZoomIn={() => renderer.current?.getCamera().animatedZoom()}
-        onZoomOut={() => renderer.current?.getCamera().animatedUnzoom()}
+        onZoomIn={() => zoomAroundCenter("in")}
+        onZoomOut={() => zoomAroundCenter("out")}
         onReset={() => renderer.current?.getCamera().animatedReset()}
         onLayout={layout}
       />
@@ -365,7 +462,7 @@ export function KnowledgeGraph({
           Handwriting
         </span>
       </div>
-      <div ref={container} className="h-full w-full" />
+      <div ref={container} className="h-full w-full cursor-grab" />
     </div>
   );
 }
