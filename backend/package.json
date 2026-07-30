@@ -12,7 +12,8 @@
     "hono": "latest",
     "kokoro-js": "latest",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "latest"
+    "pdf-parse": "latest",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

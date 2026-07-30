@@ -8,6 +8,9 @@ import { embedDocumentChunks } from "./embeddings";
 import { buildKnowledgeGraph } from "./knowledgeGraph";
 import { createId } from "../utils/ids";
 import { preparePagesForIndexing } from "./indexText";
+import { addTableContext } from "./tableText";
+import { compactDocumentEmbeddingText } from "./embeddingText";
+import { addVisualContext } from "./visualIngestion";
 async function updateDocumentStatus(
   documentId: string,
   status: DocumentStatus,
@@ -36,7 +39,11 @@ async function saveChunks(
 ): Promise<void> {
   const tx = db.transaction(() => {
     db.query("DELETE FROM chunks WHERE document_id=?").run(documentId);
-    const insert = db.query("INSERT INTO chunks VALUES (?,?,?,?,?,?,?)");
+    const insert = db.query(
+      `INSERT INTO chunks
+       (id,document_id,page_number,chunk_index,content,embedding,created_at,embedding_content)
+       VALUES (?,?,?,?,?,?,?,?)`,
+    );
     const now = new Date().toISOString();
     for (const c of chunks)
       insert.run(
@@ -47,6 +54,7 @@ async function saveChunks(
         c.content,
         null,
         now,
+        compactDocumentEmbeddingText(c.content),
       );
   });
   tx();
@@ -55,11 +63,12 @@ export async function ingestDocument(documentId: string): Promise<void> {
   try {
     await updateDocumentStatus(documentId, "extracting");
     const row = db
-      .query("SELECT file_path FROM documents WHERE id=?")
-      .get(documentId) as { file_path: string } | null;
+      .query("SELECT file_path,name FROM documents WHERE id=?")
+      .get(documentId) as { file_path: string; name: string } | null;
     if (!row) throw new Error("Document not found");
     const extracted = await extractPdf(row.file_path);
     await saveDocumentPages(documentId, extracted.pages);
+    const enrichedPages = await addVisualContext(extracted.pages, row.name);
     db.query("UPDATE documents SET page_count=?,updated_at=? WHERE id=?").run(
       extracted.pageCount,
       new Date().toISOString(),
@@ -68,7 +77,10 @@ export async function ingestDocument(documentId: string): Promise<void> {
     await updateDocumentStatus(documentId, "chunking");
     await saveChunks(
       documentId,
-      chunkPages(preparePagesForIndexing(extracted.pages)),
+      chunkPages(addTableContext(preparePagesForIndexing(enrichedPages)), {
+        maxCharacters: 1800,
+        overlapCharacters: 120,
+      }),
     );
     await updateDocumentStatus(documentId, "embedding");
     await embedDocumentChunks(documentId);

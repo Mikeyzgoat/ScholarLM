@@ -1,4 +1,5 @@
 import { env } from "../env";
+import { compactQueryEmbeddingText } from "./embeddingText";
 
 interface OpenRouterChunk {
   choices?: Array<{
@@ -292,7 +293,73 @@ export async function generateDocumentEmbeddings(
 }
 
 export async function generateQueryEmbedding(text: string): Promise<number[]> {
-  return generateEmbedding(`search_query: ${text}`);
+  return generateEmbedding(
+    `search_query: ${compactQueryEmbeddingText(text)}`,
+  );
+}
+
+export async function describeDocumentPageVisual(input: {
+  imageDataUrl: string;
+  documentTitle: string;
+  pageNumber: number;
+  extractedText: string;
+}): Promise<string> {
+  return openRouterGenerate({
+    imageDataUrl: input.imageDataUrl,
+    maxTokens: 650,
+    system:
+      "You extract faithful retrieval context from document visuals. Never infer values that are not visibly supported.",
+    prompt: `Analyze page ${input.pageNumber} of "${input.documentTitle}" for retrieval.
+Capture only meaningful visual information:
+- flowcharts: nodes, ordered steps, arrows, decisions, and branches;
+- diagrams: labels, components, relationships, direction, and units;
+- charts: title, axes, legend, series, exact labeled values, and clearly visible trends;
+- images: a concise factual caption and any readable text;
+- tables: merged headers, row/column relationships, units, dates, currencies, totals, and negative values.
+Preserve exact numbers and uncertainty. Ignore logos, decoration, and repeated page furniture.
+Return compact plain text, not Markdown.
+
+Existing extracted text:
+${input.extractedText.slice(0, 4000)}`,
+  });
+}
+
+export async function describeDocumentPageCollage(input: {
+  imageDataUrl: string;
+  documentTitle: string;
+  pages: Array<{ pageNumber: number; extractedText: string }>;
+}): Promise<Map<number, string>> {
+  const raw = await openRouterGenerate({
+    imageDataUrl: input.imageDataUrl,
+    json: true,
+    maxTokens: 1000,
+    system:
+      "You extract faithful, page-specific retrieval context from labeled document collages. Never mix panels or infer unsupported values. Return valid JSON only.",
+    prompt: `Analyze this labeled collage from "${input.documentTitle}".
+For every visible PAGE label, separately capture meaningful flowcharts, diagrams, charts, images, and readable labels. Preserve step order, branches, relationships, axes, legends, units, and exact visible values. Ignore decoration.
+Return exactly:
+{"pages":[{"pageNumber":1,"description":"compact factual visual context"}]}
+
+Panel references:
+${input.pages
+  .map(
+    (page) =>
+      `PAGE ${page.pageNumber} extracted text: ${page.extractedText.slice(0, 1800)}`,
+  )
+  .join("\n")}`,
+  });
+  const parsed = JSON.parse(
+    raw.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, ""),
+  ) as { pages?: Array<{ pageNumber?: unknown; description?: unknown }> };
+  return new Map(
+    (parsed.pages ?? []).flatMap((page) =>
+      Number.isInteger(page.pageNumber) &&
+      typeof page.description === "string" &&
+      page.description.trim()
+        ? [[Number(page.pageNumber), page.description.trim()] as const]
+        : [],
+    ),
+  );
 }
 
 export async function explainSelectedText(input: {

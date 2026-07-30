@@ -12,7 +12,7 @@ export async function embedDocumentChunks(documentId: string): Promise<void> {
   for (let index = 0; index < pending.length; index += 64) {
     const batch = pending.slice(index, index + 64);
     const embeddings = await generateDocumentEmbeddings(
-      batch.map((chunk) => chunk.content),
+      batch.map((chunk) => chunk.embedding_content ?? chunk.content),
     );
     const update = db.query("UPDATE chunks SET embedding=? WHERE id=?");
     db.transaction(() => {

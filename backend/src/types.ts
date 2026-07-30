@@ -33,6 +33,7 @@ export interface ChunkRecord {
   page_number: number;
   chunk_index: number;
   content: string;
+  embedding_content: string | null;
   embedding: string | Uint8Array | null;
   created_at: string;
 }
