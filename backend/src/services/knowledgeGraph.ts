@@ -3,6 +3,7 @@ import type { ChunkRecord, DocumentRecord, GraphResponse } from "../types";
 import { createId } from "../utils/ids";
 import { extractConceptGraph } from "./openRouter";
 import { extractStickies } from "./stickyNotes";
+import { getManualGraphData } from "./manualGraph";
 
 interface GraphNote {
   id: string;
@@ -254,7 +255,7 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
   const document = db
     .query("SELECT * FROM documents WHERE id=?")
     .get(documentId) as DocumentRecord | null;
-  if (!document) return { nodes: [], edges: [] };
+  if (!document) return { nodes: [], edges: [], groups: [] };
   const concepts = db
     .query(
       "SELECT id,label,description,page_number pageNumber FROM concepts WHERE document_id=?",
@@ -286,8 +287,7 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
   const connected = new Set(
     conceptEdges.flatMap((edge) => [edge.source, edge.target]),
   );
-  return {
-    nodes: [
+  const nodes: GraphResponse["nodes"] = [
       {
         id: sourceId,
         label: document.name,
@@ -313,8 +313,8 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
       ...stickies,
       ...drawingPages,
       ...handwriting,
-    ],
-    edges: [
+    ];
+  const edges: GraphResponse["edges"] = [
       ...conceptEdges,
       ...concepts
         .filter((node) => !connected.has(node.id))
@@ -351,7 +351,15 @@ export function getKnowledgeGraph(documentId: string): GraphResponse {
         target: item.id,
         relationship: "handwriting",
       })),
-    ],
+    ];
+  const manual = getManualGraphData(
+    { kind: "document", documentId },
+    new Set(nodes.map((node) => node.id)),
+  );
+  return {
+    nodes,
+    edges: [...edges, ...manual.edges],
+    groups: manual.groups,
   };
 }
 
@@ -414,8 +422,7 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
       ].map((canvas) => [canvas.canvasId, canvas]),
     ).values(),
   ];
-  return {
-    nodes: [
+  const nodes: GraphResponse["nodes"] = [
       {
         id: hubId,
         label: "ScholarLM",
@@ -447,8 +454,8 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
       ...stickies,
       ...drawingPages,
       ...handwriting,
-    ],
-    edges: [
+    ];
+  const edges: GraphResponse["edges"] = [
       ...documents.map((document) => ({
         id: `library-link:${document.id}`,
         source: hubId,
@@ -498,6 +505,14 @@ export function getGlobalKnowledgeGraph(): GraphResponse {
             }]
           : [];
       }),
-    ],
+    ];
+  const manual = getManualGraphData(
+    { kind: "global" },
+    new Set(nodes.map((node) => node.id)),
+  );
+  return {
+    nodes,
+    edges: [...edges, ...manual.edges],
+    groups: manual.groups,
   };
 }

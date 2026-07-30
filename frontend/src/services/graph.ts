@@ -12,6 +12,62 @@ export async function getGlobalGraph(): Promise<GraphResponse> {
   return apiFetch("/graph");
 }
 
+export type GraphScopeInput =
+  | { scope: "global" }
+  | { scope: "document"; documentId: string };
+
+export async function createManualGraphEdge(
+  scope: GraphScopeInput,
+  input: { source: string; target: string; relationship: string },
+): Promise<{ id: string }> {
+  return apiFetch("/graph/manual/edges", {
+    method: "POST",
+    body: JSON.stringify({ ...scope, ...input }),
+  });
+}
+
+export async function updateManualGraphEdge(
+  edgeId: string,
+  relationship: string,
+): Promise<void> {
+  await apiFetch(`/graph/manual/edges/${encodeURIComponent(edgeId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ relationship }),
+  });
+}
+
+export async function deleteManualGraphEdge(edgeId: string): Promise<void> {
+  await apiFetch(`/graph/manual/edges/${encodeURIComponent(edgeId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function createManualGraphGroup(
+  scope: GraphScopeInput,
+  input: { name: string; color: string; memberNodeIds: string[] },
+): Promise<{ id: string }> {
+  return apiFetch("/graph/manual/groups", {
+    method: "POST",
+    body: JSON.stringify({ ...scope, ...input }),
+  });
+}
+
+export async function updateManualGraphGroup(
+  groupId: string,
+  input: { name?: string; color?: string; memberNodeIds?: string[] },
+): Promise<void> {
+  await apiFetch(`/graph/manual/groups/${encodeURIComponent(groupId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteManualGraphGroup(groupId: string): Promise<void> {
+  await apiFetch(`/graph/manual/groups/${encodeURIComponent(groupId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function deleteGraphLeafNode(node: GraphNode): Promise<void> {
   if (node.kind === "concept") {
     await apiFetch(`/graph/concepts/${node.id}`, { method: "DELETE" });

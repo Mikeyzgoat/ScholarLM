@@ -131,6 +131,16 @@ export interface GraphResponse {
     source: string;
     target: string;
     relationship: string;
+    manual?: boolean;
+  }>;
+  groups: Array<{
+    id: string;
+    name: string;
+    color: string;
+    memberNodeIds: string[];
+    scope: "global" | "document";
+    indexStatus: "indexed" | "empty" | "stale";
+    indexedCandidateCount: number;
   }>;
 }
 export interface CreateNoteRequest {

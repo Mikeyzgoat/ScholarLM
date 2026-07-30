@@ -70,10 +70,21 @@ export interface GraphEdge {
   source: string;
   target: string;
   relationship: string;
+  manual?: boolean;
+}
+export interface GraphGroup {
+  id: string;
+  name: string;
+  color: string;
+  memberNodeIds: string[];
+  scope: "global" | "document";
+  indexStatus: "indexed" | "empty" | "stale";
+  indexedCandidateCount: number;
 }
 export interface GraphResponse {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  groups: GraphGroup[];
 }
 export interface ExplanationResponse {
   explanation: string;

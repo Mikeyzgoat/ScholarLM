@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS openrouter_requests (id TEXT PRIMARY KEY,operation TE
 CREATE INDEX IF NOT EXISTS idx_openrouter_requests_created ON openrouter_requests(created_at DESC);
 CREATE TABLE IF NOT EXISTS explanation_audio (explanation_id TEXT PRIMARY KEY,text_hash TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE,FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS runtime_metadata (key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS manual_graph_edges (id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,document_id TEXT,source_node_id TEXT NOT NULL,target_node_id TEXT NOT NULL,relationship TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(scope_key,source_node_id,target_node_id));
+CREATE TABLE IF NOT EXISTS manual_graph_groups (id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,document_id TEXT,name TEXT NOT NULL,color TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS manual_graph_group_members (group_id TEXT NOT NULL,scope_key TEXT NOT NULL,node_id TEXT NOT NULL,PRIMARY KEY(group_id,node_id),UNIQUE(scope_key,node_id),FOREIGN KEY (group_id) REFERENCES manual_graph_groups(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS manual_graph_group_index (group_id TEXT PRIMARY KEY,embedding TEXT,candidate_refs TEXT NOT NULL DEFAULT '[]',content_hash TEXT NOT NULL,candidate_count INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'empty',updated_at TEXT NOT NULL,FOREIGN KEY (group_id) REFERENCES manual_graph_groups(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_manual_graph_edges_scope ON manual_graph_edges(scope_key);
+CREATE INDEX IF NOT EXISTS idx_manual_graph_groups_scope ON manual_graph_groups(scope_key);
+CREATE INDEX IF NOT EXISTS idx_manual_graph_members_scope ON manual_graph_group_members(scope_key);
 `);
   const columns = db.query("PRAGMA table_info(documents)").all() as Array<{
     name: string;

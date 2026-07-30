@@ -4,6 +4,7 @@ import { dotProduct, normalizeVector, parseEmbedding } from "../utils/vectors";
 import { getDocumentVectorIndex } from "./vectorIndex";
 import { db } from "../db/database";
 import { ensureDocumentStickiesIndexed } from "./stickyNotes";
+import { getDocumentGroupRouting } from "./manualGraph";
 
 interface VectorCandidate {
   result: SearchResult;
@@ -53,7 +54,18 @@ async function rankedCandidates(input: {
   query: string;
 }): Promise<VectorCandidate[]> {
   const vector = normalizeVector(await generateQueryEmbedding(input.query));
+  const routing = getDocumentGroupRouting({
+    documentId: input.documentId,
+    queryVector: vector,
+  });
   return getDocumentVectorIndex(input.documentId)
+    .filter(({ chunk }) => {
+      const key = `pdf:${chunk.id}`;
+      return (
+        !routing.groupedCandidates.has(key) ||
+        routing.allowedGroupedCandidates.has(key)
+      );
+    })
     .filter(({ chunk }) => isUsefulChunk(chunk.content))
     .filter(({ embedding }) => embedding.length === vector.length)
     .map(({ chunk, embedding }) => ({
@@ -79,7 +91,18 @@ export async function semanticSearch(input: {
   const limit = Math.min(20, Math.max(1, input.limit ?? 8));
   await ensureDocumentStickiesIndexed(input.documentId);
   const queryVector = normalizeVector(await generateQueryEmbedding(query));
+  const routing = getDocumentGroupRouting({
+    documentId: input.documentId,
+    queryVector,
+  });
   const pdfResults = getDocumentVectorIndex(input.documentId)
+    .filter(({ chunk }) => {
+      const key = `pdf:${chunk.id}`;
+      return (
+        !routing.groupedCandidates.has(key) ||
+        routing.allowedGroupedCandidates.has(key)
+      );
+    })
     .filter(({ embedding }) => embedding.length === queryVector.length)
     .map(({ chunk, embedding }) => ({
       chunkId: chunk.id,
@@ -107,6 +130,12 @@ export async function semanticSearch(input: {
       embedding: string | Uint8Array;
     }>
   ).flatMap((sticky) => {
+    const key = `sticky:${sticky.id}`;
+    if (
+      routing.groupedCandidates.has(key) &&
+      !routing.allowedGroupedCandidates.has(key)
+    )
+      return [];
     const embedding = normalizeVector(parseEmbedding(sticky.embedding));
     if (embedding.length !== queryVector.length) return [];
     return [{
