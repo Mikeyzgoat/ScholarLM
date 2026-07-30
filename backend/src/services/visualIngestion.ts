@@ -5,6 +5,24 @@ import {
 } from "./openRouter";
 import sharp from "sharp";
 
+let visionQueue = Promise.resolve();
+let lastVisionRequestAt = 0;
+
+function queuedVisionRequest<T>(request: () => Promise<T>): Promise<T> {
+  const operation = visionQueue.then(async () => {
+    const delay = Math.max(0, 1200 - (Date.now() - lastVisionRequestAt));
+    if (delay)
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    lastVisionRequestAt = Date.now();
+    return request();
+  });
+  visionQueue = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return operation;
+}
+
 function dataUrlBuffer(dataUrl: string): Buffer {
   const encoded = dataUrl.slice(dataUrl.indexOf(",") + 1);
   return Buffer.from(encoded, "base64");
@@ -86,12 +104,14 @@ export async function addVisualContext(
   const jobs: Array<() => Promise<void>> = fullResolution.map((page) => {
     return async () => {
       try {
-        const description = await describeDocumentPageVisual({
-          imageDataUrl: page.visualImageDataUrl!,
-          documentTitle,
-          pageNumber: page.pageNumber,
-          extractedText: page.content,
-        });
+        const description = await queuedVisionRequest(() =>
+          describeDocumentPageVisual({
+            imageDataUrl: page.visualImageDataUrl!,
+            documentTitle,
+            pageNumber: page.pageNumber,
+            extractedText: page.content,
+          }),
+        );
         const index = enriched.findIndex(
           (item) => item.pageNumber === page.pageNumber,
         );
@@ -114,14 +134,17 @@ export async function addVisualContext(
     const batch = collageCandidates.slice(index, index + 2);
     jobs.push(async () => {
       try {
-        const descriptions = await describeDocumentPageCollage({
-          imageDataUrl: await makeCollage(batch),
-          documentTitle,
-          pages: batch.map((page) => ({
-            pageNumber: page.pageNumber,
-            extractedText: page.content,
-          })),
-        });
+        const imageDataUrl = await makeCollage(batch);
+        const descriptions = await queuedVisionRequest(() =>
+          describeDocumentPageCollage({
+            imageDataUrl,
+            documentTitle,
+            pages: batch.map((page) => ({
+              pageNumber: page.pageNumber,
+              extractedText: page.content,
+            })),
+          }),
+        );
         batch.forEach((page) => {
           const description = descriptions.get(page.pageNumber);
           const pageIndex = enriched.findIndex(

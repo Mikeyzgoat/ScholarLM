@@ -68,7 +68,7 @@ async function openRouterGenerate(input: {
       signal: input.signal,
     });
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     let emittedToken = false;
     try {
       return await readOpenRouterStream(
@@ -84,6 +84,7 @@ async function openRouterGenerate(input: {
         error instanceof Error ? error.message.toLowerCase() : "";
       const transient =
         message.includes("provider returned error") ||
+        message.includes("rate limit") ||
         message.includes("connection was closed") ||
         message.includes("unable to connect") ||
         message.includes("returned 429") ||
@@ -91,11 +92,13 @@ async function openRouterGenerate(input: {
       if (
         !transient ||
         emittedToken ||
-        attempt === 1 ||
+        attempt === 2 ||
         input.signal?.aborted
       )
         throw error;
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await new Promise((resolve) =>
+        setTimeout(resolve, 750 * 2 ** attempt),
+      );
     }
   }
   throw lastError;
@@ -337,11 +340,12 @@ export async function describeDocumentPageCollage(input: {
   const raw = await openRouterGenerate({
     imageDataUrl: input.imageDataUrl,
     model: env.OPENROUTER_VISION_MODEL,
-    maxTokens: 1000,
+    json: true,
+    maxTokens: 1800,
     system:
       "You extract faithful, page-specific retrieval context from labeled document collages. Never mix panels or infer unsupported values. Return valid JSON only.",
     prompt: `Analyze this labeled collage from "${input.documentTitle}".
-For every visible PAGE label, separately capture meaningful flowcharts, diagrams, charts, images, and readable labels. Preserve step order, branches, relationships, axes, legends, units, and exact visible values. Ignore decoration.
+For every visible PAGE label, separately capture meaningful flowcharts, diagrams, charts, images, and readable labels. Preserve step order, branches, relationships, axes, legends, units, and exact visible values. Ignore decoration. Limit each page description to 700 characters.
 Return exactly:
 {"pages":[{"pageNumber":1,"description":"compact factual visual context"}]}
 
