@@ -1,6 +1,17 @@
 import app from "./index";
 import { env } from "./env";
 import { backfillMissingExplanationAudio } from "./services/speechBackfill";
+import { warmSpeechModel } from "./services/speech";
+
+try {
+  await warmSpeechModel();
+  console.log("[tts] Kokoro is loaded and ready");
+} catch (error) {
+  console.error(
+    "[tts] Kokoro preload failed; browser speech fallback remains available",
+    error,
+  );
+}
 
 const server = Bun.serve({
   port: env.BACKEND_PORT,

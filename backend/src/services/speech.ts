@@ -17,6 +17,11 @@ function getModel(): Promise<KokoroModel> {
       });
   return modelPromise;
 }
+
+export async function warmSpeechModel(): Promise<void> {
+  await getModel();
+}
+
 export async function synthesizeSpeech(text: string): Promise<Uint8Array> {
   if (!text.trim()) throw new Error("Speech text is required");
   const audio = await (await getModel()).generate(text, { voice: "af_heart" });
