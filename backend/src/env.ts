@@ -7,6 +7,7 @@ export const env: {
   OPENROUTER_API_KEY: string;
   OPENROUTER_BASE_URL: string;
   OPENROUTER_MODEL: string;
+  OPENROUTER_VISION_MODEL: string;
   OPENROUTER_EMBEDDING_MODEL: string;
   OPENROUTER_ROUTING_MODELS: string[];
   OPENROUTER_MAX_INPUT_PRICE: number;
@@ -20,6 +21,9 @@ export const env: {
     "https://openrouter.ai/api/v1",
   OPENROUTER_MODEL:
     Bun.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
+  OPENROUTER_VISION_MODEL:
+    Bun.env.OPENROUTER_VISION_MODEL?.trim() ||
+    "mistralai/ministral-8b-2512",
   OPENROUTER_EMBEDDING_MODEL:
     Bun.env.OPENROUTER_EMBEDDING_MODEL?.trim() ||
     "nvidia/nemotron-3-embed-1b:free",

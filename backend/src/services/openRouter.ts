@@ -28,7 +28,11 @@ async function openRouterGenerate(input: {
   signal?: AbortSignal;
   maxTokens?: number;
   onToken?: (token: string) => void;
+  model?: string;
 }): Promise<string> {
+  const selectedModel = input.imageDataUrl
+    ? input.model ?? env.OPENROUTER_VISION_MODEL
+    : env.OPENROUTER_MODEL;
   const content = input.imageDataUrl
     ? [
         { type: "text", text: input.prompt },
@@ -40,9 +44,9 @@ async function openRouterGenerate(input: {
       method: "POST",
       headers: authorizationHeaders(),
       body: JSON.stringify({
-        ...(env.OPENROUTER_MODEL === "openrouter/auto"
+        ...(selectedModel === "openrouter/auto"
           ? { models: env.OPENROUTER_ROUTING_MODELS }
-          : { model: env.OPENROUTER_MODEL }),
+          : { model: selectedModel }),
         messages: [
           ...(input.system ? [{ role: "system", content: input.system }] : []),
           { role: "user", content },
@@ -306,6 +310,7 @@ export async function describeDocumentPageVisual(input: {
 }): Promise<string> {
   return openRouterGenerate({
     imageDataUrl: input.imageDataUrl,
+    model: env.OPENROUTER_VISION_MODEL,
     maxTokens: 650,
     system:
       "You extract faithful retrieval context from document visuals. Never infer values that are not visibly supported.",
@@ -331,7 +336,7 @@ export async function describeDocumentPageCollage(input: {
 }): Promise<Map<number, string>> {
   const raw = await openRouterGenerate({
     imageDataUrl: input.imageDataUrl,
-    json: true,
+    model: env.OPENROUTER_VISION_MODEL,
     maxTokens: 1000,
     system:
       "You extract faithful, page-specific retrieval context from labeled document collages. Never mix panels or infer unsupported values. Return valid JSON only.",
