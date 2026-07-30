@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -14,6 +14,11 @@ import {
   StickyNote,
   Trash2,
   AlertTriangle,
+  Check,
+  Layers3,
+  Link2,
+  PencilLine,
+  X,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
@@ -28,7 +33,24 @@ import { createNote, deleteNote } from "../services/notes";
 import { createRandomCanvasName } from "../lib/randomName";
 import { deleteStandaloneCanvas } from "../services/canvases";
 import { removeLocalCanvas } from "../lib/localCanvases";
-import { deleteGraphLeafNode } from "../services/graph";
+import {
+  createManualGraphEdge,
+  createManualGraphGroup,
+  deleteGraphLeafNode,
+  deleteManualGraphEdge,
+  deleteManualGraphGroup,
+  updateManualGraphEdge,
+  updateManualGraphGroup,
+} from "../services/graph";
+
+const groupColors = [
+  "#0d9488",
+  "#2563eb",
+  "#7c3aed",
+  "#c2410c",
+  "#be123c",
+  "#a16207",
+] as const;
 
 function fuzzyScore(query: string, value: string): number {
   const needle = query.toLowerCase().trim();
@@ -98,6 +120,16 @@ export default function KnowledgeGraphPage() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GraphNode | null>(null);
+  const [curating, setCurating] = useState(false);
+  const [curationNodeIds, setCurationNodeIds] = useState<string[]>([]);
+  const [curationDialog, setCurationDialog] = useState<
+    "connection" | "group" | null
+  >(null);
+  const [relationship, setRelationship] = useState("Related to");
+  const [groupName, setGroupName] = useState("New group");
+  const [groupColor, setGroupColor] = useState<(typeof groupColors)[number]>(
+    groupColors[0],
+  );
   const document = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => getDocument(documentId),
@@ -110,6 +142,69 @@ export default function KnowledgeGraphPage() {
   );
   const globalGraph = useGlobalKnowledgeGraph();
   const graph = isGlobal ? globalGraph : documentGraph;
+  const graphScope = isGlobal
+    ? ({ scope: "global" } as const)
+    : ({ scope: "document", documentId } as const);
+  const refreshGraph = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["graph", isGlobal ? "global" : documentId],
+    });
+  const createConnection = useMutation({
+    mutationFn: () =>
+      createManualGraphEdge(graphScope, {
+        source: curationNodeIds[0],
+        target: curationNodeIds[1],
+        relationship,
+      }),
+    onSuccess: async () => {
+      setCurationDialog(null);
+      setCurationNodeIds([]);
+      await refreshGraph();
+    },
+  });
+  const createGroup = useMutation({
+    mutationFn: () =>
+      createManualGraphGroup(graphScope, {
+        name: groupName,
+        color: groupColor,
+        memberNodeIds: curationNodeIds,
+      }),
+    onSuccess: async () => {
+      setCurationDialog(null);
+      setCurationNodeIds([]);
+      await refreshGraph();
+    },
+  });
+  const editConnection = useMutation({
+    mutationFn: ({
+      id,
+      value,
+    }: {
+      id: string;
+      value: string;
+    }) => updateManualGraphEdge(id, value),
+    onSuccess: refreshGraph,
+  });
+  const editGroup = useMutation({
+    mutationFn: ({
+      id,
+      name,
+      color,
+    }: {
+      id: string;
+      name?: string;
+      color?: string;
+    }) => updateManualGraphGroup(id, { name, color }),
+    onSuccess: refreshGraph,
+  });
+  const removeConnection = useMutation({
+    mutationFn: deleteManualGraphEdge,
+    onSuccess: refreshGraph,
+  });
+  const removeGroup = useMutation({
+    mutationFn: deleteManualGraphGroup,
+    onSuccess: refreshGraph,
+  });
   const linkedNotes = useMemo(
     () =>
       graph.graph?.nodes.filter(
@@ -182,6 +277,24 @@ export default function KnowledgeGraphPage() {
   }, [graph.graph?.nodes, query]);
 
   const focus = useCallback((node: GraphNode) => setSelected(node), []);
+  const toggleCurationNode = useCallback((node: GraphNode) => {
+    setCurationNodeIds((current) =>
+      current.includes(node.id)
+        ? current.filter((id) => id !== node.id)
+        : [...current, node.id],
+    );
+  }, []);
+  useEffect(() => {
+    if (!curating) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setCurationDialog(null);
+      setCurationNodeIds([]);
+      setCurating(false);
+    };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, [curating]);
   return (
     <main className="grid min-h-[calc(100vh-3.5rem)] grid-rows-[auto_minmax(420px,1fr)] overflow-hidden bg-neutral-950 lg:h-[calc(100vh-3.5rem)] lg:min-h-[640px] lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-1">
       <aside className="z-10 max-h-[46vh] overflow-auto border-b border-orange-400/10 bg-neutral-950/90 p-4 backdrop-blur-xl lg:max-h-none lg:border-b-0 lg:border-r">
@@ -208,6 +321,23 @@ export default function KnowledgeGraphPage() {
         >
           <FilePlus2 size={16} />
           Add source
+        </button>
+        <button
+          type="button"
+          aria-pressed={curating}
+          onClick={() => {
+            setCurating((value) => !value);
+            setCurationNodeIds([]);
+            setSelected(null);
+          }}
+          className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium ${
+            curating
+              ? "border-teal-400/40 bg-teal-500/15 text-teal-200"
+              : "border-white/10 bg-white/5 text-stone-300 hover:border-teal-400/30"
+          }`}
+        >
+          <Layers3 size={16} />
+          {curating ? "Finish curating" : "Curate graph"}
         </button>
         <label className="mt-5 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3">
           <Search size={16} className="text-stone-500" />
@@ -260,6 +390,109 @@ export default function KnowledgeGraphPage() {
               </p>
             )}
           </div>
+        )}
+        {(graph.graph?.groups.length ||
+          graph.graph?.edges.some((edge) => edge.manual)) && (
+          <section className="mt-5">
+            <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+              Manual curation
+            </p>
+            <div className="space-y-2">
+              {graph.graph.groups.map((group) => (
+                <div
+                  key={group.id}
+                  className="rounded-xl border border-white/10 bg-white/5 p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: group.color }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                      {group.name}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Rename ${group.name}`}
+                      onClick={() => {
+                        const name = window.prompt("Group name", group.name);
+                        if (name?.trim())
+                          editGroup.mutate({ id: group.id, name });
+                      }}
+                      className="rounded p-1 text-stone-500 hover:text-orange-300"
+                    >
+                      <PencilLine size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${group.name}`}
+                      onClick={() => removeGroup.mutate(group.id)}
+                      className="rounded p-1 text-stone-500 hover:text-red-300"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-stone-500">
+                    {group.indexStatus === "indexed"
+                      ? `Indexed · ${group.indexedCandidateCount} items`
+                      : group.indexStatus === "stale"
+                        ? "Indexing"
+                        : "No searchable content"}
+                  </p>
+                  <div className="mt-2 flex gap-1">
+                    {groupColors.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-label={`Use color ${color}`}
+                        onClick={() =>
+                          editGroup.mutate({ id: group.id, color })
+                        }
+                        className="h-3.5 w-3.5 rounded-full border border-white/20"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {graph.graph.edges
+                .filter((edge) => edge.manual)
+                .map((edge) => (
+                  <div
+                    key={edge.id}
+                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3"
+                  >
+                    <Link2 size={13} className="text-teal-400" />
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      {edge.relationship}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${edge.relationship}`}
+                      onClick={() => {
+                        const value = window.prompt(
+                          "Relationship",
+                          edge.relationship,
+                        );
+                        if (value?.trim())
+                          editConnection.mutate({ id: edge.id, value });
+                      }}
+                      className="rounded p-1 text-stone-500 hover:text-orange-300"
+                    >
+                      <PencilLine size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${edge.relationship}`}
+                      onClick={() => removeConnection.mutate(edge.id)}
+                      className="rounded p-1 text-stone-500 hover:text-red-300"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </section>
         )}
         {selected && (
           <section className="mt-5 rounded-2xl border border-orange-400/20 bg-gradient-to-b from-orange-500/10 to-black/20 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.25)]">
@@ -426,9 +659,166 @@ export default function KnowledgeGraphPage() {
           isLoading={graph.isLoading}
           onNodeSelect={focus}
           focusedNodeId={selected?.id}
+          selectionMode={curating}
+          selectedNodeIds={curationNodeIds}
+          onNodeToggle={toggleCurationNode}
           className="h-full"
         />
+        {curating && (
+          <div className="absolute bottom-5 left-1/2 z-30 flex w-[min(92%,44rem)] -translate-x-1/2 flex-wrap items-center gap-2 rounded-2xl border border-teal-400/25 bg-neutral-950/90 p-3 shadow-2xl backdrop-blur-xl">
+            <span className="mr-auto text-xs text-stone-300">
+              {curationNodeIds.length
+                ? `${curationNodeIds.length} node${curationNodeIds.length === 1 ? "" : "s"} selected`
+                : "Select nodes to connect or group"}
+            </span>
+            <button
+              type="button"
+              disabled={curationNodeIds.length !== 2}
+              onClick={() => {
+                setRelationship("Related to");
+                setCurationDialog("connection");
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-stone-200 disabled:opacity-35"
+            >
+              <Link2 size={13} />
+              Connect
+            </button>
+            <button
+              type="button"
+              disabled={curationNodeIds.length < 2}
+              onClick={() => {
+                setGroupName("New group");
+                setGroupColor(groupColors[0]);
+                setCurationDialog("group");
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-stone-200 disabled:opacity-35"
+            >
+              <Layers3 size={13} />
+              Group
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurationNodeIds([])}
+              className="rounded-lg px-3 py-2 text-xs text-stone-500"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </section>
+      {curationDialog && (
+        <div
+          className="fixed inset-0 z-[1200] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="curation-dialog-title"
+        >
+          <form
+            className="w-full max-w-md rounded-2xl border border-teal-400/20 bg-neutral-950 p-5 shadow-2xl"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (curationDialog === "connection") createConnection.mutate();
+              else createGroup.mutate();
+            }}
+          >
+            <h2 id="curation-dialog-title" className="font-semibold">
+              {curationDialog === "connection"
+                ? "Connect selected nodes"
+                : "Create a manual group"}
+            </h2>
+            {curationDialog === "connection" ? (
+              <>
+                <label className="mt-4 block text-xs text-stone-400">
+                  Relationship
+                  <select
+                    value={relationship}
+                    onChange={(event) => setRelationship(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-white/10 bg-stone-900 px-3 py-2.5 text-sm"
+                  >
+                    {[
+                      "Related to",
+                      "Supports",
+                      "Contrasts with",
+                      "Builds on",
+                    ].map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                    <option value="">Custom…</option>
+                  </select>
+                </label>
+                <input
+                  value={relationship}
+                  onChange={(event) => setRelationship(event.target.value)}
+                  placeholder="Describe the relationship"
+                  maxLength={80}
+                  className="mt-3 w-full rounded-lg border border-white/10 px-3 py-2.5 text-sm"
+                  autoFocus
+                />
+              </>
+            ) : (
+              <>
+                <label className="mt-4 block text-xs text-stone-400">
+                  Group name
+                  <input
+                    value={groupName}
+                    onChange={(event) => setGroupName(event.target.value)}
+                    maxLength={80}
+                    className="mt-2 w-full rounded-lg border border-white/10 px-3 py-2.5 text-sm"
+                    autoFocus
+                  />
+                </label>
+                <div className="mt-4 flex gap-2">
+                  {groupColors.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      aria-label={`Choose color ${color}`}
+                      aria-pressed={groupColor === color}
+                      onClick={() => setGroupColor(color)}
+                      className={`h-8 w-8 rounded-full border-2 ${
+                        groupColor === color
+                          ? "border-white"
+                          : "border-transparent"
+                      }`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+            {(createConnection.isError || createGroup.isError) && (
+              <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {(createConnection.error ?? createGroup.error)?.message}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCurationDialog(null)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  !(
+                    curationDialog === "connection"
+                      ? relationship.trim()
+                      : groupName.trim()
+                  ) ||
+                  createConnection.isPending ||
+                  createGroup.isPending
+                }
+                className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                <Check size={14} />
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {deleteTarget && (
         <div
           className="fixed inset-0 z-[1200] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"

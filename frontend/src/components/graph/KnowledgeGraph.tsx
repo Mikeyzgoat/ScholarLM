@@ -150,12 +150,18 @@ export function KnowledgeGraph({
   isLoading,
   onNodeSelect,
   focusedNodeId,
+  selectionMode = false,
+  selectedNodeIds = [],
+  onNodeToggle,
   className,
 }: {
   graph: GraphResponse | undefined;
   isLoading: boolean;
   onNodeSelect: (node: GraphNode) => void;
   focusedNodeId?: string | null;
+  selectionMode?: boolean;
+  selectedNodeIds?: string[];
+  onNodeToggle?: (node: GraphNode) => void;
   className?: string;
 }) {
   const { resolvedTheme } = useTheme();
@@ -164,9 +170,13 @@ export function KnowledgeGraph({
     renderer = useRef<Sigma | null>(null),
     model = useRef<Graph | null>(null),
     focusedNode = useRef<string | null>(null),
+    selectionActive = useRef(selectionMode),
+    toggleNode = useRef(onNodeToggle),
     lightTheme = useRef(light),
     physicsFrame = useRef(0);
   focusedNode.current = focusedNodeId ?? null;
+  selectionActive.current = selectionMode;
+  toggleNode.current = onNodeToggle;
   lightTheme.current = light;
   const runPhysics = useCallback((steps = 72) => {
     cancelAnimationFrame(physicsFrame.current);
@@ -235,11 +245,24 @@ export function KnowledgeGraph({
     graph.edges.forEach((e) => {
       if (g.hasNode(e.source) && g.hasNode(e.target))
         g.addEdgeWithKey(e.id, e.source, e.target, {
-          label: e.relationship,
-          color: light ? "#a7d8dc" : "#78350f",
-          baseColor: light ? "#a7d8dc" : "#78350f",
-          size: 1.4,
-          baseSize: 1.4,
+          label: e.manual ? e.relationship : undefined,
+          color: e.manual
+            ? light
+              ? "#087f89"
+              : "#fb923c"
+            : light
+              ? "#a7d8dc"
+              : "#78350f",
+          baseColor: e.manual
+            ? light
+              ? "#087f89"
+              : "#fb923c"
+            : light
+              ? "#a7d8dc"
+              : "#78350f",
+          size: e.manual ? 2.4 : 1.4,
+          baseSize: e.manual ? 2.4 : 1.4,
+          forceLabel: Boolean(e.manual),
           weight:
             e.relationship === "explanation"
               ? 4
@@ -254,7 +277,7 @@ export function KnowledgeGraph({
     });
     model.current = g;
     const sigma = new Sigma(g, container.current, {
-      renderEdgeLabels: false,
+      renderEdgeLabels: true,
       labelColor: { color: light ? "#26333c" : "#d6d3d1" },
       labelFont: "ui-monospace, SFMono-Regular, Menlo, monospace",
       labelSize: 11,
@@ -310,6 +333,65 @@ export function KnowledgeGraph({
       allowInvalidContainer: true,
     });
     renderer.current = sigma;
+    const groupCanvas = sigma.createCanvas("manualGroups", {
+      beforeLayer: "edges",
+    });
+    const groupContext = groupCanvas.getContext("2d");
+    const groupHandles = new Map<
+      string,
+      { x: number; y: number; width: number; height: number }
+    >();
+    const drawGroups = () => {
+      if (!groupContext) return;
+      const dimensions = sigma.getDimensions();
+      groupContext.clearRect(0, 0, dimensions.width, dimensions.height);
+      groupHandles.clear();
+      (graph.groups ?? []).forEach((group) => {
+        const points = group.memberNodeIds.flatMap((nodeId) => {
+          const data = sigma.getNodeDisplayData(nodeId);
+          if (!data || data.hidden) return [];
+          return [sigma.framedGraphToViewport(data)];
+        });
+        if (points.length < 2) return;
+        const padding = 28;
+        const left = Math.min(...points.map((point) => point.x)) - padding;
+        const right = Math.max(...points.map((point) => point.x)) + padding;
+        const top = Math.min(...points.map((point) => point.y)) - padding;
+        const bottom = Math.max(...points.map((point) => point.y)) + padding;
+        groupContext.save();
+        groupContext.fillStyle = `${group.color}18`;
+        groupContext.strokeStyle = `${group.color}99`;
+        groupContext.lineWidth = 1.5;
+        groupContext.beginPath();
+        groupContext.roundRect(left, top, right - left, bottom - top, 18);
+        groupContext.fill();
+        groupContext.stroke();
+        groupContext.font =
+          "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+        const labelWidth = groupContext.measureText(group.name).width + 18;
+        const handle = {
+          x: left + 12,
+          y: top - 11,
+          width: labelWidth,
+          height: 22,
+        };
+        groupContext.fillStyle = group.color;
+        groupContext.beginPath();
+        groupContext.roundRect(
+          handle.x,
+          handle.y,
+          handle.width,
+          handle.height,
+          11,
+        );
+        groupContext.fill();
+        groupContext.fillStyle = "#ffffff";
+        groupContext.fillText(group.name, handle.x + 9, handle.y + 15);
+        groupContext.restore();
+        groupHandles.set(group.id, handle);
+      });
+    };
+    sigma.on("afterRender", drawGroups);
     const resizeObserver = new ResizeObserver(() => {
       const bounds = container.current?.getBoundingClientRect();
       if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
@@ -319,9 +401,13 @@ export function KnowledgeGraph({
     resizeObserver.observe(container.current);
     runPhysics();
     let draggedNode: string | null = null;
+    let draggedGroup: string | null = null;
+    let previousGroupPointer: { x: number; y: number } | null = null;
     sigma.on("clickNode", ({ node }) => {
       const found = graph.nodes.find((n) => n.id === node);
-      if (found) onNodeSelect(found);
+      if (!found) return;
+      if (selectionActive.current) toggleNode.current?.(found);
+      else onNodeSelect(found);
     });
     sigma.on("enterNode", ({ node }) => {
       const found = graph.nodes.find((item) => item.id === node);
@@ -383,6 +469,27 @@ export function KnowledgeGraph({
       event.preventSigmaDefault();
     });
     sigma.getMouseCaptor().on("mousemovebody", (event) => {
+      if (draggedGroup && previousGroupPointer) {
+        const previous = sigma.viewportToGraph(previousGroupPointer);
+        const next = sigma.viewportToGraph({ x: event.x, y: event.y });
+        const group = (graph.groups ?? []).find(
+          (item) => item.id === draggedGroup,
+        );
+        group?.memberNodeIds.forEach((nodeId) => {
+          if (!g.hasNode(nodeId)) return;
+          g.updateNodeAttribute(nodeId, "x", (value) => {
+            return value + next.x - previous.x;
+          });
+          g.updateNodeAttribute(nodeId, "y", (value) => {
+            return value + next.y - previous.y;
+          });
+        });
+        previousGroupPointer = { x: event.x, y: event.y };
+        event.preventSigmaDefault();
+        event.original.preventDefault();
+        sigma.refresh();
+        return;
+      }
       if (!draggedNode) return;
       const position = sigma.viewportToGraph({ x: event.x, y: event.y });
       g.mergeNodeAttributes(draggedNode, position);
@@ -391,12 +498,33 @@ export function KnowledgeGraph({
       sigma.refresh();
     });
     sigma.getMouseCaptor().on("mouseup", () => {
+      if (draggedGroup) {
+        draggedGroup = null;
+        previousGroupPointer = null;
+        if (container.current) container.current.style.cursor = "grab";
+        return;
+      }
       if (!draggedNode) return;
       g.setNodeAttribute(draggedNode, "highlighted", false);
       g.setNodeAttribute(draggedNode, "fixed", false);
       draggedNode = null;
       if (container.current) container.current.style.cursor = "grab";
       runPhysics(24);
+    });
+    sigma.on("downStage", ({ event }) => {
+      const matched = [...groupHandles.entries()].find(([, handle]) => {
+        return (
+          event.x >= handle.x &&
+          event.x <= handle.x + handle.width &&
+          event.y >= handle.y &&
+          event.y <= handle.y + handle.height
+        );
+      });
+      if (!matched) return;
+      draggedGroup = matched[0];
+      previousGroupPointer = { x: event.x, y: event.y };
+      if (container.current) container.current.style.cursor = "grabbing";
+      event.preventSigmaDefault();
     });
     return () => {
       resizeObserver.disconnect();
@@ -415,7 +543,14 @@ export function KnowledgeGraph({
         g.setNodeAttribute(node.id, "color", nodeColor(node, light));
     });
     g.forEachEdge((edge) => {
-      const color = light ? "#a7d8dc" : "#78350f";
+      const manual = g.getEdgeAttribute(edge, "forceLabel") === true;
+      const color = manual
+        ? light
+          ? "#087f89"
+          : "#fb923c"
+        : light
+          ? "#a7d8dc"
+          : "#78350f";
       g.setEdgeAttribute(edge, "color", color);
       g.setEdgeAttribute(edge, "baseColor", color);
     });
@@ -434,21 +569,23 @@ export function KnowledgeGraph({
       if (!g.hasNode(node.id)) return;
       const normalSize = nodeSize(node);
       const isFocused = hasFocus && node.id === focusedNodeId;
+      const isSelected = selectedNodeIds.includes(node.id);
       g.setNodeAttribute(
         node.id,
         "size",
-        isFocused ? normalSize + 5 : normalSize,
+        isFocused ? normalSize + 5 : isSelected ? normalSize + 3 : normalSize,
       );
       g.setNodeAttribute(node.id, "focused", isFocused);
       g.setNodeAttribute(
         node.id,
         "label",
-        isFocused ? node.label.trim() : graphLabel(node),
+        isFocused || isSelected ? node.label.trim() : graphLabel(node),
       );
       g.setNodeAttribute(
         node.id,
         "forceLabel",
         isFocused ||
+          isSelected ||
           node.kind === "hub" ||
           node.kind === "source",
       );
@@ -459,7 +596,7 @@ export function KnowledgeGraph({
       sigma.getCamera().animate({ x, y, ratio: 0.42 }, { duration: 420 });
     }
     sigma.refresh();
-  }, [focusedNodeId, graph, light]);
+  }, [focusedNodeId, graph, light, selectedNodeIds]);
   if (isLoading) return <p className="text-sm">Loading graph…</p>;
   if (!graph?.nodes.length)
     return <p className="text-sm text-stone-500">No graph nodes were found.</p>;

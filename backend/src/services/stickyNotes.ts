@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { db } from "../db/database";
 import { generateDocumentEmbeddings } from "./openRouter";
 import { serializeEmbedding } from "../utils/vectors";
+import { markGraphGroupIndexesStale } from "./manualGraph";
 
 export interface ExtractedSticky {
   id: string;
@@ -156,6 +157,7 @@ export async function indexNoteStickies(input: {
     ? await generateDocumentEmbeddings(changed.map((sticky) => sticky.content))
     : [];
   const currentIds = new Set(stickies.map((sticky) => sticky.id));
+  const removed = existing.some((item) => !currentIds.has(item.id));
   db.transaction(() => {
     for (const item of existing)
       if (!currentIds.has(item.id))
@@ -196,6 +198,7 @@ export async function indexNoteStickies(input: {
       ).run(sticky.documentId, sticky.noteId, sticky.explanationId);
     });
   })();
+  if (changed.length || removed) markGraphGroupIndexesStale(input.documentId);
 }
 
 export async function ensureDocumentStickiesIndexed(

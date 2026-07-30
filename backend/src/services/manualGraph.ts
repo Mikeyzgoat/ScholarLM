@@ -222,6 +222,38 @@ export function deleteManualGroup(id: string): boolean {
   );
 }
 
+export function removeManualGraphNodes(
+  nodeIds: string[],
+  documentId?: string,
+): void {
+  const ids = [...new Set(nodeIds)].filter(Boolean);
+  db.transaction(() => {
+    const removeEdges = db.query(
+      "DELETE FROM manual_graph_edges WHERE source_node_id=? OR target_node_id=?",
+    );
+    const removeMembers = db.query(
+      "DELETE FROM manual_graph_group_members WHERE node_id=?",
+    );
+    ids.forEach((id) => {
+      removeEdges.run(id, id);
+      removeMembers.run(id);
+    });
+    if (documentId) {
+      db.query("DELETE FROM manual_graph_edges WHERE document_id=?").run(
+        documentId,
+      );
+      db.query("DELETE FROM manual_graph_groups WHERE document_id=?").run(
+        documentId,
+      );
+    }
+    db.exec(
+      `DELETE FROM manual_graph_groups
+       WHERE (SELECT COUNT(*) FROM manual_graph_group_members
+              WHERE group_id=manual_graph_groups.id)<2`,
+    );
+  })();
+}
+
 type Candidate = {
   id: string;
   kind: "pdf" | "sticky";
@@ -339,9 +371,23 @@ export function rebuildGroupIndex(groupId: string, force = false): void {
 
 export function rebuildDocumentGroupIndexes(documentId: string): void {
   const groups = db
-    .query("SELECT id FROM manual_graph_groups WHERE document_id=?")
+    .query(
+      `SELECT g.id FROM manual_graph_groups g
+       LEFT JOIN manual_graph_group_index i ON i.group_id=g.id
+       WHERE g.document_id=? AND (i.group_id IS NULL OR i.status='stale')`,
+    )
     .all(documentId) as Array<{ id: string }>;
   groups.forEach((group) => rebuildGroupIndex(group.id));
+}
+
+export function markGraphGroupIndexesStale(documentId: string): void {
+  db.query(
+    `UPDATE manual_graph_group_index SET status='stale'
+     WHERE group_id IN (
+       SELECT id FROM manual_graph_groups
+       WHERE document_id=? OR scope_key='global'
+     )`,
+  ).run(documentId);
 }
 
 export function getDocumentGroupRouting(input: {

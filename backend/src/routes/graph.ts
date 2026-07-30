@@ -16,6 +16,7 @@ import {
   deleteManualEdge,
   deleteManualGroup,
   type GraphScope,
+  removeManualGraphNodes,
   updateManualEdge,
   updateManualGroup,
 } from "../services/manualGraph";
@@ -214,6 +215,31 @@ graph.patch("/manual/groups/:groupId", async (c) => {
       { error: { message: "Invalid manual group update", code: "INVALID_INPUT" } },
       400,
     );
+  if (Array.isArray(body.memberNodeIds)) {
+    const row = db
+      .query(
+        "SELECT scope_key scopeKey,document_id documentId FROM manual_graph_groups WHERE id=?",
+      )
+      .get(c.req.param("groupId")) as {
+      scopeKey: string;
+      documentId: string | null;
+    } | null;
+    if (!row)
+      return c.json(
+        { error: { message: "Group not found", code: "NOT_FOUND" } },
+        404,
+      );
+    const scope: GraphScope =
+      row.scopeKey === "global"
+        ? { kind: "global" }
+        : { kind: "document", documentId: row.documentId! };
+    const visible = visibleNodeIds(scope);
+    if (!body.memberNodeIds.every((id) => visible.has(id as string)))
+      return c.json(
+        { error: { message: "Graph node not found", code: "NOT_FOUND" } },
+        404,
+      );
+  }
   try {
     return updateManualGroup({
       id: c.req.param("groupId"),
@@ -239,9 +265,11 @@ graph.delete("/manual/groups/:groupId", (c) =>
       ),
 );
 graph.delete("/concepts/:conceptId", (c) => {
+  const conceptId = c.req.param("conceptId");
   const removed = db
     .query("DELETE FROM concepts WHERE id=?")
-    .run(c.req.param("conceptId")).changes;
+    .run(conceptId).changes;
+  if (removed) removeManualGraphNodes([conceptId]);
   return removed
     ? c.body(null, 204)
     : c.json(
@@ -250,9 +278,11 @@ graph.delete("/concepts/:conceptId", (c) => {
       );
 });
 graph.delete("/explanations/:explanationId", (c) => {
+  const explanationId = c.req.param("explanationId");
   const removed = db
     .query("DELETE FROM explanation_history WHERE id=?")
-    .run(c.req.param("explanationId")).changes;
+    .run(explanationId).changes;
+  if (removed) removeManualGraphNodes([`handwriting:${explanationId}`]);
   return removed
     ? c.body(null, 204)
     : c.json(

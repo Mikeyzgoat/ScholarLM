@@ -5,6 +5,8 @@ import { deleteFileIfExists, saveUploadedPdf } from "../utils/files";
 import type { DocumentRecord } from "../types";
 import { ingestDocument } from "../services/ingestion";
 import { createHash } from "node:crypto";
+import { getKnowledgeGraph } from "../services/knowledgeGraph";
+import { removeManualGraphNodes } from "../services/manualGraph";
 const documents = new Hono();
 const summary = (d: DocumentRecord) => ({
   id: d.id,
@@ -227,6 +229,9 @@ documents.delete("/:id", async (c) => {
       .query("SELECT id FROM note_pages WHERE document_id=?")
       .all(id) as Array<{ id: string }>
   ).map((note) => note.id);
+  const deletedGraphNodeIds = getKnowledgeGraph(id).nodes.map(
+    (node) => node.id,
+  );
   await deleteFileIfExists(document.file_path);
   db.transaction(() => {
     db.query(
@@ -236,6 +241,7 @@ documents.delete("/:id", async (c) => {
     ).run(id, id);
     db.query("DELETE FROM documents WHERE id=?").run(id);
   })();
+  removeManualGraphNodes(deletedGraphNodeIds, id);
   return c.json({ deletedNoteIds });
 });
 export default documents;

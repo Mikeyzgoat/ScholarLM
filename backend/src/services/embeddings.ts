@@ -3,6 +3,7 @@ import type { ChunkRecord } from "../types";
 import { generateDocumentEmbeddings } from "./openRouter";
 import { serializeEmbedding } from "../utils/vectors";
 import { invalidateDocumentVectorIndex } from "./vectorIndex";
+import { markGraphGroupIndexesStale } from "./manualGraph";
 export async function embedDocumentChunks(documentId: string): Promise<void> {
   const chunks = db
     .query("SELECT * FROM chunks WHERE document_id=? ORDER BY chunk_index")
@@ -21,4 +22,5 @@ export async function embedDocumentChunks(documentId: string): Promise<void> {
     })();
   }
   invalidateDocumentVectorIndex(documentId);
+  if (pending.length) markGraphGroupIndexesStale(documentId);
 }
