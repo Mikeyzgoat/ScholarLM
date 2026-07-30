@@ -36,6 +36,44 @@ function snapshotState(snapshot: unknown): {
   return { shapeIds, savedExplanationIds };
 }
 
+function explanationExistsInOtherSnapshot(input: {
+  explanationId: string;
+  noteId?: string;
+  canvasId?: string;
+}): boolean {
+  const notes = db
+    .query(
+      input.noteId
+        ? "SELECT snapshot FROM note_pages WHERE id<>?"
+        : "SELECT snapshot FROM note_pages",
+    )
+    .all(...(input.noteId ? [input.noteId] : [])) as Array<{
+    snapshot: string;
+  }>;
+  if (
+    notes.some((note) =>
+      snapshotState(JSON.parse(note.snapshot)).savedExplanationIds.has(
+        input.explanationId,
+      ),
+    )
+  )
+    return true;
+  const canvases = db
+    .query(
+      input.canvasId
+        ? "SELECT snapshot FROM standalone_canvases WHERE id<>?"
+        : "SELECT snapshot FROM standalone_canvases",
+    )
+    .all(...(input.canvasId ? [input.canvasId] : [])) as Array<{
+    snapshot: string;
+  }>;
+  return canvases.some((canvas) =>
+    snapshotState(JSON.parse(canvas.snapshot)).savedExplanationIds.has(
+      input.explanationId,
+    ),
+  );
+}
+
 export function pruneOrphanedSelectionExplanations(input: {
   noteId?: string;
   canvasId?: string;
@@ -63,9 +101,23 @@ export function pruneOrphanedSelectionExplanations(input: {
       .filter((source) => !shapeIds.has(source.shapeId))
       .map((source) => source.explanationId),
   );
+  const owned = db
+    .query(
+      `SELECT id FROM explanation_history WHERE ${scope.column}=?`,
+    )
+    .all(scope.value) as Array<{ id: string }>;
+  owned.forEach(({ id }) => orphaned.add(id));
   let removed = 0;
   orphaned.forEach((explanationId) => {
     if (savedExplanationIds.has(explanationId)) return;
+    if (
+      explanationExistsInOtherSnapshot({
+        explanationId,
+        noteId: input.noteId,
+        canvasId: input.canvasId,
+      })
+    )
+      return;
     removed += db
       .query("DELETE FROM explanation_history WHERE id=?")
       .run(explanationId).changes;

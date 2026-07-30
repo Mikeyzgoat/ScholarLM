@@ -89,6 +89,7 @@ export interface RagAnswer {
   answer: string;
   sources: RagSource[];
   grounded: boolean;
+  cached?: boolean;
 }
 export interface ExplainRequest {
   selectedText?: string;

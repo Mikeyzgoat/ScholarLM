@@ -22,6 +22,8 @@ CREATE INDEX IF NOT EXISTS idx_explanation_history_selection_created ON explanat
 CREATE TABLE IF NOT EXISTS openrouter_requests (id TEXT PRIMARY KEY,operation TEXT NOT NULL,model TEXT NOT NULL,status TEXT NOT NULL,http_status INTEGER,error_code TEXT,error_message TEXT,created_at TEXT NOT NULL,completed_at TEXT);
 CREATE INDEX IF NOT EXISTS idx_openrouter_requests_created ON openrouter_requests(created_at DESC);
 CREATE TABLE IF NOT EXISTS explanation_audio (explanation_id TEXT PRIMARY KEY,text_hash TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE,FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS rag_answer_cache (cache_key TEXT PRIMARY KEY,scope_kind TEXT NOT NULL,scope_id TEXT NOT NULL,question TEXT NOT NULL,page_number INTEGER,answer TEXT NOT NULL,sources TEXT NOT NULL,grounded INTEGER NOT NULL,content_version TEXT NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_rag_answer_cache_scope ON rag_answer_cache(scope_kind,scope_id);
 CREATE TABLE IF NOT EXISTS runtime_metadata (key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS manual_graph_edges (id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,document_id TEXT,source_node_id TEXT NOT NULL,target_node_id TEXT NOT NULL,relationship TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(scope_key,source_node_id,target_node_id));
 CREATE TABLE IF NOT EXISTS manual_graph_groups (id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,document_id TEXT,name TEXT NOT NULL,color TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
