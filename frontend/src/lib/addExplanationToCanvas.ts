@@ -17,6 +17,11 @@ export interface ExplanationCanvasInput {
   answers?: string[];
   anchors?: CanvasSelectionAnchor[];
   explanationId?: string;
+  sources?: Array<{
+    documentId: string;
+    documentName: string;
+    pageNumber: number;
+  }>;
 }
 
 export function addExplanationStickyToCanvas(
@@ -80,6 +85,9 @@ export function addExplanationStickyToCanvas(
         : {}),
       ...(input.explanationId
         ? { scholarLmExplanationId: input.explanationId }
+        : {}),
+      ...(input.sources?.length
+        ? { scholarLmSources: input.sources }
         : {}),
     },
     props: {

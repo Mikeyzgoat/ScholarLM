@@ -302,7 +302,7 @@ export default function WorkspacePage() {
                 setInspectorTab("ask");
               }}
               activePage={activePage}
-              onAddSticky={({ question, answer, pageNumber }) => {
+              onAddSticky={({ question, answer, pageNumber, sources }) => {
                 setActivePage(pageNumber);
                 if (!canvasEditor) return;
                 showPdfPageOnCanvas({
@@ -318,6 +318,11 @@ export default function WorkspacePage() {
                     explanation: answer,
                     pageNumber,
                     mode: "explain",
+                    sources: sources.map((source) => ({
+                      documentId: source.documentId ?? documentId,
+                      documentName: source.documentName ?? doc.data.name,
+                      pageNumber: source.pageNumber,
+                    })),
                   }),
                 );
               }}

@@ -39,6 +39,27 @@ function StickyContent({ shape }: { shape: ExplanationStickyShape }) {
   const editor = useEditor();
   const { resolvedTheme } = useTheme();
   const light = resolvedTheme === "light";
+  const sources = Array.isArray(
+    (shape.meta as Record<string, unknown>).scholarLmSources,
+  )
+    ? (
+        (shape.meta as Record<string, unknown>).scholarLmSources as unknown[]
+      ).flatMap((value) => {
+        if (!value || typeof value !== "object") return [];
+        const source = value as Record<string, unknown>;
+        if (
+          typeof source.documentId !== "string" ||
+          typeof source.documentName !== "string" ||
+          typeof source.pageNumber !== "number"
+        )
+          return [];
+        return [{
+          documentId: source.documentId,
+          documentName: source.documentName,
+          pageNumber: source.pageNumber,
+        }];
+      })
+    : [];
   return (
     <HTMLContainer
       id={shape.id}
@@ -110,6 +131,26 @@ function StickyContent({ shape }: { shape: ExplanationStickyShape }) {
           onPointerDown={(event) => event.stopPropagation()}
         >
           {shape.props.explanation}
+          {!!sources.length && (
+            <span className="mt-4 block border-t border-current/15 pt-3">
+              <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
+                Sources
+              </span>
+              <span className="flex flex-wrap gap-1.5">
+                {sources.map((source) => (
+                  <a
+                    key={`${source.documentId}:${source.pageNumber}`}
+                    href={`/workspace/${encodeURIComponent(source.documentId)}?page=${source.pageNumber}`}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    className="rounded-md border border-current/20 px-2 py-1 text-[11px] font-medium underline decoration-current/40 underline-offset-2 hover:bg-amber-500/15"
+                  >
+                    {source.documentName} · p.{source.pageNumber}
+                  </a>
+                ))}
+              </span>
+            </span>
+          )}
         </div>
       )}
     </HTMLContainer>

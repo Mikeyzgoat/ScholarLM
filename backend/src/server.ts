@@ -16,6 +16,7 @@ try {
 const server = Bun.serve({
   port: env.BACKEND_PORT,
   fetch: app.fetch,
+  idleTimeout: 120,
 });
 
 console.log(`ScholarLM API listening on ${server.url}`);

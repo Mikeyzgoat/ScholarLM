@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { BookOpenCheck, Check, Plus, Send } from "lucide-react";
-import type { RagAnswer } from "../../lib/types";
+import type { RagAnswer, RagSource } from "../../lib/types";
 import { askDocument } from "../../services/rag";
 
 interface QuestionTurn extends RagAnswer {
@@ -66,6 +66,7 @@ export function DocumentQA({
     question: string;
     answer: string;
     pageNumber: number;
+    sources: RagSource[];
   }) => void;
 }) {
   const [restored] = useState(() => restoreState(documentId));
@@ -75,6 +76,11 @@ export function DocumentQA({
   const [savedTurns, setSavedTurns] = useState<Set<number>>(
     restored.savedTurns,
   );
+  const [stickyChoice, setStickyChoice] = useState<{
+    turn: QuestionTurn;
+    turnIndex: number;
+    sources: RagSource[];
+  } | null>(null);
   useEffect(() => {
     sessionStorage.setItem(
       storageKey(documentId),
@@ -111,6 +117,22 @@ export function DocumentQA({
     if (!disabled && !ask.isPending && value.length >= 3) ask.mutate(value);
   }
 
+  function saveTurnAsSticky(
+    turn: QuestionTurn,
+    turnIndex: number,
+    pageNumber: number,
+  ) {
+    if (!onAddSticky) return;
+    onAddSticky({
+      question: turn.question,
+      answer: turn.answer,
+      pageNumber,
+      sources: turn.sources,
+    });
+    setSavedTurns((current) => new Set(current).add(turnIndex));
+    setStickyChoice(null);
+  }
+
   return (
     <section className="rounded-xl border border-orange-400/15 bg-neutral-950/70 p-3 shadow-[0_0_32px_rgba(249,115,22,0.04)]">
       <div className="mb-3 flex items-center gap-2">
@@ -137,13 +159,27 @@ export function DocumentQA({
                   title="Add this answer as a sticky on the PDF canvas"
                   aria-label="Add answer as sticky note"
                   onClick={() => {
-                    onAddSticky({
-                      question: turn.question,
-                      answer: turn.answer,
-                      pageNumber:
-                        activePage ?? turn.sources[0]?.pageNumber ?? 1,
-                    });
-                    setSavedTurns((current) => new Set(current).add(index));
+                    const uniqueSources = [
+                      ...new Map(
+                        turn.sources.map((source) => [
+                          `${source.documentId ?? documentId}:${source.pageNumber}`,
+                          source,
+                        ]),
+                      ).values(),
+                    ];
+                    if (uniqueSources.length > 1) {
+                      setStickyChoice({
+                        turn,
+                        turnIndex: index,
+                        sources: uniqueSources,
+                      });
+                      return;
+                    }
+                    saveTurnAsSticky(
+                      turn,
+                      index,
+                      uniqueSources[0]?.pageNumber ?? activePage ?? 1,
+                    );
                   }}
                   className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-orange-400/20 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 disabled:text-emerald-300 disabled:opacity-80"
                 >
@@ -220,6 +256,54 @@ export function DocumentQA({
         <p className="mt-2 text-xs leading-5 text-red-400">
           {ask.error.message}
         </p>
+      )}
+      {stickyChoice && (
+        <div
+          className="fixed inset-0 z-[1300] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sticky-page-choice-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-orange-400/20 bg-neutral-950 p-5 shadow-2xl">
+            <h3 id="sticky-page-choice-title" className="font-semibold">
+              Choose where to store the sticky
+            </h3>
+            <p className="mt-2 text-xs leading-5 text-stone-400">
+              This answer uses multiple sources. Select the PDF page where the
+              sticky should be placed; every citation will remain linked.
+            </p>
+            <div className="mt-4 space-y-2">
+              {stickyChoice.sources.map((source) => (
+                <button
+                  key={`${source.documentId ?? documentId}:${source.pageNumber}`}
+                  type="button"
+                  onClick={() =>
+                    saveTurnAsSticky(
+                      stickyChoice.turn,
+                      stickyChoice.turnIndex,
+                      source.pageNumber,
+                    )
+                  }
+                  className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left text-xs hover:border-orange-400/30"
+                >
+                  <span className="truncate">
+                    {source.documentName ?? "Open PDF"}
+                  </span>
+                  <span className="ml-3 shrink-0 font-mono text-orange-300">
+                    Page {source.pageNumber}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setStickyChoice(null)}
+              className="mt-4 w-full rounded-lg border border-white/10 px-3 py-2 text-xs text-stone-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </section>
   );

@@ -2,7 +2,7 @@ import { apiFetch, ApiError } from "../lib/api";
 import { API_BASE_URL } from "../lib/constants";
 import type { RagAnswer } from "../lib/types";
 
-export function askDocument(input: {
+export async function askDocument(input: {
   documentId: string;
   question: string;
   pageNumber?: number;
@@ -10,7 +10,21 @@ export function askDocument(input: {
   signal?: AbortSignal;
 }): Promise<RagAnswer> {
   const { onToken, signal, ...body } = input;
-  return streamDocumentAnswer(body, onToken, signal);
+  try {
+    return await streamDocumentAnswer(body, onToken, signal);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    const interrupted =
+      error instanceof TypeError ||
+      (error instanceof Error &&
+        error.message === "Document answer stream ended unexpectedly");
+    if (!interrupted) throw error;
+    return apiFetch<RagAnswer>("/qa", {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal,
+    });
+  }
 }
 
 export function askDocumentGroup(input: {
