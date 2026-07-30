@@ -16,6 +16,8 @@ import {
   deleteManualEdge,
   deleteManualGroup,
   type GraphScope,
+  getLibraryGraphGroups,
+  getDocumentLibraryGroups,
   removeManualGraphNodes,
   updateManualEdge,
   updateManualGroup,
@@ -98,6 +100,12 @@ function withoutShapes(snapshot: unknown, shapeIds: string[]): {
 }
 
 graph.get("/", (c) => c.json(getGlobalKnowledgeGraph()));
+graph.get("/manual/library-groups", (c) =>
+  c.json({ groups: getLibraryGraphGroups() }),
+);
+graph.get("/manual/document-groups", (c) =>
+  c.json({ groups: getDocumentLibraryGroups() }),
+);
 graph.post("/manual/edges", async (c) => {
   const body = (await c.req.json<unknown>().catch(() => null)) as Record<
     string,

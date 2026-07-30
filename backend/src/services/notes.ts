@@ -5,6 +5,7 @@ import {
   deleteScopedExplanations,
   pruneOrphanedSelectionExplanations,
 } from "./explanationLifecycle";
+import { removeManualGraphOwner } from "./manualGraph";
 interface NoteRow {
   id: string;
   document_id: string;
@@ -92,6 +93,7 @@ export function updateNote(input: {
   return getNote(input.noteId)!;
 }
 export function deleteNote(noteId: string): boolean {
+  if (getNote(noteId)) removeManualGraphOwner("note", noteId);
   const removed =
     db.query("DELETE FROM note_pages WHERE id=?").run(noteId).changes > 0;
   if (removed) deleteScopedExplanations({ noteId });

@@ -11,7 +11,7 @@ import {
   AlertTriangle,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { NotePage } from "../lib/types";
 import { listDocuments } from "../services/documents";
@@ -27,6 +27,7 @@ import {
 } from "../lib/localCanvases";
 import { deleteStandaloneCanvas } from "../services/canvases";
 import { ApiError } from "../lib/api";
+import { getLibraryGraphGroups } from "../services/graph";
 
 interface LibraryNote extends NotePage {
   documentName: string;
@@ -66,6 +67,62 @@ export default function NotesLibraryPage() {
     queryKey: ["notes", "library"],
     queryFn: listAllNotes,
   });
+  const graphGroups = useQuery({
+    queryKey: ["graph", "library-groups"],
+    queryFn: getLibraryGraphGroups,
+  });
+  const librarySections = useMemo(() => {
+    const assignedCanvases = new Set<string>();
+    const assignedNotes = new Set<string>();
+    const grouped = (graphGroups.data ?? []).flatMap((group) => {
+      const canvasIds = new Set(
+        group.memberNodeIds
+          .filter((id) => id.startsWith("canvas:"))
+          .map((id) => id.slice(7)),
+      );
+      const noteIds = new Set(
+        group.memberNodeIds
+          .filter((id) => id.startsWith("note:"))
+          .map((id) => id.slice(5)),
+      );
+      const canvases = localCanvases.filter((canvas) =>
+        canvasIds.has(canvas.id),
+      );
+      const groupedNotes = (notes.data ?? []).filter((note) =>
+        noteIds.has(note.id),
+      );
+      if (!canvases.length && !groupedNotes.length) return [];
+      canvases.forEach((canvas) => assignedCanvases.add(canvas.id));
+      groupedNotes.forEach((note) => assignedNotes.add(note.id));
+      return [{
+        id: group.id,
+        name: group.name,
+        color: group.color,
+        scope: group.scope,
+        canvases,
+        notes: groupedNotes,
+      }];
+    });
+    const ungroupedCanvases = localCanvases.filter(
+      (canvas) => !assignedCanvases.has(canvas.id),
+    );
+    const ungroupedNotes = (notes.data ?? []).filter(
+      (note) => !assignedNotes.has(note.id),
+    );
+    return [
+      ...grouped,
+      ...(ungroupedCanvases.length || ungroupedNotes.length
+        ? [{
+            id: "ungrouped",
+            name: "Ungrouped",
+            color: null,
+            scope: null,
+            canvases: ungroupedCanvases,
+            notes: ungroupedNotes,
+          }]
+        : []),
+    ];
+  }, [graphGroups.data, localCanvases, notes.data]);
   const rename = useMutation({
     mutationFn: (note: LibraryNote) =>
       updateNote({
@@ -194,7 +251,32 @@ export default function NotesLibraryPage() {
           visible: { transition: { staggerChildren: 0.055 } },
         }}
       >
-        {localCanvases.map((canvas) => (
+        {librarySections.map((section) => (
+          <Fragment key={section.id}>
+            <div className="col-span-full mt-4 flex items-center gap-3 first:mt-0">
+              {section.color && (
+                <span
+                  className="h-3 w-3 rounded-full shadow-[0_0_18px_currentColor]"
+                  style={{
+                    backgroundColor: section.color,
+                    color: section.color,
+                  }}
+                />
+              )}
+              <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em]">
+                {section.name}
+              </h3>
+              {section.scope && (
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] uppercase tracking-wide text-stone-500">
+                  {section.scope}
+                </span>
+              )}
+              <span className="h-px flex-1 bg-white/10" />
+              <span className="text-[10px] text-stone-600">
+                {section.canvases.length + section.notes.length} items
+              </span>
+            </div>
+            {section.canvases.map((canvas) => (
           <motion.div
             key={canvas.id}
             className="relative"
@@ -240,7 +322,7 @@ export default function NotesLibraryPage() {
           </motion.div>
         ))}
 
-        {notes.data?.map((note) => (
+            {section.notes.map((note) => (
           <motion.div
             key={note.id}
             variants={{
@@ -372,6 +454,8 @@ export default function NotesLibraryPage() {
             </motion.div>
           </motion.div>
         ))}
+          </Fragment>
+        ))}
       </motion.div>
 
       {notes.isLoading && (
@@ -379,6 +463,11 @@ export default function NotesLibraryPage() {
       )}
       {notes.isError && (
         <p className="mt-6 text-sm text-red-400">{notes.error.message}</p>
+      )}
+      {graphGroups.isError && (
+        <p className="mt-3 text-sm text-red-400">
+          Note groups could not be loaded: {graphGroups.error.message}
+        </p>
       )}
       {!notes.isLoading && !notes.isError && !notes.data?.length && (
         <p className="mt-6 text-sm text-stone-500">

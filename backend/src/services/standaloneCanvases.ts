@@ -3,6 +3,7 @@ import {
   deleteScopedExplanations,
   pruneOrphanedSelectionExplanations,
 } from "./explanationLifecycle";
+import { removeManualGraphOwner } from "./manualGraph";
 
 interface StandaloneCanvasRow {
   id: string;
@@ -98,6 +99,8 @@ export function saveStandaloneCanvas(input: {
 }
 
 export function deleteStandaloneCanvas(canvasId: string): boolean {
+  if (getStandaloneCanvas(canvasId))
+    removeManualGraphOwner("canvas", canvasId);
   const removed =
     db.query("DELETE FROM standalone_canvases WHERE id=?").run(canvasId)
       .changes > 0;

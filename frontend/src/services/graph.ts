@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import type { GraphNode, GraphResponse } from "../lib/types";
+import type { GraphGroup, GraphNode, GraphResponse } from "../lib/types";
 import { saveLocalCanvasSnapshot } from "../lib/localCanvases";
 import { removeLocalNoteDraft } from "../lib/noteStorage";
 export async function getDocumentGraph(
@@ -10,6 +10,18 @@ export async function getDocumentGraph(
 
 export async function getGlobalGraph(): Promise<GraphResponse> {
   return apiFetch("/graph");
+}
+
+export async function getLibraryGraphGroups(): Promise<GraphGroup[]> {
+  return (
+    await apiFetch<{ groups: GraphGroup[] }>("/graph/manual/library-groups")
+  ).groups;
+}
+
+export async function getDocumentLibraryGroups(): Promise<GraphGroup[]> {
+  return (
+    await apiFetch<{ groups: GraphGroup[] }>("/graph/manual/document-groups")
+  ).groups;
 }
 
 export type GraphScopeInput =

@@ -5,12 +5,13 @@ import {
 } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { UploadBox } from "../components/documents/UploadBox";
 import { DocumentCard } from "../components/documents/DocumentCard";
 import { deleteDocument, listDocuments } from "../services/documents";
 import type { DocumentSummary } from "../lib/types";
+import { getDocumentLibraryGroups } from "../services/graph";
 export default function HomePage() {
   const nav = useNavigate();
   const client = useQueryClient();
@@ -21,6 +22,42 @@ export default function HomePage() {
     null,
   );
   const q = useQuery({ queryKey: ["documents"], queryFn: listDocuments });
+  const graphGroups = useQuery({
+    queryKey: ["graph", "document-library-groups"],
+    queryFn: getDocumentLibraryGroups,
+  });
+  const documentSections = useMemo(() => {
+    const assigned = new Set<string>();
+    const grouped = (graphGroups.data ?? []).flatMap((group) => {
+      const documentIds = new Set(
+        group.memberNodeIds.map((id) => id.slice("source:".length)),
+      );
+      const documents = (q.data ?? []).filter((document) =>
+        documentIds.has(document.id),
+      );
+      if (documents.length < 2) return [];
+      documents.forEach((document) => assigned.add(document.id));
+      return [{ ...group, documents }];
+    });
+    const ungrouped = (q.data ?? []).filter(
+      (document) => !assigned.has(document.id),
+    );
+    return [
+      ...grouped,
+      ...(ungrouped.length
+        ? [{
+            id: "ungrouped",
+            name: "Ungrouped",
+            color: null,
+            scope: "global" as const,
+            indexStatus: "empty" as const,
+            indexedCandidateCount: 0,
+            memberNodeIds: [],
+            documents: ungrouped,
+          }]
+        : []),
+    ];
+  }, [graphGroups.data, q.data]);
   const remove = useMutation({
     mutationFn: (document: DocumentSummary) => deleteDocument(document.id),
     onSuccess: async (_, document) => {
@@ -82,20 +119,49 @@ export default function HomePage() {
             },
           }}
         >
-          {q.data.map((d) => (
-            <DocumentCard
-              key={d.id}
-              document={d}
-              onOpen={openDocument}
-              onDelete={(document) => {
-                remove.reset();
-                setDeleteTarget(document);
-              }}
-            />
+          {documentSections.map((section) => (
+            <Fragment key={section.id}>
+              <div className="mt-6 flex items-center gap-3 first:mt-0">
+                {section.color && (
+                  <span
+                    className="h-3 w-3 rounded-full shadow-[0_0_18px_currentColor]"
+                    style={{
+                      backgroundColor: section.color,
+                      color: section.color,
+                    }}
+                  />
+                )}
+                <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.16em]">
+                  {section.name}
+                </h3>
+                <span className="h-px flex-1 bg-white/10" />
+                <span className="text-[10px] text-stone-500">
+                  {section.documents.length} PDF
+                  {section.documents.length === 1 ? "" : "s"}
+                  {section.color ? " · combined index" : ""}
+                </span>
+              </div>
+              {section.documents.map((document) => (
+                <DocumentCard
+                  key={document.id}
+                  document={document}
+                  onOpen={openDocument}
+                  onDelete={(target) => {
+                    remove.reset();
+                    setDeleteTarget(target);
+                  }}
+                />
+              ))}
+            </Fragment>
           ))}
         </motion.div>
       ) : (
         <p className="text-stone-500">No documents yet.</p>
+      )}
+      {graphGroups.isError && (
+        <p className="mt-3 text-sm text-red-500">
+          Document groups could not be loaded: {graphGroups.error.message}
+        </p>
       )}
       {deleteTarget && (
         <div

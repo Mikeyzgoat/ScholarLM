@@ -333,14 +333,17 @@ export function KnowledgeGraph({
       allowInvalidContainer: true,
     });
     renderer.current = sigma;
-    const groupCanvas = sigma.createCanvas("manualGroups", {
-      beforeLayer: "edges",
-    });
-    const groupContext = groupCanvas.getContext("2d");
     const groupHandles = new Map<
       string,
       { x: number; y: number; width: number; height: number }
     >();
+    const groupCanvas = graph.groups?.length
+      ? sigma.createCanvas("manualGroups", {
+          beforeLayer: "edges",
+          style: { pointerEvents: "none" },
+        })
+      : null;
+    const groupContext = groupCanvas?.getContext("2d") ?? null;
     const drawGroups = () => {
       if (!groupContext) return;
       const dimensions = sigma.getDimensions();

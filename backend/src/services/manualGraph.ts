@@ -43,6 +43,7 @@ export function getManualGraphData(
   visibleNodeIds: Set<string>,
 ): Pick<GraphResponse, "edges" | "groups"> {
   const key = scopeKey(scope);
+  rebuildScopeGroupIndexes(key);
   const edges = (
     db
       .query(
@@ -86,6 +87,94 @@ export function getManualGraphData(
     }];
   });
   return { edges, groups };
+}
+
+export function getLibraryGraphGroups(): GraphResponse["groups"] {
+  rebuildScopeGroupIndexes("global");
+  const documentScopes = db
+    .query(
+      "SELECT DISTINCT scope_key scopeKey FROM manual_graph_groups WHERE document_id IS NOT NULL",
+    )
+    .all() as Array<{ scopeKey: string }>;
+  documentScopes.forEach((row) => rebuildScopeGroupIndexes(row.scopeKey));
+  const rows = db
+    .query(
+      `SELECT g.id,g.scope_key scopeKey,g.name,g.color,g.created_at createdAt,
+              i.status indexStatus,i.candidate_count candidateCount,
+              m.node_id nodeId
+       FROM manual_graph_groups g
+       JOIN manual_graph_group_members m ON m.group_id=g.id
+       LEFT JOIN manual_graph_group_index i ON i.group_id=g.id
+       WHERE m.node_id LIKE 'note:%' OR m.node_id LIKE 'canvas:%'
+       ORDER BY CASE WHEN g.scope_key='global' THEN 0 ELSE 1 END,g.created_at`,
+    )
+    .all() as Array<{
+    id: string;
+    scopeKey: string;
+    name: string;
+    color: string;
+    createdAt: string;
+    indexStatus: "indexed" | "empty" | "stale" | null;
+    candidateCount: number | null;
+    nodeId: string;
+  }>;
+  const assigned = new Set<string>();
+  const groups = new Map<string, GraphResponse["groups"][number]>();
+  rows.forEach((row) => {
+    if (assigned.has(row.nodeId)) return;
+    assigned.add(row.nodeId);
+    const group = groups.get(row.id) ?? {
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      memberNodeIds: [],
+      scope: row.scopeKey === "global" ? "global" : "document",
+      indexStatus: row.indexStatus ?? "stale",
+      indexedCandidateCount: row.candidateCount ?? 0,
+    };
+    group.memberNodeIds.push(row.nodeId);
+    groups.set(row.id, group);
+  });
+  return [...groups.values()];
+}
+
+export function getDocumentLibraryGroups(): GraphResponse["groups"] {
+  rebuildScopeGroupIndexes("global");
+  const rows = db
+    .query(
+      `SELECT g.id,g.name,g.color,i.status indexStatus,
+              i.candidate_count candidateCount,m.node_id nodeId
+       FROM manual_graph_groups g
+       JOIN manual_graph_group_members m ON m.group_id=g.id
+       LEFT JOIN manual_graph_group_index i ON i.group_id=g.id
+       WHERE g.scope_key='global' AND m.node_id LIKE 'source:%'
+       ORDER BY g.created_at,m.rowid`,
+    )
+    .all() as Array<{
+    id: string;
+    name: string;
+    color: string;
+    indexStatus: "indexed" | "empty" | "stale" | null;
+    candidateCount: number | null;
+    nodeId: string;
+  }>;
+  const groups = new Map<string, GraphResponse["groups"][number]>();
+  rows.forEach((row) => {
+    const group = groups.get(row.id) ?? {
+      id: row.id,
+      name: row.name,
+      color: row.color,
+      memberNodeIds: [],
+      scope: "global" as const,
+      indexStatus: row.indexStatus ?? "stale",
+      indexedCandidateCount: row.candidateCount ?? 0,
+    };
+    group.memberNodeIds.push(row.nodeId);
+    groups.set(row.id, group);
+  });
+  return [...groups.values()].filter(
+    (group) => group.memberNodeIds.length >= 2,
+  );
 }
 
 export function createManualEdge(input: {
@@ -254,6 +343,37 @@ export function removeManualGraphNodes(
   })();
 }
 
+export function removeManualGraphOwner(
+  kind: "note" | "canvas",
+  ownerId: string,
+): void {
+  const exactId = `${kind}:${ownerId}`;
+  const drawingPrefix = `canvas-drawing:${ownerId}:%`;
+  const stickyPrefix = kind === "note" ? `sticky:${ownerId}:%` : null;
+  const memberRows = db
+    .query(
+      `SELECT node_id nodeId FROM manual_graph_group_members
+       WHERE node_id=? OR node_id LIKE ?
+          ${stickyPrefix ? "OR node_id LIKE ?" : ""}`,
+    )
+    .all(
+      ...(stickyPrefix
+        ? [exactId, drawingPrefix, stickyPrefix]
+        : [exactId, drawingPrefix]),
+    ) as Array<{ nodeId: string }>;
+  const explanationRows = db
+    .query(
+      `SELECT id FROM explanation_history
+       WHERE ${kind === "note" ? "note_id" : "canvas_id"}=?`,
+    )
+    .all(ownerId) as Array<{ id: string }>;
+  removeManualGraphNodes([
+    exactId,
+    ...memberRows.map((row) => row.nodeId),
+    ...explanationRows.map((row) => `handwriting:${row.id}`),
+  ]);
+}
+
 type Candidate = {
   id: string;
   kind: "pdf" | "sticky";
@@ -370,13 +490,17 @@ export function rebuildGroupIndex(groupId: string, force = false): void {
 }
 
 export function rebuildDocumentGroupIndexes(documentId: string): void {
+  rebuildScopeGroupIndexes(`document:${documentId}`);
+}
+
+function rebuildScopeGroupIndexes(key: string): void {
   const groups = db
     .query(
       `SELECT g.id FROM manual_graph_groups g
        LEFT JOIN manual_graph_group_index i ON i.group_id=g.id
-       WHERE g.document_id=? AND (i.group_id IS NULL OR i.status='stale')`,
+       WHERE g.scope_key=? AND (i.group_id IS NULL OR i.status='stale')`,
     )
-    .all(documentId) as Array<{ id: string }>;
+    .all(key) as Array<{ id: string }>;
   groups.forEach((group) => rebuildGroupIndex(group.id));
 }
 
