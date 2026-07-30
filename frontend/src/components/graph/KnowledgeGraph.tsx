@@ -261,6 +261,46 @@ export function KnowledgeGraph({
       labelDensity: 0.65,
       labelGridCellSize: 120,
       labelRenderedSizeThreshold: 6.5,
+      defaultDrawNodeHover: (context, data, settings) => {
+        const padding = 4;
+        const label = typeof data.label === "string" ? data.label : "";
+        context.font = `${settings.labelWeight} ${settings.labelSize}px ${settings.labelFont}`;
+        const labelWidth = label ? context.measureText(label).width : 0;
+        const height = settings.labelSize + padding * 2;
+        const radius = Math.max(data.size, settings.labelSize / 2) + padding;
+        const join = Math.sqrt(
+          Math.max(0, radius ** 2 - (height / 2) ** 2),
+        );
+
+        context.save();
+        context.fillStyle = lightTheme.current ? "#ffffff" : "#1c1917";
+        context.shadowColor = lightTheme.current
+          ? "rgba(15, 23, 42, 0.18)"
+          : "rgba(0, 0, 0, 0.55)";
+        context.shadowBlur = 8;
+        context.beginPath();
+        context.moveTo(data.x + join, data.y + height / 2);
+        context.lineTo(
+          data.x + radius + labelWidth + padding,
+          data.y + height / 2,
+        );
+        context.lineTo(
+          data.x + radius + labelWidth + padding,
+          data.y - height / 2,
+        );
+        context.lineTo(data.x + join, data.y - height / 2);
+        context.arc(
+          data.x,
+          data.y,
+          radius,
+          Math.asin(height / 2 / radius),
+          -Math.asin(height / 2 / radius),
+        );
+        context.closePath();
+        context.fill();
+        context.restore();
+        settings.defaultDrawNodeLabel(context, data, settings);
+      },
       defaultEdgeColor: light ? "#a7d8dc" : "#78350f",
       stagePadding: 60,
       minCameraRatio: 0.35,

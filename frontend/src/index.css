@@ -417,6 +417,93 @@ input::placeholder {
   filter: hue-rotate(135deg) saturate(0.88) brightness(1.05);
 }
 
+:root[data-theme="light"] .home-product-billboard {
+  border-color: rgba(28, 78, 91, 0.22) !important;
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 30px 80px rgba(34, 66, 75, 0.17);
+}
+
+:root[data-theme="light"] .home-billboard-slide {
+  border-color: rgba(28, 78, 91, 0.18) !important;
+  background-color: #edf5f6;
+}
+
+:root[data-theme="light"] .home-billboard-slide [class*="text-sky-"] {
+  color: #075985 !important;
+}
+
+:root[data-theme="light"] .home-billboard-slide [class*="text-orange-"] {
+  color: #087f89 !important;
+}
+
+:root[data-theme="light"] .home-billboard-slide [class*="text-amber-"] {
+  color: #92400e !important;
+}
+
+:root[data-theme="light"] .home-billboard-slide [class*="text-purple-"] {
+  color: #6b21a8 !important;
+}
+
+:root[data-theme="light"] .home-billboard-slide .text-stone-500 {
+  color: #4b5f69 !important;
+}
+
+:root[data-theme="light"] .home-billboard-art {
+  border-color: rgba(3, 105, 161, 0.24) !important;
+  background-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+:root[data-theme="light"] .home-billboard-art [class*="bg-sky-"] {
+  background-color: rgba(3, 105, 161, 0.18) !important;
+}
+
+:root[data-theme="light"] .home-billboard-art [class*="text-sky-"] {
+  color: #0c4a6e !important;
+}
+
+.home-feature-loop {
+  isolation: isolate;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    black 5%,
+    black 95%,
+    transparent
+  );
+}
+
+.home-feature-loop-track {
+  animation: home-features-right 32s linear infinite;
+  will-change: transform;
+}
+
+.home-feature-loop:hover .home-feature-loop-track {
+  animation-play-state: paused;
+}
+
+.home-feature-loop .home-billboard-slide {
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    0 2px 0 rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="light"] .home-feature-loop .home-billboard-slide {
+  box-shadow:
+    0 10px 26px rgba(34, 66, 75, 0.14),
+    0 2px 0 rgba(255, 255, 255, 0.8);
+}
+
+@keyframes home-features-right {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 .theme-selector {
   border-color: var(--scholar-line);
   background: var(--scholar-panel);
@@ -624,6 +711,11 @@ input::placeholder {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .home-feature-loop-track {
+    animation: none !important;
+    transform: none;
+  }
+
   *,
   *::before,
   *::after {
