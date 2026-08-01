@@ -164,45 +164,12 @@ export default function WorkspacePage() {
         }}
         transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
-        {status.status && status.status.status !== "ready" && (
-          <div className="absolute left-3 right-3 top-3 z-30 flex items-center gap-3 rounded-xl border bg-white/90 p-3 shadow-xl backdrop-blur-xl">
-            <IngestionStatus status={status.status} />
-            {status.status.status === "failed" && (
-              <button
-                type="button"
-                disabled={isRetrying}
-                className="scholar-primary-action ml-auto shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                onClick={async () => {
-                  setIsRetrying(true);
-                  setRetryError("");
-                  try {
-                    await retryDocumentIngestion(documentId);
-                    await status.refetch();
-                  } catch (error) {
-                    setRetryError(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not retry ingestion",
-                    );
-                  } finally {
-                    setIsRetrying(false);
-                  }
-                }}
-              >
-                {isRetrying ? "Retrying…" : "Retry ingestion"}
-              </button>
-            )}
-            {retryError && (
-              <span className="text-xs text-red-400">{retryError}</span>
-            )}
-          </div>
-        )}
         <WorkspaceCanvas
           key={documentId}
           documentId={documentId}
           fileUrl={getDocumentFileUrl(documentId)}
           activePage={activePage}
-          pageCount={doc.data.pageCount ?? 1}
+          pageCount={status.status?.pageCount ?? doc.data.pageCount ?? 1}
           onSaveControllerChange={setCanvasSaveController}
           onPageChange={setActivePage}
           onPdfTextSelected={(text) => {
@@ -257,6 +224,41 @@ export default function WorkspacePage() {
             Research inspector
           </p>
           <h2 className="mt-1 truncate text-sm font-semibold">{doc.data.name}</h2>
+          {status.status && status.status.status !== "ready" && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <div className="min-w-0 flex-1 opacity-75">
+                <IngestionStatus status={status.status} />
+              </div>
+              {status.status.status === "failed" && (
+                <button
+                  type="button"
+                  disabled={isRetrying}
+                  className="scholar-primary-action shrink-0 rounded-lg px-2 py-1 text-[10px] font-medium disabled:opacity-50"
+                  onClick={async () => {
+                    setIsRetrying(true);
+                    setRetryError("");
+                    try {
+                      await retryDocumentIngestion(documentId);
+                      await status.refetch();
+                    } catch (error) {
+                      setRetryError(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not retry ingestion",
+                      );
+                    } finally {
+                      setIsRetrying(false);
+                    }
+                  }}
+                >
+                  {isRetrying ? "Retrying…" : "Retry"}
+                </button>
+              )}
+            </div>
+          )}
+          {retryError && (
+            <p className="mt-1 text-xs text-red-400">{retryError}</p>
+          )}
         </div>
         <div
           className="grid grid-cols-5 gap-1 border-b p-2"

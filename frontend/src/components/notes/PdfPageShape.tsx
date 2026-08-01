@@ -13,7 +13,10 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs" with { type: "fil
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  pdfWorkerUrl,
+  `${window.location.origin}/`,
+).href;
 
 export const PDF_PAGE_SHAPE_TYPE = "scholar-pdf-page" as const;
 

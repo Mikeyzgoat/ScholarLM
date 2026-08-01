@@ -7,6 +7,7 @@ rmSync(outputDirectory, { recursive: true, force: true });
 const result = await Bun.build({
   entrypoints: ["./index.html"],
   outdir: outputDirectory.pathname,
+  publicPath: "/",
   minify: true,
   define: {
     SCHOLARLM_API_BASE_URL: JSON.stringify(

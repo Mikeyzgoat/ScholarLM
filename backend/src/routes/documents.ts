@@ -50,9 +50,13 @@ documents.post("/", async (c) => {
       },
       400,
     );
+  const fileBytes = new Uint8Array(await file.arrayBuffer());
   const contentHash = createHash("sha256")
-    .update(Buffer.from(await file.arrayBuffer()))
+    .update(Buffer.from(fileBytes))
     .digest("hex");
+  const initialPageCount = await PDFDocument.load(fileBytes)
+    .then((pdf) => pdf.getPageCount())
+    .catch(() => null);
   let duplicate = db
     .query("SELECT * FROM documents WHERE content_hash=?")
     .get(contentHash) as DocumentRecord | null;
@@ -84,7 +88,7 @@ documents.post("/", async (c) => {
   try {
     path = await saveUploadedPdf(file, id);
     db.query(
-      "INSERT INTO documents (id,name,original_name,file_path,mime_type,size_bytes,content_hash,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO documents (id,name,original_name,file_path,mime_type,size_bytes,content_hash,status,page_count,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
     ).run(
       id,
       file.name.replace(/\.pdf$/i, ""),
@@ -94,6 +98,7 @@ documents.post("/", async (c) => {
       file.size,
       contentHash,
       "uploaded",
+      initialPageCount,
       now,
       now,
     );

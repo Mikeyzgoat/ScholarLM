@@ -165,9 +165,18 @@ export function WorkspaceCanvas({
           >
             <ChevronLeft size={15} />
           </button>
-          <span className="min-w-16 text-center text-xs text-stone-400">
-            {activePage} / {Math.max(1, pageCount)}
-          </span>
+          <label className="flex items-center gap-1 text-xs text-stone-400">
+            <span className="sr-only">PDF page number</span>
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, pageCount)}
+              value={activePage}
+              onChange={(event) => navigateToPage(Number(event.target.value))}
+              className="w-14 rounded border bg-transparent px-1.5 py-1 text-center text-xs outline-none focus:border-orange-400/50"
+            />
+            <span>/ {Math.max(1, pageCount)}</span>
+          </label>
           <button
             type="button"
             aria-label="Next PDF page"
