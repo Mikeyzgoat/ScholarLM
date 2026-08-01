@@ -45,6 +45,46 @@ locally as the server fallback, with browser speech as the final fallback.
 
 ## Running it locally
 
+### Docker package (recommended)
+
+Install Docker Desktop or Docker Engine with Compose v2, clone the repository,
+and run the installer. Bun does not need to be installed on the host. The
+installer prompts for the OpenRouter API key without showing it on screen,
+writes an ignored `.env.docker` file, installs the locked backend and frontend
+packages inside their Bun build images, builds both containers, initializes the
+database on first boot, and starts ScholarLM.
+
+Linux, macOS, WSL, or Git Bash:
+
+```sh
+./scripts/install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\install.ps1
+```
+
+Open [http://localhost:3000](http://localhost:3000), or the custom port entered
+during initialization. SQLite, uploaded PDFs, and the Kokoro model cache are
+kept in Docker volumes, so recreating the containers does not erase study data.
+
+Useful package commands:
+
+```sh
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker stop
+docker compose --env-file .env.docker up -d
+docker compose --env-file .env.docker down
+```
+
+Run the initializer again to change the API key, port, or rebuild after an
+update. Do not use `docker compose down -v` unless you intentionally want to
+delete the database, uploaded PDFs, and cached local model files.
+
+### Manual Bun setup
+
 You need:
 
 - [Bun](https://bun.sh/) 1.3 or newer
@@ -133,6 +173,8 @@ when the source equation changes.
 ScholarLM/
 ├── backend/                 Bun, Hono, SQLite, retrieval and AI services
 ├── frontend/                React, tldraw, PDF.js and Sigma.js
+├── docker-compose.yml       Two-container local package
+├── scripts/                 Docker initialization helpers
 ├── future_upgrades.md       Engineering notes and remaining work
 ├── .env.example             Runtime configuration
 └── README.md

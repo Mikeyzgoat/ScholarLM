@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env.docker
+    environment:
+      BACKEND_PORT: 3001
+      FRONTEND_ORIGIN: http://localhost:${SCHOLARLM_FRONTEND_PORT:-3000}
+    volumes:
+      - scholarlm_data:/app/data
+      - kokoro_cache:/app/.cache
+    expose:
+      - "3001"
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_BASE_URL: /api
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${SCHOLARLM_FRONTEND_PORT:-3000}:80"
+    restart: unless-stopped
+
+volumes:
+  scholarlm_data:
+  kokoro_cache:

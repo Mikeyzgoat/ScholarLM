@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { env } from "../env";
 import {
   explainCanvasSelection,
+  generateCanvasVoiceExplanation,
   hasUsefulVoiceExplanation,
 } from "./openRouter";
 
@@ -37,7 +38,7 @@ describe("hasUsefulVoiceExplanation", () => {
     ).toBe(true);
   });
 
-  test("repairs a visual-math response that omitted narration", async () => {
+  test("returns visual math before generating missing narration", async () => {
     const originalFetch = globalThis.fetch;
     const originalKey = env.OPENROUTER_API_KEY;
     const requests: string[] = [];
@@ -59,9 +60,15 @@ describe("hasUsefulVoiceExplanation", () => {
       const result = await explainCanvasSelection({
         selectedText: "y = x^3 sin x",
       });
-      expect(requests).toHaveLength(2);
+      expect(requests).toHaveLength(1);
       expect(result.answer).toBe("dy/dx = 3x² sin x + x³ cos x");
-      expect(result.voiceExplanation).toContain("product rule");
+      expect(result.voiceExplanation).toBeUndefined();
+      const voiceExplanation = await generateCanvasVoiceExplanation({
+        answer: result.answer!,
+        recognizedEquation: result.recognizedEquation,
+      });
+      expect(requests).toHaveLength(2);
+      expect(voiceExplanation).toContain("product rule");
     } finally {
       globalThis.fetch = originalFetch;
       env.OPENROUTER_API_KEY = originalKey;

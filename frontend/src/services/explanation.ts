@@ -105,6 +105,20 @@ export async function findExistingExplanation(input: {
   ).explanation;
 }
 
+export async function generateVoiceExplanation(input: {
+  answer: string;
+  recognizedEquation?: string;
+  historyId?: string;
+  signal?: AbortSignal;
+}): Promise<{ voiceExplanation: string }> {
+  const { signal, ...body } = input;
+  return apiFetch("/explain/voice", {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
 export async function createDeterministicMathGraph(
   equation: string,
 ): Promise<{

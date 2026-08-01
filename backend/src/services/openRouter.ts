@@ -277,10 +277,10 @@ export async function explainCanvasSelection(input: {
   signal?: AbortSignal;
 }): Promise<CanvasAnalysis> {
   const prompt = `Analyze the selected mathematics${input.imageDataUrl ? " in the image" : ""}.
-Recognize the equation accurately, solve it step by step, and explain the reasoning as a teacher.
+Recognize the equation accurately and solve it step by step for visual display.
 Provide 17–41 ordered sample points across a useful domain when a graph materially helps the explanation${input.graphRequested ? " or because the user explicitly requested a graph" : ""}. Otherwise omit plot. If a requested graph is mathematically inapplicable, explain why instead of inventing one.
 Return only JSON:
-{"recognizedEquation":"...","answer":"math only","voiceExplanation":"teacher explanation","explanation":"math only","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
+{"recognizedEquation":"...","answer":"math only","explanation":"math only","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
 ${input.documentTitle ? `Document context: ${input.documentTitle}` : ""}
 ${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
 ${input.selectedTexts?.length ? `Treat these as separate numbered selections and answer each separately:\n${input.selectedTexts.map((text, index) => `Selection ${index + 1}: ${text}`).join("\n")}\nRequired explanation format: "Answer 1: ...\\n<ANSWER_SPLIT>\\nAnswer 2: ..." with exactly one answer per selection.` : input.selectedText ? `Associated text: ${input.selectedText}` : ""}
@@ -288,7 +288,7 @@ ${input.previousExplanation ? `Previous explanation: ${input.previousExplanation
 ${input.mode === "simplify" ? "Rewrite the explanation more simply with shorter steps and intuitive language." : ""}
 ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improve on the previous explanation." : ""}`;
   const system =
-    "You are a mathematics teacher with visual handwriting recognition. Classify the input as a mathematical problem. Never invent unreadable symbols: state uncertainty in the voice explanation. Return valid JSON only. Keep answer tokens mathematical and voiceExplanation tokens conversational.";
+    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the written answer. Return valid JSON only. Keep the answer concise, mathematical, and suitable for immediate visual display. Spoken narration is generated separately.";
   const result = parseCanvasAnalysis(
     await openRouterGenerate({
       prompt,
@@ -300,27 +300,35 @@ ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improv
     }),
   );
   const answer = result.answer ?? result.explanation;
-  if (!hasUsefulVoiceExplanation(answer, result.voiceExplanation)) {
-    result.voiceExplanation = parseVoiceRepair(
-      await openRouterGenerate({
-        prompt: `Recognized equation: ${result.recognizedEquation ?? input.selectedText ?? "handwritten mathematics"}
-Written solution:
-${answer}
-
-Create the missing spoken explanation. Teach how the equation is interpreted, why each operation or rule is used, and how the final result follows. Speak naturally to a student. Do not merely read, repeat, or list the written equations. Return only JSON: {"voiceExplanation":"..."}`,
-        system:
-          "You are a patient mathematics teacher writing audio narration. Return valid JSON only. The voiceExplanation must explain the reasoning in complete conversational sentences and must not duplicate the written answer.",
-        json: true,
-        signal: input.signal,
-        maxTokens: 450,
-      }),
-    );
-  }
   if (!hasUsefulVoiceExplanation(answer, result.voiceExplanation))
-    throw new Error("AI did not provide a distinct spoken explanation");
+    result.voiceExplanation = undefined;
   result.answer = answer;
   result.intent = "math";
   return result;
+}
+
+export async function generateCanvasVoiceExplanation(input: {
+  answer: string;
+  recognizedEquation?: string;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const voiceExplanation = parseVoiceRepair(
+    await openRouterGenerate({
+      prompt: `Recognized equation: ${input.recognizedEquation ?? "handwritten mathematics"}
+Written solution:
+${input.answer}
+
+Create the spoken explanation. Teach how the equation is interpreted, why each operation or rule is used, and how the final result follows. Speak naturally to a student. Do not merely read, repeat, or list the written equations. Return only JSON: {"voiceExplanation":"..."}`,
+      system:
+        "You are a patient mathematics teacher writing audio narration. Return valid JSON only. The voiceExplanation must explain the reasoning in complete conversational sentences and must not duplicate the written answer.",
+      json: true,
+      signal: input.signal,
+      maxTokens: 450,
+    }),
+  );
+  if (!hasUsefulVoiceExplanation(input.answer, voiceExplanation))
+    throw new Error("AI did not provide a distinct spoken explanation");
+  return voiceExplanation;
 }
 
 export async function generateEmbeddings(

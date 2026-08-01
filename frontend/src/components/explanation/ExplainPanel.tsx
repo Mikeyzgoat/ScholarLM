@@ -10,6 +10,7 @@ import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
 import {
   createDeterministicMathGraph,
   findExistingExplanation,
+  generateVoiceExplanation,
 } from "../../services/explanation";
 import {
   ChartSpline,
@@ -95,6 +96,7 @@ export function ExplainPanel({
   const [isGraphing, setIsGraphing] = useState(false);
   const screenshotInput = useRef<HTMLInputElement>(null);
   const voiceText = useRef("");
+  const voiceController = useRef<AbortController | null>(null);
   const [canvasInput, setCanvasInput] = useState<Parameters<
     NonNullable<typeof onExplanationGenerated>
   >[0]>();
@@ -164,6 +166,8 @@ export function ExplainPanel({
     mode: "explain" | "regenerate" | "simplify" = "explain",
     requestGraph = false,
   ) {
+    voiceController.current?.abort();
+    voiceController.current = null;
     const value = await state.explain({
       selectedText: activeText,
       selectedTexts:
@@ -192,8 +196,7 @@ export function ExplainPanel({
     });
     if (value) {
       const displayAnswer = value.answer ?? value.explanation;
-      const voiceExplanation = value.voiceExplanation ?? displayAnswer;
-      voiceText.current = voiceExplanation;
+      voiceText.current = value.voiceExplanation ?? "";
       setRecognizedEquation(value.recognizedEquation ?? "");
       setGraphError("");
       if (value.plot)
@@ -212,7 +215,31 @@ export function ExplainPanel({
         pageNumber: pageNumber ?? undefined,
       });
       if (pastedImage) setInputMode("selection");
-      await speech.speak(voiceExplanation, activeText, value.historyId);
+      const backgroundVoice = new AbortController();
+      voiceController.current = backgroundVoice;
+      void (async () => {
+        try {
+          const voiceExplanation =
+            value.voiceExplanation ??
+            (
+              await generateVoiceExplanation({
+                answer: displayAnswer,
+                recognizedEquation: value.recognizedEquation,
+                historyId: value.historyId,
+                signal: backgroundVoice.signal,
+              })
+            ).voiceExplanation;
+          if (backgroundVoice.signal.aborted) return;
+          voiceText.current = voiceExplanation;
+          await speech.speak(voiceExplanation, activeText, value.historyId);
+        } catch (error) {
+          if (!backgroundVoice.signal.aborted)
+            console.warn("Could not prepare the spoken explanation", error);
+        } finally {
+          if (voiceController.current === backgroundVoice)
+            voiceController.current = null;
+        }
+      })();
     }
   }
   async function insertVerifiedGraph() {
@@ -242,6 +269,8 @@ export function ExplainPanel({
   }
   useEffect(() => {
     const controller = new AbortController();
+    voiceController.current?.abort();
+    voiceController.current = null;
     speech.stop();
     if (!activeText && !activeImage) {
       voiceText.current = "";
@@ -274,9 +303,19 @@ export function ExplainPanel({
           documentTitle,
           pageNumber: pageNumber ?? undefined,
           signal: controller.signal,
-        }).then((cached) => {
+        }).then(async (cached) => {
           if (!cached || controller.signal.aborted) return;
-          const spoken = cached.voiceExplanation ?? cached.explanation;
+          const spoken =
+            cached.voiceExplanation ??
+            (
+              await generateVoiceExplanation({
+                answer: cached.explanation,
+                recognizedEquation: cached.recognizedEquation,
+                historyId: cached.historyId,
+                signal: controller.signal,
+              })
+            ).voiceExplanation;
+          if (controller.signal.aborted) return;
           voiceText.current = spoken;
           void speech.prepare(spoken, activeText, cached.historyId);
         }).catch((error) => {
@@ -335,10 +374,20 @@ export function ExplainPanel({
         pageNumber: pageNumber ?? undefined,
         signal: controller.signal,
       })
-        .then((cached) => {
+        .then(async (cached) => {
           if (!cached || controller.signal.aborted) return;
           const displayAnswer = cached.answer ?? cached.explanation;
-          const voiceExplanation = cached.voiceExplanation ?? displayAnswer;
+          const voiceExplanation =
+            cached.voiceExplanation ??
+            (
+              await generateVoiceExplanation({
+                answer: displayAnswer,
+                recognizedEquation: cached.recognizedEquation,
+                historyId: cached.historyId,
+                signal: controller.signal,
+              })
+            ).voiceExplanation;
+          if (controller.signal.aborted) return;
           voiceText.current = voiceExplanation;
           state.load(displayAnswer);
           void speech.prepare(

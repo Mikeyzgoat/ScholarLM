@@ -3,6 +3,7 @@ import { stream } from "hono/streaming";
 import {
   explainCanvasSelection,
   explainSelectedText,
+  generateCanvasVoiceExplanation,
   hasUsefulVoiceExplanation,
 } from "../services/openRouter";
 import {
@@ -19,6 +20,56 @@ import {
 } from "../services/providerTelemetry";
 import { db } from "../db/database";
 const explanation = new Hono();
+explanation.post("/voice", async (c) => {
+  const body = (await c.req.json<unknown>().catch(() => null)) as {
+    answer?: unknown;
+    recognizedEquation?: unknown;
+    historyId?: unknown;
+  } | null;
+  if (
+    !body ||
+    typeof body.answer !== "string" ||
+    !body.answer.trim() ||
+    body.answer.length > 12000 ||
+    (body.recognizedEquation !== undefined &&
+      typeof body.recognizedEquation !== "string") ||
+    (body.historyId !== undefined &&
+      (typeof body.historyId !== "string" ||
+        !/^[a-f0-9]{64}$/.test(body.historyId)))
+  )
+    return c.json(
+      { error: { message: "Invalid voice explanation request", code: "INVALID_INPUT" } },
+      400,
+    );
+  try {
+    const voiceExplanation = await generateCanvasVoiceExplanation({
+      answer: body.answer.trim(),
+      recognizedEquation:
+        typeof body.recognizedEquation === "string"
+          ? body.recognizedEquation.trim()
+          : undefined,
+      signal: c.req.raw.signal,
+    });
+    if (typeof body.historyId === "string")
+      db.query(
+        "UPDATE explanation_history SET voice_explanation=? WHERE id=?",
+      ).run(voiceExplanation, body.historyId);
+    return c.json({ voiceExplanation });
+  } catch (error) {
+    return c.json(
+      {
+        error: {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Voice explanation generation failed",
+          code: "VOICE_EXPLANATION_FAILED",
+        },
+      },
+      503,
+    );
+  }
+});
 explanation.post("/graph", async (c) => {
   const body = (await c.req.json<unknown>().catch(() => null)) as {
     equation?: unknown;
@@ -89,7 +140,13 @@ explanation.post("/lookup", async (c) => {
         : undefined,
     pageNumber: body.pageNumber as number | undefined,
   });
-  return c.json({ explanation: cached });
+  return c.json({
+    explanation:
+      cached &&
+      !hasUsefulVoiceExplanation(cached.explanation, cached.voiceExplanation)
+        ? { ...cached, voiceExplanation: undefined }
+        : cached,
+  });
 });
 explanation.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
@@ -245,11 +302,18 @@ explanation.post("/", async (c) => {
       documentTitle: context.documentTitle,
       pageNumber: context.pageNumber,
     });
-    if (
-      cached &&
-      hasUsefulVoiceExplanation(cached.explanation, cached.voiceExplanation)
-    )
-      return c.json({ ...cached, answer: cached.explanation, cached: true });
+    if (cached)
+      return c.json({
+        ...cached,
+        answer: cached.explanation,
+        voiceExplanation: hasUsefulVoiceExplanation(
+          cached.explanation,
+          cached.voiceExplanation,
+        )
+          ? cached.voiceExplanation
+          : undefined,
+        cached: true,
+      });
   }
   const requestId = beginOpenRouterRequest("explanation");
   try {
