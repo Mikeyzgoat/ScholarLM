@@ -17,7 +17,7 @@
   arrow/.style={-Latex, draw=scholarblue, line width=0.55pt}
 }
 
-\title{ScholarLM: An Interactive PDF Study Workspace with\\Retrieval-Augmented Assistance and Canvas-Based Knowledge Mapping}
+\title{ScholarLM: An AI-Assisted PDF Study Workspace}
 
 \author{\IEEEauthorblockN{T Aditya Ananda Sai}
 \IEEEauthorblockA{Term-3 Project Report\\
@@ -111,10 +111,10 @@ ScholarLM separates language generation, visual understanding, embeddings, and s
 \toprule
 \textbf{Capability} & \textbf{Primary configuration} & \textbf{Fallback}\\
 \midrule
-Text generation & \texttt{google/gemma-4-26b-a4b-it:free} & Ordered free models: Gemma 4 31B, GPT-OSS 20B, Nemotron Nano 9B V2, then \texttt{openrouter/free}.\\
-Vision and handwriting & \texttt{google/gemma-4-26b-a4b-it:free} & The same ordered route, with OpenRouter selecting a compatible free endpoint.\\
-Document embeddings & \texttt{nvidia/llama-nemotron-embed-vl-1b-v2:free} & Re-indexing can be retried with the configured embedding provider; unavailable embeddings disable semantic retrieval until indexing succeeds.\\
-Speech synthesis & \texttt{fish-audio/s2.1-pro-free:free} through OpenRouter & Local Kokoro JS, then browser SpeechSynthesis when server audio is unavailable.\\
+Text generation & Google Gemma 4 26B A4B & Ordered free models: Gemma 4 31B, GPT-OSS 20B, Nemotron Nano 9B V2, then the OpenRouter free router.\\
+Vision and handwriting & Google Gemma 4 26B A4B & The same ordered route, with OpenRouter selecting a compatible free endpoint.\\
+Document embeddings & NVIDIA Llama Nemotron Embed VL 1B V2 & Re-indexing can be retried with the configured embedding provider; unavailable embeddings disable semantic retrieval until indexing succeeds.\\
+Speech synthesis & Fish Audio S2.1 Pro through OpenRouter & Local Kokoro JS, then browser SpeechSynthesis when server audio is unavailable.\\
 Transient provider errors & Current OpenRouter operation and selected model & Short retry with exponential backoff, provided that no response tokens have already been emitted.\\
 \bottomrule
 \end{tabular}
@@ -174,8 +174,6 @@ ScholarLM demonstrates how document rendering, an infinite annotation canvas, se
 \end{thebibliography}
 
 \end{document}
-
-
 
 
 
