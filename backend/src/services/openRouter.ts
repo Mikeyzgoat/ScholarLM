@@ -177,6 +177,30 @@ export interface GeneratedExplanation {
   voiceExplanation: string;
 }
 
+export function hasUsefulVoiceExplanation(
+  answer: string,
+  voiceExplanation?: string,
+): voiceExplanation is string {
+  if (!voiceExplanation?.trim()) return false;
+  const normalize = (value: string) =>
+    value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
+  return normalize(answer) !== normalize(voiceExplanation);
+}
+
+function parseVoiceRepair(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/iu, "")
+    .replace(/\s*```$/u, "");
+  const value = JSON.parse(cleaned) as { voiceExplanation?: unknown };
+  if (
+    typeof value.voiceExplanation !== "string" ||
+    !value.voiceExplanation.trim()
+  )
+    throw new Error("AI returned an invalid repaired voice explanation");
+  return value.voiceExplanation.trim();
+}
+
 function parseGeneratedExplanation(raw: string): GeneratedExplanation {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
   const value = JSON.parse(cleaned) as Partial<GeneratedExplanation>;
@@ -265,7 +289,7 @@ ${input.mode === "simplify" ? "Rewrite the explanation more simply with shorter 
 ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improve on the previous explanation." : ""}`;
   const system =
     "You are a mathematics teacher with visual handwriting recognition. Classify the input as a mathematical problem. Never invent unreadable symbols: state uncertainty in the voice explanation. Return valid JSON only. Keep answer tokens mathematical and voiceExplanation tokens conversational.";
-  return parseCanvasAnalysis(
+  const result = parseCanvasAnalysis(
     await openRouterGenerate({
       prompt,
       system,
@@ -275,6 +299,28 @@ ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improv
       maxTokens: 750,
     }),
   );
+  const answer = result.answer ?? result.explanation;
+  if (!hasUsefulVoiceExplanation(answer, result.voiceExplanation)) {
+    result.voiceExplanation = parseVoiceRepair(
+      await openRouterGenerate({
+        prompt: `Recognized equation: ${result.recognizedEquation ?? input.selectedText ?? "handwritten mathematics"}
+Written solution:
+${answer}
+
+Create the missing spoken explanation. Teach how the equation is interpreted, why each operation or rule is used, and how the final result follows. Speak naturally to a student. Do not merely read, repeat, or list the written equations. Return only JSON: {"voiceExplanation":"..."}`,
+        system:
+          "You are a patient mathematics teacher writing audio narration. Return valid JSON only. The voiceExplanation must explain the reasoning in complete conversational sentences and must not duplicate the written answer.",
+        json: true,
+        signal: input.signal,
+        maxTokens: 450,
+      }),
+    );
+  }
+  if (!hasUsefulVoiceExplanation(answer, result.voiceExplanation))
+    throw new Error("AI did not provide a distinct spoken explanation");
+  result.answer = answer;
+  result.intent = "math";
+  return result;
 }
 
 export async function generateEmbeddings(

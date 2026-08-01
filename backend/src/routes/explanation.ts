@@ -3,6 +3,7 @@ import { stream } from "hono/streaming";
 import {
   explainCanvasSelection,
   explainSelectedText,
+  hasUsefulVoiceExplanation,
 } from "../services/openRouter";
 import {
   findLatestExplanation,
@@ -244,7 +245,11 @@ explanation.post("/", async (c) => {
       documentTitle: context.documentTitle,
       pageNumber: context.pageNumber,
     });
-    if (cached) return c.json({ ...cached, cached: true });
+    if (
+      cached &&
+      hasUsefulVoiceExplanation(cached.explanation, cached.voiceExplanation)
+    )
+      return c.json({ ...cached, answer: cached.explanation, cached: true });
   }
   const requestId = beginOpenRouterRequest("explanation");
   try {
@@ -278,7 +283,7 @@ explanation.post("/", async (c) => {
         pageNumber: context.pageNumber,
         mode,
         explanation: result.answer ?? result.explanation,
-        voiceExplanation: result.voiceExplanation ?? result.explanation,
+        voiceExplanation: result.voiceExplanation,
         intent: result.intent ?? "math",
         recognizedText: result.recognizedEquation,
         inputKind: hasImage
@@ -293,7 +298,7 @@ explanation.post("/", async (c) => {
         ...result,
         answer: result.answer ?? result.explanation,
         explanation: result.answer ?? result.explanation,
-        voiceExplanation: result.voiceExplanation ?? result.explanation,
+        voiceExplanation: result.voiceExplanation,
         ...history,
       });
     }
