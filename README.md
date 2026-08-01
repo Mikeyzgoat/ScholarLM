@@ -22,7 +22,7 @@ open for working things out.
 - Search PDF passages and saved sticky notes together
 - Plot supported handwritten or typed equations
 - Connect PDFs, canvases, stickies, and handwriting in a knowledge graph
-- Read explanations aloud with Kokoro or browser speech
+- Read explanations aloud with Fish Audio, Kokoro, or browser speech
 - Create an empty canvas first and attach a PDF later
 
 Canvas state is saved in SQLite and backed up in browser storage. Questions,
@@ -40,8 +40,8 @@ flowchart LR
 
 The frontend handles the PDF, canvas, and graph interface. The backend stores
 documents and canvas snapshots, extracts page-aware text, runs retrieval, and
-calls OpenRouter for generation and embeddings. Kokoro speech runs locally when
-available.
+calls OpenRouter for generation, embeddings, and Fish Audio speech. Kokoro runs
+locally as the server fallback, with browser speech as the final fallback.
 
 ## Running it locally
 
@@ -176,8 +176,8 @@ curl http://localhost:3001/health
 
 - Selected text, screenshots, and embedding input are sent to the configured
   OpenRouter service.
-- Kokoro runs locally, but its model can take time to load. Browser speech is
-  used as a fallback.
+- Fish Audio is the primary speech provider. Kokoro runs locally as a fallback
+  and can take time to load; browser speech is used if both are unavailable.
 - The free OpenRouter route can occasionally be unavailable. ScholarLM retries
   short provider failures and keeps the active selection available.
 - Handwriting recognition still depends on how clearly the equation is

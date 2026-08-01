@@ -66,12 +66,6 @@ async function synthesizeWithKokoro(text: string): Promise<SpeechAudio> {
 }
 
 export async function warmSpeechModel(): Promise<void> {
-  try {
-    await synthesizeWithFishAudio("ScholarLM speech is ready.");
-    return;
-  } catch (error) {
-    console.warn("[tts] Fish Audio preload failed; warming Kokoro fallback", error);
-  }
   await getKokoroModel();
 }
 

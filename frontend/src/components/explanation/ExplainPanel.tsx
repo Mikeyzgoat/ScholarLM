@@ -241,6 +241,7 @@ export function ExplainPanel({
     }
   }
   useEffect(() => {
+    const controller = new AbortController();
     speech.stop();
     if (!activeText && !activeImage) {
       voiceText.current = "";
@@ -248,7 +249,7 @@ export function ExplainPanel({
       setCanvasInput(undefined);
       setRecognizedEquation("");
       setGraphError("");
-      return;
+      return () => controller.abort();
     }
     const existing =
       existingExplanation ||
@@ -260,11 +261,30 @@ export function ExplainPanel({
     if (existing) {
       voiceText.current = existing;
       state.load(existing);
-      void speech.prepare(
-        existing,
-        activeText,
-        existingExplanationId,
-      );
+      if (existingExplanationId) {
+        void findExistingExplanation({
+          selectedText: activeText,
+          imageDataUrl: activeImage,
+          documentId,
+          canvasId,
+          shapeId:
+            activeImage && !pastedImage
+              ? selectionAnchors?.[0]?.shapeId
+              : undefined,
+          documentTitle,
+          pageNumber: pageNumber ?? undefined,
+          signal: controller.signal,
+        }).then((cached) => {
+          if (!cached || controller.signal.aborted) return;
+          const spoken = cached.voiceExplanation ?? cached.explanation;
+          voiceText.current = spoken;
+          void speech.prepare(spoken, activeText, cached.historyId);
+        }).catch((error) => {
+          if (!controller.signal.aborted)
+            console.warn("Could not restore saved speech", error);
+        });
+      } else
+        void speech.prepare(existing, activeText);
       setCanvasInput({
         selectedText: activeText,
         explanation: existing,
@@ -279,10 +299,15 @@ export function ExplainPanel({
       setRecognizedEquation("");
       setGraphError("");
     }
+    return () => controller.abort();
   }, [
     activeText,
     activeImage,
+    canvasId,
+    documentId,
+    documentTitle,
     pageNumber,
+    pastedImage,
     existingExplanation,
     existingExplanationId,
     selectionAnchors,
@@ -290,6 +315,8 @@ export function ExplainPanel({
   useEffect(() => {
     if (
       (!activeText && !activeImage) ||
+      existingExplanation ||
+      state.explanation ||
       state.isExplaining
     )
       return;
@@ -344,7 +371,6 @@ export function ExplainPanel({
     canvasId,
     documentId,
     documentTitle,
-    existingExplanation,
     pageNumber,
     pastedImage,
     selectionAnchors,
@@ -625,5 +651,3 @@ export function ExplainPanel({
     </motion.section>
   );
 }
-
-

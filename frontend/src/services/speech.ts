@@ -54,7 +54,7 @@ export async function streamSpeech(
     if (!line.trim()) return;
     const chunk = JSON.parse(line) as { audio?: unknown; text?: unknown; mimeType?: unknown };
     if (typeof chunk.audio !== "string" || typeof chunk.text !== "string")
-      throw new Error("Invalid Kokoro audio stream");
+      throw new Error("Invalid server audio stream");
     const binary = atob(chunk.audio);
     const bytes = Uint8Array.from(binary, (character) =>
       character.charCodeAt(0),

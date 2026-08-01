@@ -165,7 +165,7 @@ export function useSpeech() {
       stopProgress();
     };
     player.onerror = () =>
-      setError(new Error("The browser could not decode Kokoro audio"));
+      setError(new Error("The browser could not decode the generated audio"));
     void player.play().catch((cause: unknown) => {
       setPaused(true);
       if (!(cause instanceof DOMException && cause.name === "AbortError"))

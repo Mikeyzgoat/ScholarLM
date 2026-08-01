@@ -1,5 +1,6 @@
 import { env } from "../env";
 import { compactQueryEmbeddingText } from "./embeddingText";
+import { buildModelFallbacks } from "./modelRouting";
 
 interface OpenRouterChunk {
   choices?: Array<{
@@ -39,9 +40,9 @@ async function openRouterGenerate(input: {
         { type: "image_url", image_url: { url: input.imageDataUrl } },
       ]
     : input.prompt;
-  const models = [selectedModel, ...env.OPENROUTER_ROUTING_MODELS].filter(
-    (model, index, values) =>
-      model !== "openrouter/auto" && values.indexOf(model) === index,
+  const models = buildModelFallbacks(
+    selectedModel,
+    env.OPENROUTER_ROUTING_MODELS,
   );
   const request = () =>
     fetch(`${env.OPENROUTER_BASE_URL}/chat/completions`, {
@@ -57,7 +58,7 @@ async function openRouterGenerate(input: {
         max_tokens: input.maxTokens ?? 500,
         temperature: 0.2,
         provider: {
-          sort: { by: "throughput", partition: "none" },
+          sort: { by: "throughput", partition: "model" },
           allow_fallbacks: true,
           require_parameters: input.json === true,
           max_price: {

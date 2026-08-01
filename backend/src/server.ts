@@ -3,16 +3,6 @@ import { env } from "./env";
 import { backfillMissingExplanationAudio } from "./services/speechBackfill";
 import { warmSpeechModel } from "./services/speech";
 
-try {
-  await warmSpeechModel();
-  console.log("[tts] Kokoro is loaded and ready");
-} catch (error) {
-  console.error(
-    "[tts] Kokoro preload failed; browser speech fallback remains available",
-    error,
-  );
-}
-
 const server = Bun.serve({
   port: env.BACKEND_PORT,
   fetch: app.fetch,
@@ -20,6 +10,15 @@ const server = Bun.serve({
 });
 
 console.log(`ScholarLM API listening on ${server.url}`);
+
+void warmSpeechModel()
+  .then(() => console.log("[tts] Kokoro fallback is loaded and ready"))
+  .catch((error) =>
+    console.warn(
+      "[tts] Kokoro preload failed; Fish Audio remains available",
+      error,
+    ),
+  );
 
 setTimeout(() => {
   void backfillMissingExplanationAudio(10)
