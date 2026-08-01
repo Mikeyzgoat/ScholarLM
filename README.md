@@ -17,6 +17,7 @@ open for working things out.
 - Open a PDF inside a persistent tldraw canvas
 - Draw, type, highlight, and add movable sticky notes
 - Explain selected PDF text or canvas content
+- Queue multiple explanations without overlapping their generated audio
 - Paste or upload a screenshot when text selection is unavailable
 - Answer questions using the open PDF and link back to the source page
 - Search PDF passages and saved sticky notes together
@@ -27,6 +28,8 @@ open for working things out.
 
 Canvas state is saved in SQLite and backed up in browser storage. Questions,
 searches, and inspector tabs also survive normal navigation within a document.
+Repeated selections reuse stored explanations and audio when their document,
+page, canvas, shape, and content fingerprints still match.
 
 ## How it is put together
 
@@ -86,8 +89,9 @@ docker compose --env-file .env.docker up -d
 docker compose --env-file .env.docker down
 ```
 
-The frontend is served by Nginx at `http://localhost:3000` (or the configured
-`SCHOLARLM_FRONTEND_PORT`). To expose the same Nginx entry point publicly with
+The Docker frontend is served by Nginx at `http://localhost:3000` (or the
+configured `SCHOLARLM_FRONTEND_PORT`). Nginx is not involved when running the
+frontend directly with `bun run dev`. To expose the Docker entry point publicly with
 ngrok's free tier, add your ngrok account token to `.env.docker`:
 
 ```env
@@ -180,6 +184,14 @@ Open [http://localhost:3000](http://localhost:3000). The API runs on
 An independent canvas can be created from Notes without uploading a document.
 Its drawings are saved in both the browser and SQLite.
 
+Explanation requests remain attached to the selection captured when they were
+submitted, even if the user continues editing or changes the active selection.
+The queue serializes generation and playback. Completed entries replay their
+stored database audio, while failed entries retain the provider error for
+diagnosis. Model-produced intent labels are normalized to `theory`, `math`,
+`problem-solving`, or `general`; an unexpected label falls back to `general`
+instead of discarding an otherwise valid explanation.
+
 ## Equation graphs
 
 Graphing uses two separate steps. The visual model reads the selected equation,
@@ -232,6 +244,13 @@ cd ../frontend
 bun run typecheck
 ```
 
+Run backend regression tests:
+
+```sh
+cd backend
+bun test
+```
+
 Build the frontend:
 
 ```sh
@@ -243,6 +262,14 @@ Check the running backend:
 
 ```sh
 curl http://localhost:3001/health
+```
+
+For the Docker package, rebuild and verify the Nginx-routed application:
+
+```sh
+docker compose up -d --build
+curl http://localhost:3000/api/health
+curl -I http://localhost:3000/notes
 ```
 
 ## Notes

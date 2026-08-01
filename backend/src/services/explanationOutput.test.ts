@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { env } from "../env";
 import {
   explainCanvasSelection,
+  explainSelectedText,
   generateCanvasVoiceExplanation,
   hasUsefulVoiceExplanation,
+  normalizeExplanationIntent,
 } from "./openRouter";
 
 function streamedJson(value: unknown): Response {
@@ -69,6 +71,56 @@ describe("hasUsefulVoiceExplanation", () => {
       });
       expect(requests).toHaveLength(2);
       expect(voiceExplanation).toContain("product rule");
+    } finally {
+      globalThis.fetch = originalFetch;
+      env.OPENROUTER_API_KEY = originalKey;
+    }
+  });
+});
+
+describe("normalizeExplanationIntent", () => {
+  test("keeps supported intent values", () => {
+    expect(normalizeExplanationIntent("theory")).toBe("theory");
+    expect(normalizeExplanationIntent("problem-solving")).toBe(
+      "problem-solving",
+    );
+  });
+
+  test("normalizes common model variants", () => {
+    expect(normalizeExplanationIntent("Conceptual Explanation")).toBe(
+      "theory",
+    );
+    expect(normalizeExplanationIntent("problem_solving")).toBe(
+      "problem-solving",
+    );
+    expect(normalizeExplanationIntent("mathematical calculation")).toBe(
+      "math",
+    );
+  });
+
+  test("falls back safely instead of discarding a valid answer", () => {
+    expect(normalizeExplanationIntent("educational-response")).toBe("theory");
+    expect(normalizeExplanationIntent("unexpected-category")).toBe("general");
+    expect(normalizeExplanationIntent(undefined)).toBe("general");
+  });
+
+  test("preserves a generated explanation with a nonstandard intent", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = env.OPENROUTER_API_KEY;
+    env.OPENROUTER_API_KEY = "test-key";
+    globalThis.fetch = (async (_url, _init) =>
+      streamedJson({
+        intent: "conceptual explanation",
+        answer: "Osmosis is the movement of water across a selective membrane.",
+        voiceExplanation:
+          "Think of water moving toward the side with more dissolved particles until the imbalance is reduced.",
+      })) as typeof fetch;
+    try {
+      const result = await explainSelectedText({
+        selectedText: "what is osmosis",
+      });
+      expect(result.intent).toBe("theory");
+      expect(result.answer).toContain("Osmosis");
     } finally {
       globalThis.fetch = originalFetch;
       env.OPENROUTER_API_KEY = originalKey;

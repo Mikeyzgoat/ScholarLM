@@ -179,6 +179,24 @@ interface FlowchartDiagram {
 
 export type ExplanationIntent = "theory" | "math" | "problem-solving" | "general";
 
+export function normalizeExplanationIntent(value: unknown): ExplanationIntent {
+  if (typeof value !== "string") return "general";
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+  if (normalized === "theory") return "theory";
+  if (normalized === "math") return "math";
+  if (normalized === "problem-solving") return "problem-solving";
+  if (normalized === "general") return "general";
+  if (/theor|concept|educat|explan/.test(normalized)) return "theory";
+  if (/math|equation|calcul|numeric|algebra|geometr|statistic/.test(normalized))
+    return "math";
+  if (/problem|solv|reason|step-by-step/.test(normalized))
+    return "problem-solving";
+  return "general";
+}
+
 export interface GeneratedExplanation {
   intent: ExplanationIntent;
   answer: string;
@@ -250,15 +268,12 @@ function parseVoiceRepair(raw: string): string {
 function parseGeneratedExplanation(raw: string): GeneratedExplanation {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
   const value = JSON.parse(cleaned) as Partial<GeneratedExplanation>;
-  const intents: ExplanationIntent[] = ["theory", "math", "problem-solving", "general"];
-  if (!intents.includes(value.intent as ExplanationIntent))
-    throw new Error("AI returned an invalid explanation intent");
   if (typeof value.answer !== "string" || !value.answer.trim())
     throw new Error("AI returned an invalid explanation answer");
   if (typeof value.voiceExplanation !== "string" || !value.voiceExplanation.trim())
     throw new Error("AI returned an invalid voice explanation");
   return {
-    intent: value.intent as ExplanationIntent,
+    intent: normalizeExplanationIntent(value.intent),
     answer: value.answer.trim(),
     voiceExplanation: value.voiceExplanation.trim(),
     recognizedEquation:

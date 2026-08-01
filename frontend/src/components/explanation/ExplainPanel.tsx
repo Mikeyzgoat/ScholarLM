@@ -115,6 +115,7 @@ export function ExplainPanel({
       sourceText: string;
       status: "pending" | "complete" | "failed";
       result?: Parameters<NonNullable<typeof onExplanationGenerated>>[0];
+      error?: string;
     }>
   >([]);
   const [activeQueueId, setActiveQueueId] = useState("");
@@ -237,6 +238,7 @@ export function ExplainPanel({
     ]);
     voiceController.current?.abort();
     voiceController.current = null;
+    let failureMessage = "Explanation failed";
     const value = await state.explain({
       selectedText: requestText,
       selectedTexts:
@@ -262,6 +264,10 @@ export function ExplainPanel({
       mode,
       previousExplanation:
         mode === "explain" ? undefined : state.explanation || undefined,
+    }).catch((error: unknown) => {
+      failureMessage =
+        error instanceof Error ? error.message : "Explanation failed";
+      return null;
     });
     if (value) {
       const displayAnswer = value.answer ?? value.explanation;
@@ -328,7 +334,7 @@ export function ExplainPanel({
       setRequestHistory((history) =>
         history.map((request) =>
           request.id === requestId
-            ? { ...request, status: "failed" }
+            ? { ...request, status: "failed", error: failureMessage }
             : request,
         ),
       );
@@ -606,6 +612,11 @@ export function ExplainPanel({
                   {request.status}
                 </span>
               </div>
+              {request.error && (
+                <p className="mt-1 text-[10px] leading-4 text-red-400">
+                  {request.error}
+                </p>
+              )}
               {request.result && (
                 <div className="mt-2 flex gap-2">
                   {request.result.explanationId && (

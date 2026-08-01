@@ -70,9 +70,9 @@ export function useExplanation() {
       if (mounted.current) setExplanation(cleaned.explanation);
       return cleaned;
     } catch (e) {
-      if (!next.signal.aborted && mounted.current)
-        setError(e instanceof Error ? e : new Error("Explanation failed"));
-      return null;
+      const error = e instanceof Error ? e : new Error("Explanation failed");
+      if (!next.signal.aborted && mounted.current) setError(error);
+      throw error;
     } finally {
       if (controller.current === next) controller.current = null;
     }
