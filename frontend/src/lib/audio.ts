@@ -35,6 +35,16 @@ export async function getWavDuration(chunk: Blob): Promise<number> {
   return parseWav(new Uint8Array(await chunk.arrayBuffer())).duration;
 }
 
+export async function getAudioDuration(chunk: Blob): Promise<number> {
+  if (chunk.type === "audio/wav") return getWavDuration(chunk);
+  const context = new AudioContext();
+  try {
+    return (await context.decodeAudioData(await chunk.arrayBuffer())).duration;
+  } finally {
+    await context.close();
+  }
+}
+
 export async function combineWavChunks(chunks: Blob[]): Promise<Blob> {
   if (!chunks.length) throw new Error("No audio chunks to combine");
   const parts = await Promise.all(chunks.map((chunk) => chunk.arrayBuffer()));

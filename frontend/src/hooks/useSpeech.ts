@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { combineWavChunks, getWavDuration } from "../lib/audio";
+import { combineWavChunks, getAudioDuration } from "../lib/audio";
 import { streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
@@ -293,20 +293,27 @@ export function useSpeech() {
         sourceText,
         explanationId,
       );
-      if (!chunks.length) throw new Error("Kokoro returned no audio");
+      if (!chunks.length) throw new Error("Fish Audio and Kokoro returned no audio");
       const timedChunks = await Promise.all(
         chunks.map(async (chunk) => ({
           ...chunk,
-          duration: await getWavDuration(chunk.audio),
+          duration: await getAudioDuration(chunk.audio),
         })),
       );
-      const wav = await combineWavChunks(
-        timedChunks.map((chunk) => chunk.audio),
+      const allWav = timedChunks.every(
+        (chunk) => chunk.audio.type === "audio/wav",
       );
-      if (!wav.size) throw new Error("Kokoro returned no audio");
+      const generatedAudio = allWav
+        ? await combineWavChunks(timedChunks.map((chunk) => chunk.audio))
+        : new Blob(
+            timedChunks.map((chunk) => chunk.audio),
+            { type: "audio/mpeg" },
+          );
+      if (!generatedAudio.size)
+        throw new Error("Fish Audio and Kokoro returned no audio");
       if (next.signal.aborted) return;
       wordCueEnds.current = buildWordCueEnds(timedChunks);
-      audioUrl.current = URL.createObjectURL(wav);
+      audioUrl.current = URL.createObjectURL(generatedAudio);
       setReady(true);
       if (playWhenReady) playAudio();
     } catch {

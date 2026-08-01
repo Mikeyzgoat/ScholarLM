@@ -10,6 +10,7 @@ interface MissingExplanationAudio {
   id: string;
   selected_text: string;
   explanation: string;
+  voice_explanation: string | null;
 }
 
 export interface SpeechBackfillResult {
@@ -26,7 +27,7 @@ export async function backfillMissingExplanationAudio(
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const rows = db
     .query(
-      `SELECT eh.id,eh.selected_text,eh.explanation
+      `SELECT eh.id,eh.selected_text,eh.explanation,eh.voice_explanation
        FROM explanation_history eh
        LEFT JOIN explanation_audio ea ON ea.explanation_id=eh.id
        WHERE ea.explanation_id IS NULL
@@ -43,14 +44,15 @@ export async function backfillMissingExplanationAudio(
   };
   for (const row of rows) {
     try {
-      const cached = getCachedSpeech(row.explanation);
+      const speechText = row.voice_explanation?.trim() || row.explanation;
+      const cached = getCachedSpeech(speechText);
       if (cached) {
-        linkExplanationSpeech(row.id, row.explanation);
+        linkExplanationSpeech(row.id, speechText);
         result.linkedFromCache += 1;
       } else {
-        const audio = await synthesizeSpeech(row.explanation);
-        storeCachedSpeech(row.explanation, audio, row.selected_text);
-        linkExplanationSpeech(row.id, row.explanation);
+        const generated = await synthesizeSpeech(speechText);
+        storeCachedSpeech(speechText, generated.audio, row.selected_text);
+        linkExplanationSpeech(row.id, speechText);
         result.generated += 1;
       }
       result.processed += 1;

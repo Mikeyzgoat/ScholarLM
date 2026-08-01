@@ -49,13 +49,15 @@ export function useExplanation() {
             setExplanation(streamed);
           },
         });
-        const answers = value.explanation
+        const displayAnswer = value.answer ?? value.explanation;
+        const answers = displayAnswer
           .split(/\s*<ANSWER_SPLIT>\s*/i)
           .map(cleanExplanation)
           .filter(Boolean);
         const cleaned = {
           ...value,
           explanation: answers.join("\n\n"),
+          answer: answers.join("\n\n"),
           answers: answers.length > 1 ? answers : undefined,
         };
         if (id === generation.current) setExplanation(cleaned.explanation);

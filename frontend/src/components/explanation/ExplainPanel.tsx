@@ -94,6 +94,7 @@ export function ExplainPanel({
   const [graphError, setGraphError] = useState("");
   const [isGraphing, setIsGraphing] = useState(false);
   const screenshotInput = useRef<HTMLInputElement>(null);
+  const voiceText = useRef("");
   const [canvasInput, setCanvasInput] = useState<Parameters<
     NonNullable<typeof onExplanationGenerated>
   >[0]>();
@@ -192,6 +193,7 @@ export function ExplainPanel({
     if (value) {
       const displayAnswer = value.answer ?? value.explanation;
       const voiceExplanation = value.voiceExplanation ?? displayAnswer;
+      voiceText.current = voiceExplanation;
       setRecognizedEquation(value.recognizedEquation ?? "");
       setGraphError("");
       if (value.plot)
@@ -241,6 +243,7 @@ export function ExplainPanel({
   useEffect(() => {
     speech.stop();
     if (!activeText && !activeImage) {
+      voiceText.current = "";
       state.clear();
       setCanvasInput(undefined);
       setRecognizedEquation("");
@@ -255,6 +258,7 @@ export function ExplainPanel({
         ? findLatestGeneratedOutput(activeText, pageNumber ?? undefined)?.text
         : undefined);
     if (existing) {
+      voiceText.current = existing;
       state.load(existing);
       void speech.prepare(
         existing,
@@ -286,8 +290,6 @@ export function ExplainPanel({
   useEffect(() => {
     if (
       (!activeText && !activeImage) ||
-      existingExplanation ||
-      state.explanation ||
       state.isExplaining
     )
       return;
@@ -308,16 +310,19 @@ export function ExplainPanel({
       })
         .then((cached) => {
           if (!cached || controller.signal.aborted) return;
-          state.load(cached.explanation);
+          const displayAnswer = cached.answer ?? cached.explanation;
+          const voiceExplanation = cached.voiceExplanation ?? displayAnswer;
+          voiceText.current = voiceExplanation;
+          state.load(displayAnswer);
           void speech.prepare(
-            cached.explanation,
+            voiceExplanation,
             activeText,
             cached.historyId,
           );
           setRecognizedEquation(cached.recognizedEquation ?? "");
           setCanvasInput({
             selectedText: activeText,
-            explanation: cached.explanation,
+            explanation: displayAnswer,
             mode: "explain",
             anchors: selectionAnchors,
             explanationId: cached.historyId,
@@ -484,7 +489,7 @@ export function ExplainPanel({
             if (speech.isReady) speech.resume();
             else
               void speech.play(
-                state.explanation,
+                voiceText.current || state.explanation,
                 activeText,
                 canvasInput?.explanationId ?? existingExplanationId,
               );
@@ -620,7 +625,5 @@ export function ExplainPanel({
     </motion.section>
   );
 }
-
-
 
 

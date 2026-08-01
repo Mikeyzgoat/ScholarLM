@@ -33,7 +33,7 @@ export const env: {
     "fish-audio/s2.1-pro-free:free",
   OPENROUTER_ROUTING_MODELS: (
     Bun.env.OPENROUTER_ROUTING_MODELS ||
-    "qwen/qwen3.5-flash-02-23,google/gemma-4-26b-a4b-it:free,google/gemma-4-26b-a4b-it,bytedance-seed/seed-1.6-flash,mistralai/mistral-small-3.2-24b-instruct"
+    "google/gemma-4-31b-it:free,openai/gpt-oss-20b:free,nvidia/nemotron-nano-9b-v2:free,openrouter/free"
   )
     .split(",")
     .map((model) => model.trim())

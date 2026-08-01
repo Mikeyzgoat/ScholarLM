@@ -28,7 +28,7 @@ taa.sai@op.iitg.ac.in}}
 \maketitle
 
 \begin{abstract}
-ScholarLM is an interactive PDF study workspace that combines document reading, an infinite annotation canvas, retrieval-augmented question answering, visual explanations, and a knowledge graph in one browser application. The system is designed to reduce the context switching that occurs when learners move between a PDF viewer, a notes application, and an AI assistant. A Bun and Hono backend extracts page-aware PDF text, tables, and selected visual context; chunks and embeds the content; and stores documents, canvas state, notes, embeddings, and graph data in SQLite. A React frontend uses PDF.js and tldraw to place the document and user reasoning on a persistent canvas. OpenRouter provides configurable language, vision, and embedding models, while Kokoro or browser speech provides read-aloud support. This paper presents the architecture, grounding strategy, deterministic equation-plotting pipeline, persistence model, and functional validation of the current implementation.
+ScholarLM is an interactive PDF study workspace that combines document reading, an infinite annotation canvas, retrieval-augmented question answering, visual explanations, and a knowledge graph in one browser application. The system is designed to reduce the context switching that occurs when learners move between a PDF viewer, a notes application, and an AI assistant. A Bun and Hono backend extracts page-aware PDF text, tables, and selected visual context; chunks and embeds the content; and stores documents, canvas state, notes, embeddings, and graph data in SQLite. A React frontend uses PDF.js and tldraw to place the document and user reasoning on a persistent canvas. OpenRouter provides configurable language, vision, embedding, and Fish Audio speech models, while local Kokoro or browser speech provides read-aloud fallback. This paper presents the architecture, grounding strategy, deterministic equation-plotting pipeline, persistence model, and functional validation of the current implementation.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -46,6 +46,7 @@ ScholarLM addresses these requirements through a document-centered workspace. A 
 \item an integrated PDF and infinite-canvas study environment;
 \item page-aware ingestion with chunking, embeddings, table context, repeated-header filtering, and selected visual context;
 \item grounded document question answering with source citations and refusal when evidence is insufficient;
+\item intent-aware explanations that keep the written solution separate from the spoken teaching narrative;
 \item a graph connecting documents, concepts, notes, explanations, handwriting, and canvas objects;
 \item a restricted, deterministic plotting path for supported equations recognized from text or handwriting; and
 \item persistence and deletion workflows that preserve or remove affiliated data across SQLite and browser recovery storage.
@@ -80,7 +81,11 @@ For a document question, ScholarLM embeds the query and retrieves a small set of
 The answer is cached using a content version derived from the document, chunks, and indexed stickies. Exact and sufficiently similar questions can therefore reuse a valid answer, while edits or re-indexing invalidate stale results. Search combines vector similarity with lexical matching and returns PDF passages, explanations, notes, handwriting, or concepts with navigation metadata.
 
 \subsection{Explanation and Vision}
-The Explain workflow supports selected PDF text, canvas text, handwriting, and screenshots. Text explanations are streamed when possible. Visual requests use the configured vision model and return a structured result containing an explanation, an optional recognized equation, and optional plot data. The prompt explicitly asks the model to state uncertainty rather than invent unreadable symbols. Explanations can be simplified or regenerated, and unchanged selections can use cached explanation records.
+The Explain workflow supports selected PDF text, canvas text, handwriting, and screenshots. Before composing a response, the model classifies the selection as theory, mathematics, problem solving, or general material. This small routing step lets the system adjust its teaching style to the task. A theory passage receives a conceptual explanation, while a mathematical selection keeps equations, substitutions, working steps, and the final result in the written answer. Word problems and other multi-step tasks receive a more deliberate solution structure.
+
+Each response contains two related but distinct fields. The \texttt{answer} field is shown in the explanation panel and is the only generated content copied to a canvas text box or sticky note. The \texttt{voiceExplanation} field is written as a natural teacher-to-student account and is reserved for speech. Separating the two avoids reading equation-heavy display text aloud while also preventing conversational narration from cluttering the learner's notes. Visual requests may additionally return a recognized equation and candidate plot data. When handwriting is unclear, the prompt asks the model to express uncertainty rather than invent missing symbols.
+
+Explanations can be simplified or regenerated. For an unchanged selection, the backend first checks SQLite using a hash that includes the selected content and its document, page, canvas, shape, and image context. A match restores both the written answer and its voice explanation without another language-model request. Speech has a second text-hash cache, so replaying the same voice explanation can reuse the previously generated audio as well.
 
 \section{Knowledge Graph and Equation Support}
 After indexing, the backend asks the model to identify concepts and meaningful relationships from the document chunks. A graph response is validated before being stored: concepts have labels, descriptions, and page references, while edges refer to existing concept labels. The frontend visualizes document-scoped and library-wide graphs using graphology and Sigma. Manual groups and edges allow the learner to organize related documents or concepts. Graph nodes can point back to PDF pages, canvas shapes, sticky notes, explanations, and handwriting.
@@ -88,11 +93,11 @@ After indexing, the backend asks the model to identify concepts and meaningful r
 Equation support deliberately separates visual recognition from computation. The model may transcribe a selected equation and explain it, but plot points are generated by a restricted parser rather than by executing model-produced code. The current implementation supports explicit functions such as $y=\sin(x)$ and $y=x^2$, powers, roots, common trigonometric functions, discontinuities such as $y=1/x$, and origin-centered circles such as $x^2+y^2=1$. Unsupported expressions are rejected. Generated graphs remain linked to their source shapes and are invalidated when the source equation changes.
 
 \section{Implementation}
-The backend is a Bun and Hono TypeScript service using Bun's SQLite interface, pdf-parse, pdf-lib, Sharp, and Kokoro JS. The frontend is a React and TypeScript application using PDF.js, react-pdf, tldraw, graphology, Sigma, and Framer Motion. OpenRouter is used through configurable endpoints for generation, vision, and embeddings. The default configuration supports a free routed model and separately configurable vision and embedding models.
+The backend is a Bun and Hono TypeScript service using Bun's SQLite interface, pdf-parse, pdf-lib, Sharp, and Kokoro JS. The frontend is a React and TypeScript application using PDF.js, react-pdf, tldraw, graphology, Sigma, and Framer Motion. OpenRouter is used through configurable endpoints for generation, vision, embeddings, and Fish Audio speech. The default configuration uses free model endpoints and keeps the language, vision, embedding, and speech choices independently configurable.
 
-The persistence layer includes tables for documents, page text, chunks, embeddings, notes, explanations, graph concepts, graph edges, manual groups, speech-cache entries, and provider telemetry. Database startup performs schema initialization and lightweight migrations. Destructive operations remove affiliated files, indexes, graph edges, explanations, and browser recovery data so deleted study material does not reappear after reload.
+The persistence layer includes tables for documents, page text, chunks, embeddings, notes, explanations, graph concepts, graph edges, manual groups, speech-cache entries, and provider telemetry. Explanation history stores the display answer, the voice-specific explanation, and the classified intent together. Database startup performs schema initialization and lightweight migrations, including the addition of these newer fields to an existing local database. Destructive operations remove affiliated files, indexes, graph edges, explanations, and browser recovery data so deleted study material does not reappear after reload.
 
-The application exposes separate routes for documents, canvases, notes, explanations, retrieval, search, graph operations, and speech. Provider failures are retried for short transient errors when no output has been emitted. Kokoro speech is cached and streamed when available; browser speech is used as a fallback.
+The application exposes separate routes for documents, canvases, notes, explanations, retrieval, search, graph operations, and speech. Language requests carry an ordered list of free OpenRouter models. If the preferred model is unavailable, rate-limited, or rejected by its provider, OpenRouter can move through that list before using its free dynamic router. Fish Audio speech is requested separately through OpenRouter and cached as MP3 when available. If that request fails, the backend produces WAV audio with local Kokoro; if neither server path succeeds, the browser's SpeechSynthesis API remains the final fallback.
 
 \section{Models and Fallback Strategy}
 ScholarLM separates language generation, visual understanding, embeddings, and speech synthesis so that each capability can be configured independently. The model names below are the defaults declared in the project configuration; they can be changed through environment variables without modifying the application code.
@@ -106,16 +111,16 @@ ScholarLM separates language generation, visual understanding, embeddings, and s
 \toprule
 \textbf{Capability} & \textbf{Primary configuration} & \textbf{Fallback}\\
 \midrule
-Text generation & \texttt{google/gemma-4-26b-a4b-it:free} & OpenRouter provider fallback or another configured routing model.\\
-Vision and handwriting & \texttt{google/gemma-4-26b-a4b-it:free} & OpenRouter provider fallback when the selected provider is unavailable.\\
+Text generation & \texttt{google/gemma-4-26b-a4b-it:free} & Ordered free models: Gemma 4 31B, GPT-OSS 20B, Nemotron Nano 9B V2, then \texttt{openrouter/free}.\\
+Vision and handwriting & \texttt{google/gemma-4-26b-a4b-it:free} & The same ordered route, with OpenRouter selecting a compatible free endpoint.\\
 Document embeddings & \texttt{nvidia/llama-nemotron-embed-vl-1b-v2:free} & Re-indexing can be retried with the configured embedding provider; unavailable embeddings disable semantic retrieval until indexing succeeds.\\
-Speech synthesis & Local Kokoro JS model & Browser SpeechSynthesis API when Kokoro cannot load or decode audio.\\
+Speech synthesis & \texttt{fish-audio/s2.1-pro-free:free} through OpenRouter & Local Kokoro JS, then browser SpeechSynthesis when server audio is unavailable.\\
 Transient provider errors & Current OpenRouter operation and selected model & Short retry with exponential backoff, provided that no response tokens have already been emitted.\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The current primary language model is Gemma 4 26B, while the embedding model is NVIDIA Llama Nemotron Embed VL 1B v2. Additional language-model routing candidates can be ordered through the \texttt{OPENROUTER\_ROUTING\_MODELS} configuration. OpenRouter provider fallback is enabled for embedding requests, and the backend records provider operations and failures for diagnosis. The application also preserves the active selection during failed explanation requests and reuses cached explanations or grounded answers when their source-content version is unchanged. These behaviors provide graceful degradation without silently substituting unsupported evidence.
+The current primary language model is Gemma 4 26B, while the embedding model is NVIDIA Llama Nemotron Embed VL 1B v2. The default \texttt{OPENROUTER\_ROUTING\_MODELS} value continues with Gemma 4 31B, GPT-OSS 20B, Nemotron Nano 9B V2, and finally \texttt{openrouter/free}; every entry in this chain uses a free endpoint. The order remains configurable because free-model availability changes over time. The backend records provider operations and failures for diagnosis, preserves the learner's active selection after a failed request, and reuses valid cached work whenever possible. In practice, this makes a temporary provider failure less disruptive without hiding the source or status of the generated material.
 \section{Functional Validation}
 The repository documentation records a completed feature baseline and a manual clean-data workflow. Table~\ref{tab:validation} summarizes the implemented behaviors. These are functional checks rather than a quantitative benchmark; latency, retrieval accuracy, transcription accuracy, and grounded-answer rate remain evaluation tasks for a controlled test set.
 
@@ -131,11 +136,11 @@ The repository documentation records a completed feature baseline and a manual c
 PDF ingestion & Page-aware extraction, table handling, chunking, embeddings, and status tracking are implemented.\\
 Grounded QA & Retrieved passages are cited; unsupported questions use an evidence-based refusal.\\
 Canvas persistence & PDF-linked and standalone tldraw canvases survive normal navigation and reload.\\
-Explanation workflow & Text, handwriting, and screenshot selections can be explained, cached, and saved as stickies.\\
+Explanation workflow & Text, handwriting, and screenshot selections are classified by intent; written and spoken outputs are separated, cached, and restored together.\\
 Search & PDF chunks and saved stickies share a semantic search path with source navigation.\\
 Knowledge graph & Concepts, relationships, manual groups, and source-linked graph navigation are implemented.\\
 Math plotting & Supported equations are parsed deterministically; unsupported expressions are rejected.\\
-Speech & Kokoro generation, caching, playback controls, and browser fallback are available.\\
+Speech & Fish Audio MP3 generation, Kokoro WAV fallback, text-hash caching, playback controls, and browser fallback are available.\\
 Deletion & Documents, notes, graphs, indexes, files, and recovery copies have cascade cleanup paths.\\
 \bottomrule
 \end{tabular}
@@ -169,8 +174,6 @@ ScholarLM demonstrates how document rendering, an infinite annotation canvas, se
 \end{thebibliography}
 
 \end{document}
-
-
 
 
 

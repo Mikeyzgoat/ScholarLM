@@ -59,7 +59,12 @@ export async function streamSpeech(
     const bytes = Uint8Array.from(binary, (character) =>
       character.charCodeAt(0),
     );
-    onChunk(\n      new Blob([bytes], {\n        type: chunk.mimeType === "audio/mpeg" ? "audio/mpeg" : "audio/wav",\n      }),\n      chunk.text,\n    );
+    onChunk(
+      new Blob([bytes], {
+        type: chunk.mimeType === "audio/mpeg" ? "audio/mpeg" : "audio/wav",
+      }),
+      chunk.text,
+    );
   };
   while (true) {
     const { done, value } = await reader.read();
@@ -71,4 +76,3 @@ export async function streamSpeech(
   }
   consume(buffer);
 }
-

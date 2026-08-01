@@ -278,6 +278,8 @@ explanation.post("/", async (c) => {
         pageNumber: context.pageNumber,
         mode,
         explanation: result.answer ?? result.explanation,
+        voiceExplanation: result.voiceExplanation ?? result.explanation,
+        intent: result.intent ?? "math",
         recognizedText: result.recognizedEquation,
         inputKind: hasImage
           ? b.imageInputKind === "selection"
@@ -313,7 +315,6 @@ explanation.post("/", async (c) => {
             selectedTexts: hasMultipleTexts ? selectedTexts : undefined,
             mode,
             previousExplanation,
-            onToken: (token) => send({ type: "token", token }),
           });
           const history = storeExplanationRevision({
             selectedText: historySelection,
@@ -325,14 +326,22 @@ explanation.post("/", async (c) => {
             documentTitle: context.documentTitle,
             pageNumber: context.pageNumber,
             mode,
-            explanation: generated,
+            explanation: generated.answer,
+            voiceExplanation: generated.voiceExplanation,
+            intent: generated.intent,
             inputKind: "text",
             requestId,
           });
           finishOpenRouterRequest(requestId);
           send({
             type: "done",
-            result: { explanation: generated, ...history },
+            result: {
+              explanation: generated.answer,
+              answer: generated.answer,
+              voiceExplanation: generated.voiceExplanation,
+              intent: generated.intent,
+              ...history,
+            },
           });
           await writes;
         } catch (error) {
@@ -363,12 +372,20 @@ explanation.post("/", async (c) => {
       documentTitle: context.documentTitle,
       pageNumber: context.pageNumber,
       mode,
-      explanation: generated,
+      explanation: generated.answer,
+      voiceExplanation: generated.voiceExplanation,
+      intent: generated.intent,
       inputKind: "text",
       requestId,
     });
     finishOpenRouterRequest(requestId);
-    return c.json({ explanation: generated, ...history });
+    return c.json({
+      explanation: generated.answer,
+      answer: generated.answer,
+      voiceExplanation: generated.voiceExplanation,
+      intent: generated.intent,
+      ...history,
+    });
   } catch (error) {
     failOpenRouterRequest(requestId, error);
     const message =
@@ -400,4 +417,3 @@ explanation.post("/", async (c) => {
   }
 });
 export default explanation;
-

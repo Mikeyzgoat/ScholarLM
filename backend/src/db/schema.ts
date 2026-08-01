@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS sticky_note_index (id TEXT PRIMARY KEY,note_id TEXT N
 CREATE INDEX IF NOT EXISTS idx_sticky_note_index_document ON sticky_note_index(document_id);
 CREATE TABLE IF NOT EXISTS speech_cache (text_hash TEXT PRIMARY KEY,source_text TEXT,text TEXT NOT NULL,audio BLOB NOT NULL,byte_size INTEGER NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS generated_output_audio (source_hash TEXT NOT NULL,text_hash TEXT NOT NULL,source_text TEXT NOT NULL,output_text TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,PRIMARY KEY(source_hash,text_hash),FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS explanation_history (id TEXT PRIMARY KEY,selection_hash TEXT NOT NULL,selected_text TEXT NOT NULL,document_id TEXT,note_id TEXT,document_title TEXT,page_number INTEGER,prompt_mode TEXT NOT NULL,explanation TEXT NOT NULL,voice_explanation TEXT,created_at TEXT NOT NULL,recognized_text TEXT,input_kind TEXT NOT NULL DEFAULT 'text',canvas_id TEXT,shape_id TEXT);
+CREATE TABLE IF NOT EXISTS explanation_history (id TEXT PRIMARY KEY,selection_hash TEXT NOT NULL,selected_text TEXT NOT NULL,document_id TEXT,note_id TEXT,document_title TEXT,page_number INTEGER,prompt_mode TEXT NOT NULL,explanation TEXT NOT NULL,voice_explanation TEXT,intent TEXT,created_at TEXT NOT NULL,recognized_text TEXT,input_kind TEXT NOT NULL DEFAULT 'text',canvas_id TEXT,shape_id TEXT);
 CREATE TABLE IF NOT EXISTS explanation_sources (explanation_id TEXT NOT NULL,shape_id TEXT NOT NULL,note_id TEXT,canvas_id TEXT,PRIMARY KEY(explanation_id,shape_id),FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS idx_explanation_sources_note ON explanation_sources(note_id);
 CREATE INDEX IF NOT EXISTS idx_explanation_sources_canvas ON explanation_sources(canvas_id);
@@ -52,6 +52,8 @@ CREATE INDEX IF NOT EXISTS idx_manual_graph_members_scope ON manual_graph_group_
   const historyColumns = db.query("PRAGMA table_info(explanation_history)").all() as Array<{ name: string }>;
   if (!historyColumns.some((column) => column.name === "voice_explanation"))
     db.exec("ALTER TABLE explanation_history ADD COLUMN voice_explanation TEXT;");
+  if (!historyColumns.some((column) => column.name === "intent"))
+    db.exec("ALTER TABLE explanation_history ADD COLUMN intent TEXT;");
   if (!speechColumns.some((column) => column.name === "source_text"))
     db.exec("ALTER TABLE speech_cache ADD COLUMN source_text TEXT;");
   const stickyColumns = db
@@ -109,4 +111,3 @@ CREATE INDEX IF NOT EXISTS idx_manual_graph_members_scope ON manual_graph_group_
      WHERE document_id IS NULL AND document_title IS NOT NULL`,
   );
 }
-

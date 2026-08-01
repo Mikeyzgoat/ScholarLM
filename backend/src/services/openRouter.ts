@@ -39,14 +39,16 @@ async function openRouterGenerate(input: {
         { type: "image_url", image_url: { url: input.imageDataUrl } },
       ]
     : input.prompt;
+  const models = [selectedModel, ...env.OPENROUTER_ROUTING_MODELS].filter(
+    (model, index, values) =>
+      model !== "openrouter/auto" && values.indexOf(model) === index,
+  );
   const request = () =>
     fetch(`${env.OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: authorizationHeaders(),
       body: JSON.stringify({
-        ...(selectedModel === "openrouter/auto"
-          ? { models: env.OPENROUTER_ROUTING_MODELS }
-          : { model: selectedModel }),
+        models,
         messages: [
           ...(input.system ? [{ role: "system", content: input.system }] : []),
           { role: "user", content },
@@ -154,12 +156,40 @@ async function readOpenRouterStream(
 
 interface CanvasAnalysis {
   explanation: string;
+  answer?: string;
+  voiceExplanation?: string;
+  intent?: ExplanationIntent;
   recognizedEquation?: string;
   plot?: {
     title: string;
     xLabel: string;
     yLabel: string;
     points: Array<{ x: number; y: number }>;
+  };
+}
+
+export type ExplanationIntent = "theory" | "math" | "problem-solving" | "general";
+
+export interface GeneratedExplanation {
+  intent: ExplanationIntent;
+  answer: string;
+  voiceExplanation: string;
+}
+
+function parseGeneratedExplanation(raw: string): GeneratedExplanation {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
+  const value = JSON.parse(cleaned) as Partial<GeneratedExplanation>;
+  const intents: ExplanationIntent[] = ["theory", "math", "problem-solving", "general"];
+  if (!intents.includes(value.intent as ExplanationIntent))
+    throw new Error("AI returned an invalid explanation intent");
+  if (typeof value.answer !== "string" || !value.answer.trim())
+    throw new Error("AI returned an invalid explanation answer");
+  if (typeof value.voiceExplanation !== "string" || !value.voiceExplanation.trim())
+    throw new Error("AI returned an invalid voice explanation");
+  return {
+    intent: value.intent as ExplanationIntent,
+    answer: value.answer.trim(),
+    voiceExplanation: value.voiceExplanation.trim(),
   };
 }
 
@@ -171,6 +201,10 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
   const value = JSON.parse(cleaned) as Partial<CanvasAnalysis>;
   if ((typeof value.explanation !== "string" || !value.explanation.trim()) && (typeof value.answer !== "string" || !value.answer.trim()))
     throw new Error("AI returned an invalid handwritten-math explanation");
+  const explanation =
+    typeof value.answer === "string" && value.answer.trim()
+      ? value.answer.trim()
+      : (value.explanation as string).trim();
   const points = value.plot?.points
     ?.filter(
       (point) =>
@@ -179,7 +213,7 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
     )
     .slice(0, 80);
   return {
-    explanation: (typeof value.answer === "string" && value.answer.trim() ? value.answer : value.explanation).trim(),
+    explanation,
     answer: typeof value.answer === "string" ? value.answer.trim() : undefined,
     voiceExplanation:
       typeof value.voiceExplanation === "string"
@@ -385,7 +419,7 @@ export async function explainSelectedText(input: {
   previousExplanation?: string;
   signal?: AbortSignal;
   onToken?: (token: string) => void;
-}): Promise<string> {
+}): Promise<GeneratedExplanation> {
   const context = [
     input.documentTitle && `Document: ${input.documentTitle}`,
     input.pageNumber && `Page: ${input.pageNumber}`,
@@ -404,7 +438,7 @@ export async function explainSelectedText(input: {
   const prompt = `${context}\n\nSELECTED PASSAGE${input.selectedTexts?.length ? "S" : ""}:\n${selections}${revisionContext}`;
   const outputFormat =
     input.selectedTexts && input.selectedTexts.length > 1
-      ? `Return exactly ${input.selectedTexts.length} answer sections in this plain-text format:
+      ? `Put exactly ${input.selectedTexts.length} answer sections in the answer field in this format:
 Answer 1:
 <answer for Selection 1>
 <ANSWER_SPLIT>
@@ -418,15 +452,22 @@ Continue the same numbering for every selection. Never merge the selections or o
       : input.mode === "regenerate"
         ? "Create a genuinely new explanation with a different teaching angle. Improve clarity instead of paraphrasing sentence by sentence."
         : "Explain the passage clearly.";
-  const system =
-    `${revisionInstruction} ${outputFormat} Explain only the selected passage in English. Do not answer unrelated questions. Do not repeat or quote the selected passage, and never prefix the answer with "Selected" or "Selected passage". Start directly with the explanation. Use clear educational language, preserve important technical terminology, and use short paragraphs. Return plain text only: no Markdown, headings, bullets, code fences, or LaTeX delimiters. Write mathematical notation with Unicode symbols.`;
-  return openRouterGenerate({
+  const system = `${revisionInstruction} ${outputFormat}
+Classify the input as exactly one of: theory, math, problem-solving, general.
+Then apply the matching policy:
+- theory: answer explains concepts and relationships clearly.
+- math: answer contains equations, substitutions, ordered working, and the final result only; put all teaching prose in voiceExplanation.
+- problem-solving: answer gives a concise numbered solution; voiceExplanation teaches why each step is used.
+- general: answer directly explains the selected material.
+The answer is display/canvas content. voiceExplanation is audio-only, conversational teacher-to-student speech and must make sense when heard without seeing the answer.
+Explain only the selected input in English. Do not quote it or answer unrelated questions. Preserve technical terminology. Return one valid JSON object only with exactly this shape: {"intent":"theory","answer":"...","voiceExplanation":"Let us work through this..."}.`;
+  return parseGeneratedExplanation(await openRouterGenerate({
     prompt,
     system,
+    json: true,
     signal: input.signal,
-    maxTokens: 450,
-    onToken: input.onToken,
-  });
+    maxTokens: 700,
+  }));
 }
 
 export async function generateGroundedAnswer(input: {
@@ -546,6 +587,3 @@ export async function extractConceptGraph(input: {
     }),
   );
 }
-
-
-

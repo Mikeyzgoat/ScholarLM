@@ -92,6 +92,7 @@ export interface GraphResponse {
 export interface ExplanationResponse {
   answer?: string;
   voiceExplanation?: string;
+  intent?: "theory" | "math" | "problem-solving" | "general";
   explanation: string;
   answers?: string[];
   recognizedEquation?: string;
@@ -135,5 +136,4 @@ export interface NotePage {
   updatedAt: string;
 }
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
-
 
