@@ -30,6 +30,7 @@ async function openRouterGenerate(input: {
   maxTokens?: number;
   onToken?: (token: string) => void;
   model?: string;
+  temperature?: number;
 }): Promise<string> {
   const selectedModel = input.imageDataUrl
     ? input.model ?? env.OPENROUTER_VISION_MODEL
@@ -56,7 +57,7 @@ async function openRouterGenerate(input: {
         ],
         stream: true,
         max_tokens: input.maxTokens ?? 500,
-        temperature: 0.2,
+        temperature: input.temperature ?? 0.2,
         provider: {
           sort: { by: "throughput", partition: "model" },
           allow_fallbacks: true,
@@ -320,7 +321,7 @@ ${input.previousExplanation ? `Previous explanation: ${input.previousExplanation
 ${input.mode === "simplify" ? "Rewrite the explanation more simply with shorter steps and intuitive language." : ""}
 ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improve on the previous explanation." : ""}`;
   const system =
-    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the written answer. Return valid JSON only. Keep the answer concise, mathematical, and suitable for immediate visual display. Make voiceExplanation a distinct conversational explanation of the reasoning, not a reading of the written answer.";
+    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the written answer. Return valid JSON only. Use actual UTF-8 Unicode math characters in the visual answer, never LaTeX command names. In voiceExplanation, replace every mathematical symbol with natural spoken English. Keep the answer concise, mathematical, and suitable for immediate visual display. Make voiceExplanation a distinct conversational explanation of the reasoning, not a reading of the written answer.";
   const result = parseCanvasAnalysis(
     await openRouterGenerate({
       prompt,
@@ -542,20 +543,21 @@ Continue the same numbering for every selection. Never merge the selections or o
   const system = `${revisionInstruction} ${outputFormat}
 Classify the input as exactly one of: theory, math, problem-solving, general.
 Then apply the matching policy:
-- theory: answer explains concepts and relationships clearly.
+- theory: answer gives a thorough, technically precise explanation of the concepts, mechanisms, relationships, causes, and consequences. Use the larger output budget when the selected material needs depth, while avoiding repetition and unsupported claims.
 - math: answer contains equations, substitutions, ordered working, and the final result only; put all teaching prose in voiceExplanation.
 - problem-solving: answer gives a concise numbered solution; voiceExplanation teaches why each step is used.
 - general: answer directly explains the selected material.
 Split the available detail roughly evenly between answer and voiceExplanation. The answer is display/canvas content. voiceExplanation is audio-only, conversational teacher-to-student speech and must make sense when heard without seeing the answer.
 Decide whether a visualization materially improves understanding. For a graphable quantitative relationship, optionally return recognizedEquation and plot with 17–41 ordered points. For a process, cycle, hierarchy, or branching explanation, optionally return a flowchart with concise nodes and directed edges. Omit both unless they add real value, and never return both.
-For math, use readable Unicode symbols (such as ×, ÷, √, π, ≤, ≥, and superscript powers) instead of raw LaTeX commands. The written math answer itself is never read aloud; voiceExplanation must instead teach the reasoning conversationally without reciting the displayed equations.
+For math, emit the actual UTF-8 Unicode characters ×, ÷, √, π, ≤, ≥, ≠, ±, ², and ³ wherever applicable; never emit LaTeX command names or ASCII substitutes when one of these characters exists. The client formatter maps these stable symbols for visual display. The written math answer itself is never read aloud. voiceExplanation must use ordinary English words such as "times", "divided by", "square root", "squared", and "equals" instead of mathematical symbols, and must teach the reasoning conversationally without reciting the displayed equations.
 Explain only the selected input in English. Do not quote it or answer unrelated questions. Preserve technical terminology. Return one valid JSON object only. Required fields are intent, answer, and voiceExplanation. Optional fields are recognizedEquation, plot, and flowchart. Plot shape: {"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}. Flowchart shape: {"title":"...","nodes":[{"id":"n1","label":"Start"}],"edges":[{"from":"n1","to":"n2","label":"next"}]}.`;
   return parseGeneratedExplanation(await openRouterGenerate({
     prompt,
     system,
     json: true,
     signal: input.signal,
-    maxTokens: 2200,
+    maxTokens: 3200,
+    temperature: 0.1,
   }));
 }
 

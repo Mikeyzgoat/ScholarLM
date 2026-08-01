@@ -25,6 +25,24 @@ export async function generateSpeech(
   return r.blob();
 }
 
+export async function getStoredExplanationSpeech(
+  explanationId: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(
+    `${API_BASE_URL}/tts/explanation/${encodeURIComponent(explanationId)}`,
+    { signal },
+  );
+  if (!response.ok)
+    throw new ApiError(
+      response.status === 404
+        ? "Stored audio is not ready for this explanation"
+        : "Stored explanation audio could not be loaded",
+      response.status,
+    );
+  return response.blob();
+}
+
 export async function streamSpeech(
   text: string,
   onChunk: (audio: Blob, text: string) => void,

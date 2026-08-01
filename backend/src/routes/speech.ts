@@ -7,6 +7,7 @@ import {
 import {
   combineWavBytes,
   getCachedSpeech,
+  getExplanationSpeech,
   linkExplanationSpeech,
   normalizeSpeechText,
   storeCachedSpeech,
@@ -26,6 +27,29 @@ function cachedAudio(value: Uint8Array): SpeechAudio {
     provider: isWav ? "kokoro" : "fish-audio",
   };
 }
+
+speech.get("/explanation/:explanationId", (c) => {
+  const explanationId = c.req.param("explanationId");
+  if (!/^[a-f0-9]{64}$/.test(explanationId))
+    return c.json(
+      { error: { message: "Invalid explanation identifier", code: "INVALID_INPUT" } },
+      400,
+    );
+  const stored = getExplanationSpeech(explanationId);
+  if (!stored)
+    return c.json(
+      { error: { message: "Stored explanation audio was not found", code: "AUDIO_NOT_FOUND" } },
+      404,
+    );
+  const generated = cachedAudio(stored);
+  return new Response(stored.slice().buffer as ArrayBuffer, {
+    headers: {
+      "Content-Type": generated.mimeType,
+      "Cache-Control": "private, max-age=31536000, immutable",
+      "X-ScholarLM-TTS-Cache": "HIT",
+    },
+  });
+});
 
 speech.post("/backfill", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);

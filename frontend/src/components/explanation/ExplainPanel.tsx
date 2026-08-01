@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useExplanation } from "../../hooks/useExplanation";
 import { useSpeech } from "../../hooks/useSpeech";
+import { getStoredExplanationSpeech } from "../../services/speech";
 import { AnimatePresence, motion } from "framer-motion";
 import { SelectionPopover } from "../pdf/SelectionPopover";
 import { ExplanationContent } from "./ExplanationContent";
@@ -101,6 +102,7 @@ export function ExplainPanel({
   const [suggestedFlowchart, setSuggestedFlowchart] = useState<FlowchartDiagram>();
   const [suggestedSourceShapeIds, setSuggestedSourceShapeIds] = useState<string[]>();
   const [audioOwner, setAudioOwner] = useState("");
+  const [queueAudioError, setQueueAudioError] = useState("");
   const screenshotInput = useRef<HTMLInputElement>(null);
   const voiceText = useRef("");
   const voiceController = useRef<AbortController | null>(null);
@@ -115,9 +117,51 @@ export function ExplainPanel({
       result?: Parameters<NonNullable<typeof onExplanationGenerated>>[0];
     }>
   >([]);
+  const [activeQueueId, setActiveQueueId] = useState("");
+  const [activeExplanationId, setActiveExplanationId] = useState("");
   const activeImage = selectionImage ?? pastedImage;
   const activeText =
     selectedText.trim() || (pastedImage ? "Screenshot selection" : "");
+  const syncCachedQueue = (
+    cached: Awaited<ReturnType<typeof findExistingExplanation>>,
+    displayAnswer: string,
+  ) => {
+    if (!cached?.historyId) return;
+    const result = {
+      selectedText: activeText,
+      explanation: displayAnswer,
+      mode: "explain" as const,
+      anchors: selectionAnchors,
+      explanationId: cached.historyId,
+      pageNumber: pageNumber ?? undefined,
+    };
+    let selectedId = `history:${cached.historyId}`;
+    setRequestHistory((history) => {
+      const existing = history.find(
+        (request) => request.result?.explanationId === cached.historyId,
+      );
+      if (existing) {
+        selectedId = existing.id;
+        return history.map((request) =>
+          request.id === existing.id
+            ? { ...request, status: "complete", result }
+            : request,
+        );
+      }
+      return [
+        ...history,
+        {
+          id: selectedId,
+          sourceText: activeText,
+          status: "complete" as const,
+          result,
+        },
+      ];
+    });
+    setActiveQueueId(selectedId);
+    setActiveExplanationId(cached.historyId);
+    setCanvasInput(result);
+  };
   const acceptClipboardImage = useCallback(async (blob: Blob) => {
     if (!blob.type.startsWith("image/")) return;
     setPasteError("");
@@ -239,6 +283,8 @@ export function ExplainPanel({
         pageNumber: requestPageNumber,
       };
       setCanvasInput(completedInput);
+      setActiveQueueId(requestId);
+      setActiveExplanationId(value.historyId ?? "");
       setRequestHistory((history) =>
         history.map((request) =>
           request.id === requestId
@@ -329,39 +375,14 @@ export function ExplainPanel({
           signal: controller.signal,
         }).then(async (cached) => {
           if (!cached || controller.signal.aborted) return;
-          const spoken =
-            cached.voiceExplanation ??
-            (
-              await generateVoiceExplanation({
-                answer: cached.explanation,
-                recognizedEquation: cached.recognizedEquation,
-                historyId: cached.historyId,
-                signal: controller.signal,
-              })
-            ).voiceExplanation;
-          if (controller.signal.aborted) return;
-          voiceText.current = spoken;
-          setAudioOwner(activeText);
-          void speech.enqueue(spoken, activeText, cached.historyId, true);
+          const displayAnswer = cached.answer ?? cached.explanation;
+          syncCachedQueue(cached, displayAnswer);
+          state.load(displayAnswer);
+          setRecognizedEquation(cached.recognizedEquation ?? "");
         }).catch((error) => {
           if (!controller.signal.aborted)
             console.warn("Could not restore saved speech", error);
         });
-      } else {
-        void generateVoiceExplanation({
-          answer: existing,
-          signal: controller.signal,
-        })
-          .then(({ voiceExplanation }) => {
-            if (controller.signal.aborted) return;
-            voiceText.current = voiceExplanation;
-            setAudioOwner(activeText);
-            void speech.enqueue(voiceExplanation, activeText, undefined, true);
-          })
-          .catch((error) => {
-            if (!controller.signal.aborted)
-              console.warn("Could not prepare the spoken explanation", error);
-          });
       }
       setCanvasInput({
         selectedText: activeText,
@@ -413,29 +434,11 @@ export function ExplainPanel({
         pageNumber: pageNumber ?? undefined,
         signal: controller.signal,
       })
-        .then(async (cached) => {
+        .then((cached) => {
           if (!cached || controller.signal.aborted) return;
           const displayAnswer = cached.answer ?? cached.explanation;
-          const voiceExplanation =
-            cached.voiceExplanation ??
-            (
-              await generateVoiceExplanation({
-                answer: displayAnswer,
-                recognizedEquation: cached.recognizedEquation,
-                historyId: cached.historyId,
-                signal: controller.signal,
-              })
-            ).voiceExplanation;
-          if (controller.signal.aborted) return;
-          voiceText.current = voiceExplanation;
-          setAudioOwner(activeText);
           state.load(displayAnswer);
-          void speech.enqueue(
-            voiceExplanation,
-            activeText,
-            cached.historyId,
-            true,
-          );
+          syncCachedQueue(cached, displayAnswer);
           setRecognizedEquation(cached.recognizedEquation ?? "");
           setCanvasInput({
             selectedText: activeText,
@@ -566,7 +569,34 @@ export function ExplainPanel({
           {requestHistory.slice().reverse().map((request) => (
             <div
               key={request.id}
-              className="rounded-lg border border-orange-400/15 bg-black/5 px-3 py-2"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                setActiveQueueId(request.id);
+                setActiveExplanationId(request.result?.explanationId ?? "");
+                if (request.result) {
+                  setCanvasInput(request.result);
+                  state.load(request.result.explanation);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setActiveQueueId(request.id);
+                  setActiveExplanationId(request.result?.explanationId ?? "");
+                  if (request.result) {
+                    setCanvasInput(request.result);
+                    state.load(request.result.explanation);
+                  }
+                }
+              }}
+              className={`rounded-lg border px-3 py-2 transition ${
+                activeQueueId === request.id ||
+                (activeExplanationId &&
+                  activeExplanationId === request.result?.explanationId)
+                  ? "border-orange-400/60 bg-orange-500/10 ring-1 ring-orange-400/30"
+                  : "border-orange-400/15 bg-black/5"
+              }`}
             >
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 truncate text-xs text-stone-400">
@@ -578,8 +608,35 @@ export function ExplainPanel({
               </div>
               {request.result && (
                 <div className="mt-2 flex gap-2">
+                  {request.result.explanationId && (
+                    <button
+                      type="button"
+                      onClickCapture={(event) => event.stopPropagation()}
+                      onClick={() => {
+                        setQueueAudioError("");
+                        void getStoredExplanationSpeech(
+                          request.result!.explanationId!,
+                        )
+                          .then((audio) => {
+                            setAudioOwner(request.sourceText);
+                            return speech.enqueueStored(audio);
+                          })
+                          .catch((error) =>
+                            setQueueAudioError(
+                              error instanceof Error
+                                ? error.message
+                                : "Stored audio could not be played",
+                            ),
+                          );
+                      }}
+                      className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
+                    >
+                      Play audio
+                    </button>
+                  )}
                   <button
                     type="button"
+                    onClickCapture={(event) => event.stopPropagation()}
                     onClick={() => onExplanationGenerated?.(request.result!)}
                     className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
                   >
@@ -587,6 +644,7 @@ export function ExplainPanel({
                   </button>
                   <button
                     type="button"
+                    onClickCapture={(event) => event.stopPropagation()}
                     onClick={() =>
                       onExplanationStickyRequested?.(request.result!)
                     }
@@ -599,6 +657,9 @@ export function ExplainPanel({
             </div>
           ))}
         </section>
+      )}
+      {queueAudioError && (
+        <p className="text-xs text-red-400">{queueAudioError}</p>
       )}
       <AnimatePresence mode="popLayout">
         {activeText && !state.explanation && (

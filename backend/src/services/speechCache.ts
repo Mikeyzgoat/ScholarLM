@@ -10,6 +10,27 @@ interface SpeechCacheRow {
 
 export function normalizeSpeechText(text: string): string {
   return text
+    .replace(/×/g, " times ")
+    .replace(/÷/g, " divided by ")
+    .replace(/≤/g, " less than or equal to ")
+    .replace(/≥/g, " greater than or equal to ")
+    .replace(/≠/g, " not equal to ")
+    .replace(/±/g, " plus or minus ")
+    .replace(/√/g, " square root of ")
+    .replace(/∑/g, " sum of ")
+    .replace(/∞/g, " infinity ")
+    .replace(/π/g, " pi ")
+    .replace(/θ/g, " theta ")
+    .replace(/α/g, " alpha ")
+    .replace(/β/g, " beta ")
+    .replace(/²/g, " squared ")
+    .replace(/³/g, " cubed ")
+    .replace(/⁻([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, " to the power of negative $1 ")
+    .replace(/([⁰¹⁴⁵⁶⁷⁸⁹]+)/g, " to the power of $1 ")
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (character) =>
+      ({ "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" })[character] ?? character,
+    )
+    .replace(/=/g, " equals ")
     .trim()
     .replace(/\r\n?/g, "\n")
     .replace(/[ \t]+/g, " ")

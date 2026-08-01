@@ -361,6 +361,16 @@ export function useSpeech() {
     }
   };
 
+  const playStoredAudio = async (blob: Blob) => {
+    stop();
+    clearAudio();
+    audioUrl.current = URL.createObjectURL(blob);
+    setReady(true);
+    setUsingFallback(false);
+    setError(null);
+    await playAudio();
+  };
+
   return {
     speak: (
       text: string,
@@ -384,6 +394,11 @@ export function useSpeech() {
         await loadSpeech(text, sourceText, explanationId, autoRead);
         hasPlayedNarration.current = true;
       });
+      narrationQueue.current = operation.catch(() => undefined);
+      return operation;
+    },
+    enqueueStored: (blob: Blob) => {
+      const operation = narrationQueue.current.then(() => playStoredAudio(blob));
       narrationQueue.current = operation.catch(() => undefined);
       return operation;
     },
