@@ -21,6 +21,7 @@ import { WorkspaceCanvas } from "../components/notes/WorkspaceCanvas";
 import type { CanvasSelectionAnchor, GraphNode } from "../lib/types";
 import type { Editor } from "tldraw";
 import { drawMathPlot } from "../lib/drawMathPlot";
+import { drawFlowchart } from "../lib/drawFlowchart";
 import { DocumentQA } from "../components/rag/DocumentQA";
 import {
   addExplanationStickyToCanvas,
@@ -68,6 +69,10 @@ export default function WorkspacePage() {
   const [selectionAnchors, setSelectionAnchors] =
     useState<CanvasSelectionAnchor[]>();
   const [canvasEditor, setCanvasEditor] = useState<Editor | null>(null);
+  const [canvasSaveController, setCanvasSaveController] = useState<{
+    isDirty: boolean;
+    save: () => Promise<void>;
+  }>();
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() =>
     restoreInspectorTab(documentId),
   );
@@ -84,6 +89,22 @@ export default function WorkspacePage() {
       anchors?: CanvasSelectionAnchor[];
     }>
   >([]);
+  const switchInspectorTab = async (nextTab: InspectorTab) => {
+    if (nextTab === inspectorTab) return;
+    if (canvasSaveController?.isDirty) {
+      const approved = window.confirm(
+        "Save your canvas changes before switching tabs? Saving will update the search index.",
+      );
+      if (!approved) return;
+      try {
+        await canvasSaveController.save();
+      } catch {
+        window.alert("The canvas could not be saved. You will remain on this tab.");
+        return;
+      }
+    }
+    setInspectorTab(nextTab);
+  };
   const doc = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => getDocument(documentId),
@@ -182,6 +203,7 @@ export default function WorkspacePage() {
           fileUrl={getDocumentFileUrl(documentId)}
           activePage={activePage}
           pageCount={doc.data.pageCount ?? 1}
+          onSaveControllerChange={setCanvasSaveController}
           onPageChange={setActivePage}
           onPdfTextSelected={(text) => {
             setInspectorTab("explain");
@@ -253,7 +275,7 @@ export default function WorkspacePage() {
               type="button"
               role="tab"
               aria-selected={inspectorTab === id}
-              onClick={() => setInspectorTab(id)}
+              onClick={() => void switchInspectorTab(id)}
               className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium ${
                 inspectorTab === id
                   ? "bg-orange-500/15 text-orange-300"
@@ -285,6 +307,10 @@ export default function WorkspacePage() {
                     equation,
                     sourceShapeIds,
                   );
+              }}
+              onFlowchartGenerated={(flowchart, sourceShapeIds) => {
+                if (canvasEditor)
+                  drawFlowchart(canvasEditor, flowchart, sourceShapeIds);
               }}
               onExplanationGenerated={saveExplanationToCanvas}
               onExplanationStickyRequested={(input) => {

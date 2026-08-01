@@ -97,9 +97,15 @@ export interface ExplanationResponse {
   answers?: string[];
   recognizedEquation?: string;
   plot?: MathPlot;
+  flowchart?: FlowchartDiagram;
   historyId?: string;
   revisionCount?: number;
   cached?: boolean;
+}
+export interface FlowchartDiagram {
+  title: string;
+  nodes: Array<{ id: string; label: string }>;
+  edges: Array<{ from: string; to: string; label?: string }>;
 }
 export interface MathPlot {
   title: string;
@@ -136,4 +142,3 @@ export interface NotePage {
   updatedAt: string;
 }
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
-

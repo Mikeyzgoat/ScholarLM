@@ -27,6 +27,8 @@ import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { DocumentNotes } from "../components/notes/DocumentNotes";
 import { KnowledgeGraph } from "../components/graph/KnowledgeGraph";
 import { getGlobalGraph } from "../services/graph";
+import { drawMathPlot } from "../lib/drawMathPlot";
+import { drawFlowchart } from "../lib/drawFlowchart";
 
 type GroupInspectorTab = "explain" | "ask" | "notes" | "graph";
 
@@ -238,6 +240,14 @@ export default function GroupWorkspacePage() {
               documentId={activeSource.document.id}
               pageNumber={activeSource.pageNumber}
               documentTitle={activeSource.document.name}
+              onPlotGenerated={(plot, equation, sourceShapeIds) => {
+                if (canvasEditor)
+                  drawMathPlot(canvasEditor, plot, equation, sourceShapeIds);
+              }}
+              onFlowchartGenerated={(flowchart, sourceShapeIds) => {
+                if (canvasEditor)
+                  drawFlowchart(canvasEditor, flowchart, sourceShapeIds);
+              }}
               onExplanationGenerated={(input) => {
                 if (canvasEditor)
                   addExplanationToCanvas(canvasEditor, {

@@ -15,6 +15,7 @@ export function NotesHeader({
   saveState,
   onTitleChange,
   onBack,
+  onSave,
   lastSavedAt = null,
   pageNavigation,
   pdfTextSelection,
@@ -23,6 +24,7 @@ export function NotesHeader({
   saveState: SaveState;
   onTitleChange: (t: string) => void;
   onBack: () => void;
+  onSave?: () => void;
   lastSavedAt?: string | null;
   pageNavigation?: {
     current: number;
@@ -87,6 +89,16 @@ export function NotesHeader({
         </button>
       )}
       <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+      {onSave && saveState !== "saved" && (
+        <button
+          type="button"
+          disabled={saveState === "saving"}
+          onClick={onSave}
+          className="scholar-primary-action rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+        >
+          {saveState === "saving" ? "Saving…" : "Save changes"}
+        </button>
+      )}
       <ThemeSelector compact />
       <Link
         to="/upload"

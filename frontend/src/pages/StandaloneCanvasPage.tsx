@@ -12,6 +12,7 @@ import type { CanvasSelectionAnchor, NotePage, SaveState } from "../lib/types";
 import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
+import { drawFlowchart } from "../lib/drawFlowchart";
 import { SaveStatus } from "../components/notes/SaveStatus";
 import {
   getLocalCanvas,
@@ -311,6 +312,9 @@ export default function StandaloneCanvasPage() {
             onPlotGenerated={(plot, equation, sourceShapeIds) => {
               if (editor)
                 drawMathPlot(editor, plot, equation, sourceShapeIds);
+            }}
+            onFlowchartGenerated={(flowchart, sourceShapeIds) => {
+              if (editor) drawFlowchart(editor, flowchart, sourceShapeIds);
             }}
             onExplanationGenerated={(input) => {
               if (editor) addExplanationToCanvas(editor, input);

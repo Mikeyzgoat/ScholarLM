@@ -5,10 +5,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { SelectionPopover } from "../pdf/SelectionPopover";
 import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
-import type { CanvasSelectionAnchor, MathPlot } from "../../lib/types";
+import type { CanvasSelectionAnchor, FlowchartDiagram, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
 import {
-  createDeterministicMathGraph,
   findExistingExplanation,
   generateVoiceExplanation,
 } from "../../services/explanation";
@@ -52,6 +51,7 @@ export function ExplainPanel({
   pageNumber,
   documentTitle,
   onPlotGenerated,
+  onFlowchartGenerated,
   onExplanationGenerated,
   onExplanationStickyRequested,
 }: {
@@ -69,6 +69,10 @@ export function ExplainPanel({
   onPlotGenerated?: (
     plot: MathPlot,
     equation?: string,
+    sourceShapeIds?: string[],
+  ) => void;
+  onFlowchartGenerated?: (
+    flowchart: FlowchartDiagram,
     sourceShapeIds?: string[],
   ) => void;
   onExplanationGenerated?: (input: {
@@ -93,13 +97,24 @@ export function ExplainPanel({
   const [pasteError, setPasteError] = useState("");
   const [recognizedEquation, setRecognizedEquation] = useState("");
   const [graphError, setGraphError] = useState("");
-  const [isGraphing, setIsGraphing] = useState(false);
+  const [suggestedPlot, setSuggestedPlot] = useState<MathPlot>();
+  const [suggestedFlowchart, setSuggestedFlowchart] = useState<FlowchartDiagram>();
+  const [suggestedSourceShapeIds, setSuggestedSourceShapeIds] = useState<string[]>();
+  const [audioOwner, setAudioOwner] = useState("");
   const screenshotInput = useRef<HTMLInputElement>(null);
   const voiceText = useRef("");
   const voiceController = useRef<AbortController | null>(null);
   const [canvasInput, setCanvasInput] = useState<Parameters<
     NonNullable<typeof onExplanationGenerated>
   >[0]>();
+  const [requestHistory, setRequestHistory] = useState<
+    Array<{
+      id: string;
+      sourceText: string;
+      status: "pending" | "complete" | "failed";
+      result?: Parameters<NonNullable<typeof onExplanationGenerated>>[0];
+    }>
+  >([]);
   const activeImage = selectionImage ?? pastedImage;
   const activeText =
     selectedText.trim() || (pastedImage ? "Screenshot selection" : "");
@@ -166,30 +181,40 @@ export function ExplainPanel({
     mode: "explain" | "regenerate" | "simplify" = "explain",
     requestGraph = false,
   ) {
+    const requestId = crypto.randomUUID();
+    const requestText = activeText;
+    const requestImage = activeImage;
+    const requestAnchors = selectionAnchors;
+    const requestPageNumber = pageNumber ?? undefined;
+    const requestPastedImage = pastedImage;
+    setRequestHistory((history) => [
+      ...history,
+      { id: requestId, sourceText: requestText, status: "pending" },
+    ]);
     voiceController.current?.abort();
     voiceController.current = null;
     const value = await state.explain({
-      selectedText: activeText,
+      selectedText: requestText,
       selectedTexts:
-        !pastedImage && selectedTexts && selectedTexts.length > 1
+        !requestPastedImage && selectedTexts && selectedTexts.length > 1
           ? selectedTexts
           : undefined,
-      imageDataUrl: activeImage,
-      imageInputKind: pastedImage ? "selection" : "handwriting",
+      imageDataUrl: requestImage,
+      imageInputKind: requestPastedImage ? "selection" : "handwriting",
       graphRequested: requestGraph,
       documentId,
       noteId,
       canvasId,
       shapeId:
-        activeImage && !pastedImage
-          ? selectionAnchors?.[0]?.shapeId
+        requestImage && !requestPastedImage
+          ? requestAnchors?.[0]?.shapeId
           : undefined,
       shapeIds:
-        activeImage && !pastedImage
-          ? selectionAnchors?.map((anchor) => anchor.shapeId)
+        requestImage && !requestPastedImage
+          ? requestAnchors?.map((anchor) => anchor.shapeId)
           : undefined,
       documentTitle,
-      pageNumber: pageNumber ?? undefined,
+      pageNumber: requestPageNumber,
       mode,
       previousExplanation:
         mode === "explain" ? undefined : state.explanation || undefined,
@@ -198,23 +223,30 @@ export function ExplainPanel({
       const displayAnswer = value.answer ?? value.explanation;
       voiceText.current = value.voiceExplanation ?? "";
       setRecognizedEquation(value.recognizedEquation ?? "");
+      setSuggestedPlot(value.plot);
+      setSuggestedFlowchart(value.flowchart);
+      setSuggestedSourceShapeIds(
+        requestAnchors?.map((anchor) => anchor.shapeId),
+      );
       setGraphError("");
-      if (value.plot)
-        onPlotGenerated?.(
-          value.plot,
-          value.recognizedEquation,
-          selectionAnchors?.map((anchor) => anchor.shapeId),
-        );
-      setCanvasInput({
-        selectedText: activeText,
+      const completedInput = {
+        selectedText: requestText,
         explanation: displayAnswer,
         mode,
         answers: value.answers,
-        anchors: selectionAnchors,
+        anchors: requestAnchors,
         explanationId: value.historyId,
-        pageNumber: pageNumber ?? undefined,
-      });
-      if (pastedImage) setInputMode("selection");
+        pageNumber: requestPageNumber,
+      };
+      setCanvasInput(completedInput);
+      setRequestHistory((history) =>
+        history.map((request) =>
+          request.id === requestId
+            ? { ...request, status: "complete", result: completedInput }
+            : request,
+        ),
+      );
+      if (requestPastedImage) setInputMode("selection");
       const backgroundVoice = new AbortController();
       voiceController.current = backgroundVoice;
       void (async () => {
@@ -231,7 +263,13 @@ export function ExplainPanel({
             ).voiceExplanation;
           if (backgroundVoice.signal.aborted) return;
           voiceText.current = voiceExplanation;
-          await speech.speak(voiceExplanation, activeText, value.historyId);
+          setAudioOwner(requestText);
+          await speech.enqueue(
+            voiceExplanation,
+            requestText,
+            value.historyId,
+            value.cached === true,
+          );
         } catch (error) {
           if (!backgroundVoice.signal.aborted)
             console.warn("Could not prepare the spoken explanation", error);
@@ -240,43 +278,29 @@ export function ExplainPanel({
             voiceController.current = null;
         }
       })();
-    }
-  }
-  async function insertVerifiedGraph() {
-    const equation = recognizedEquation.trim() || activeText.trim();
-    if (!equation || isGraphing) return;
-    setGraphError("");
-    setIsGraphing(true);
-    try {
-      const result = await createDeterministicMathGraph(equation);
-      setRecognizedEquation(result.normalizedEquation);
-      if (!result.plot) {
-        setGraphError(result.error ?? "This equation cannot be graphed yet");
-        return;
-      }
-      onPlotGenerated?.(
-        result.plot,
-        result.normalizedEquation,
-        selectionAnchors?.map((anchor) => anchor.shapeId),
+    } else {
+      setRequestHistory((history) =>
+        history.map((request) =>
+          request.id === requestId
+            ? { ...request, status: "failed" }
+            : request,
+        ),
       );
-    } catch (error) {
-      setGraphError(
-        error instanceof Error ? error.message : "Graph generation failed",
-      );
-    } finally {
-      setIsGraphing(false);
     }
   }
   useEffect(() => {
     const controller = new AbortController();
     voiceController.current?.abort();
     voiceController.current = null;
-    speech.stop();
     if (!activeText && !activeImage) {
       voiceText.current = "";
       state.clear();
       setCanvasInput(undefined);
       setRecognizedEquation("");
+      setSuggestedPlot(undefined);
+      setSuggestedFlowchart(undefined);
+      setSuggestedSourceShapeIds(undefined);
+      setAudioOwner("");
       setGraphError("");
       return () => controller.abort();
     }
@@ -288,7 +312,7 @@ export function ExplainPanel({
         ? findLatestGeneratedOutput(activeText, pageNumber ?? undefined)?.text
         : undefined);
     if (existing) {
-      voiceText.current = existing;
+      voiceText.current = "";
       state.load(existing);
       if (existingExplanationId) {
         void findExistingExplanation({
@@ -317,13 +341,28 @@ export function ExplainPanel({
             ).voiceExplanation;
           if (controller.signal.aborted) return;
           voiceText.current = spoken;
-          void speech.prepare(spoken, activeText, cached.historyId);
+          setAudioOwner(activeText);
+          void speech.enqueue(spoken, activeText, cached.historyId, true);
         }).catch((error) => {
           if (!controller.signal.aborted)
             console.warn("Could not restore saved speech", error);
         });
-      } else
-        void speech.prepare(existing, activeText);
+      } else {
+        void generateVoiceExplanation({
+          answer: existing,
+          signal: controller.signal,
+        })
+          .then(({ voiceExplanation }) => {
+            if (controller.signal.aborted) return;
+            voiceText.current = voiceExplanation;
+            setAudioOwner(activeText);
+            void speech.enqueue(voiceExplanation, activeText, undefined, true);
+          })
+          .catch((error) => {
+            if (!controller.signal.aborted)
+              console.warn("Could not prepare the spoken explanation", error);
+          });
+      }
       setCanvasInput({
         selectedText: activeText,
         explanation: existing,
@@ -389,11 +428,13 @@ export function ExplainPanel({
             ).voiceExplanation;
           if (controller.signal.aborted) return;
           voiceText.current = voiceExplanation;
+          setAudioOwner(activeText);
           state.load(displayAnswer);
-          void speech.prepare(
+          void speech.enqueue(
             voiceExplanation,
             activeText,
             cached.historyId,
+            true,
           );
           setRecognizedEquation(cached.recognizedEquation ?? "");
           setCanvasInput({
@@ -516,6 +557,49 @@ export function ExplainPanel({
         }}
       />
       {pasteError && <p className="text-xs text-red-400">{pasteError}</p>}
+      {requestHistory.length > 0 && (
+        <section className="space-y-2 rounded-lg border border-orange-400/15 p-2">
+          <div className="flex items-center justify-between px-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-400">Queued explanations</p>
+            <span className="text-[10px] text-stone-500">{state.pendingCount} pending</span>
+          </div>
+          {requestHistory.slice().reverse().map((request) => (
+            <div
+              key={request.id}
+              className="rounded-lg border border-orange-400/15 bg-black/5 px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <p className="min-w-0 flex-1 truncate text-xs text-stone-400">
+                  {request.sourceText}
+                </p>
+                <span className="text-[10px] uppercase tracking-wide text-orange-400">
+                  {request.status}
+                </span>
+              </div>
+              {request.result && (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onExplanationGenerated?.(request.result!)}
+                    className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
+                  >
+                    Add text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onExplanationStickyRequested?.(request.result!)
+                    }
+                    className="scholar-primary-action rounded px-2 py-1 text-[10px]"
+                  >
+                    Add sticky
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
       <AnimatePresence mode="popLayout">
         {activeText && !state.explanation && (
           <motion.div
@@ -534,7 +618,6 @@ export function ExplainPanel({
             <SelectionPopover
               selectedText={activeText}
               onExplain={() => void explain("explain")}
-              onExplainWithGraph={() => void explain("explain", true)}
               onDismiss={() => {
                 setPastedImage(undefined);
                 state.clear();
@@ -550,37 +633,47 @@ export function ExplainPanel({
         )}
       </AnimatePresence>
       {state.explanation && (
-        <AudioControls
-          isLoading={speech.isLoading}
-          isPlaying={speech.isPlaying}
-          isPaused={speech.isPaused}
-          isReady={speech.isReady}
-          canLoad={Boolean(state.explanation)}
-          usingFallback={speech.usingFallback}
-          autoRead={speech.autoRead}
-          playbackRate={speech.playbackRate}
-          onPause={speech.pause}
-          onResume={() => {
-            if (speech.isReady) speech.resume();
-            else
-              void speech.play(
-                voiceText.current || state.explanation,
-                activeText,
-                canvasInput?.explanationId ?? existingExplanationId,
-              );
-          }}
-          onReplay={speech.replay}
-          onStop={speech.stop}
-          onAutoReadChange={speech.setAutoRead}
-          onPlaybackRateChange={speech.setPlaybackRate}
-        />
+        <section className="space-y-2 rounded-lg border border-orange-400/15 bg-orange-500/[0.04] p-2">
+          <div className="px-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-400">
+              Audio playback
+            </p>
+            <p className="mt-1 truncate text-xs text-stone-500">
+              {audioOwner
+                ? `${speech.isPlaying ? "Playing" : speech.isLoading ? "Preparing" : "Ready"}: ${audioOwner}`
+                : "One explanation plays at a time."}
+            </p>
+          </div>
+          <AudioControls
+            isLoading={speech.isLoading}
+            isPlaying={speech.isPlaying}
+            isPaused={speech.isPaused}
+            isReady={speech.isReady}
+            canLoad={Boolean(voiceText.current)}
+            usingFallback={speech.usingFallback}
+            autoRead={speech.autoRead}
+            playbackRate={speech.playbackRate}
+            onPause={speech.pause}
+            onResume={() => {
+              if (speech.isReady) speech.resume();
+              else if (voiceText.current)
+                void speech.play(
+                  voiceText.current,
+                  activeText,
+                  canvasInput?.explanationId ?? existingExplanationId,
+                );
+            }}
+            onReplay={speech.replay}
+            onStop={speech.stop}
+            onAutoReadChange={speech.setAutoRead}
+            onPlaybackRateChange={speech.setPlaybackRate}
+          />
+        </section>
       )}
       <ExplanationContent
-        selectedText={activeText}
         explanation={state.explanation}
         isLoading={state.isExplaining}
         error={state.error}
-        activeWordIndex={speech.activeWordIndex}
       />
       {speech.error && (
         <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
@@ -681,19 +774,29 @@ export function ExplainPanel({
               Add as text
             </button>
           </div>
-          {activeText && (
-            <button
+          <button
               type="button"
               className="scholar-secondary-action flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs"
-              disabled={state.isExplaining || isGraphing}
-              onClick={() => void insertVerifiedGraph()}
+              disabled={!suggestedPlot && !suggestedFlowchart}
+              onClick={() => {
+                if (suggestedPlot)
+                  onPlotGenerated?.(
+                    suggestedPlot,
+                    recognizedEquation,
+                    suggestedSourceShapeIds,
+                  );
+                else if (suggestedFlowchart)
+                  onFlowchartGenerated?.(
+                    suggestedFlowchart,
+                    suggestedSourceShapeIds,
+                  );
+              }}
             >
               <ChartSpline size={15} />
-              {isGraphing
-                ? "Drawing verified graph…"
+              {suggestedFlowchart
+                ? "Insert / replace flowchart"
                 : "Insert / replace graph"}
-            </button>
-          )}
+          </button>
           {graphError && <p className="text-xs text-red-400">{graphError}</p>}
         </>
       )}

@@ -167,6 +167,13 @@ interface CanvasAnalysis {
     yLabel: string;
     points: Array<{ x: number; y: number }>;
   };
+  flowchart?: FlowchartDiagram;
+}
+
+interface FlowchartDiagram {
+  title: string;
+  nodes: Array<{ id: string; label: string }>;
+  edges: Array<{ from: string; to: string; label?: string }>;
 }
 
 export type ExplanationIntent = "theory" | "math" | "problem-solving" | "general";
@@ -175,6 +182,44 @@ export interface GeneratedExplanation {
   intent: ExplanationIntent;
   answer: string;
   voiceExplanation: string;
+  recognizedEquation?: string;
+  plot?: CanvasAnalysis["plot"];
+  flowchart?: FlowchartDiagram;
+}
+
+function validFlowchart(value: unknown): FlowchartDiagram | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const chart = value as Partial<FlowchartDiagram>;
+  if (typeof chart.title !== "string" || !Array.isArray(chart.nodes) || !Array.isArray(chart.edges)) return undefined;
+  const nodes = chart.nodes
+    .filter((node) => typeof node?.id === "string" && typeof node?.label === "string")
+    .slice(0, 16);
+  const ids = new Set(nodes.map((node) => node.id));
+  const edges = chart.edges
+    .filter((edge) => typeof edge?.from === "string" && typeof edge?.to === "string" && ids.has(edge.from) && ids.has(edge.to))
+    .slice(0, 24)
+    .map((edge) => ({
+      from: edge.from,
+      to: edge.to,
+      ...(typeof edge.label === "string" && edge.label.trim() ? { label: edge.label.trim() } : {}),
+    }));
+  return nodes.length >= 2 && edges.length >= 1
+    ? { title: chart.title.trim(), nodes, edges }
+    : undefined;
+}
+
+function validPlot(value: CanvasAnalysis["plot"]): CanvasAnalysis["plot"] | undefined {
+  const points = value?.points
+    ?.filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y))
+    .slice(0, 80);
+  return value && typeof value.title === "string" && points && points.length >= 2
+    ? {
+        title: value.title,
+        xLabel: typeof value.xLabel === "string" ? value.xLabel : "x",
+        yLabel: typeof value.yLabel === "string" ? value.yLabel : "y",
+        points,
+      }
+    : undefined;
 }
 
 export function hasUsefulVoiceExplanation(
@@ -215,6 +260,12 @@ function parseGeneratedExplanation(raw: string): GeneratedExplanation {
     intent: value.intent as ExplanationIntent,
     answer: value.answer.trim(),
     voiceExplanation: value.voiceExplanation.trim(),
+    recognizedEquation:
+      typeof value.recognizedEquation === "string"
+        ? value.recognizedEquation.trim()
+        : undefined,
+    plot: validPlot(value.plot),
+    flowchart: validFlowchart(value.flowchart),
   };
 }
 
@@ -230,13 +281,6 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
     typeof value.answer === "string" && value.answer.trim()
       ? value.answer.trim()
       : (value.explanation as string).trim();
-  const points = value.plot?.points
-    ?.filter(
-      (point) =>
-        Number.isFinite(point?.x) &&
-        Number.isFinite(point?.y),
-    )
-    .slice(0, 80);
   return {
     explanation,
     answer: typeof value.answer === "string" ? value.answer.trim() : undefined,
@@ -248,20 +292,8 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
       typeof value.recognizedEquation === "string"
         ? value.recognizedEquation.trim()
         : undefined,
-    plot:
-      value.plot &&
-      typeof value.plot.title === "string" &&
-      points &&
-      points.length >= 2
-        ? {
-            title: value.plot.title,
-            xLabel:
-              typeof value.plot.xLabel === "string" ? value.plot.xLabel : "x",
-            yLabel:
-              typeof value.plot.yLabel === "string" ? value.plot.yLabel : "y",
-            points,
-          }
-        : undefined,
+    plot: validPlot(value.plot),
+    flowchart: validFlowchart(value.flowchart),
   };
 }
 
@@ -279,8 +311,8 @@ export async function explainCanvasSelection(input: {
   const prompt = `Analyze the selected mathematics${input.imageDataUrl ? " in the image" : ""}.
 Recognize the equation accurately and solve it step by step for visual display.
 Provide 17–41 ordered sample points across a useful domain when a graph materially helps the explanation${input.graphRequested ? " or because the user explicitly requested a graph" : ""}. Otherwise omit plot. If a requested graph is mathematically inapplicable, explain why instead of inventing one.
-Return only JSON:
-{"recognizedEquation":"...","answer":"math only","explanation":"math only","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
+Return only JSON. Give the visual solution and distinct spoken teaching explanation together so audio can begin without a second model request:
+{"recognizedEquation":"...","answer":"math only","explanation":"math only","voiceExplanation":"conversational reasoning without reciting equations","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
 ${input.documentTitle ? `Document context: ${input.documentTitle}` : ""}
 ${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
 ${input.selectedTexts?.length ? `Treat these as separate numbered selections and answer each separately:\n${input.selectedTexts.map((text, index) => `Selection ${index + 1}: ${text}`).join("\n")}\nRequired explanation format: "Answer 1: ...\\n<ANSWER_SPLIT>\\nAnswer 2: ..." with exactly one answer per selection.` : input.selectedText ? `Associated text: ${input.selectedText}` : ""}
@@ -288,7 +320,7 @@ ${input.previousExplanation ? `Previous explanation: ${input.previousExplanation
 ${input.mode === "simplify" ? "Rewrite the explanation more simply with shorter steps and intuitive language." : ""}
 ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improve on the previous explanation." : ""}`;
   const system =
-    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the written answer. Return valid JSON only. Keep the answer concise, mathematical, and suitable for immediate visual display. Spoken narration is generated separately.";
+    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the written answer. Return valid JSON only. Keep the answer concise, mathematical, and suitable for immediate visual display. Make voiceExplanation a distinct conversational explanation of the reasoning, not a reading of the written answer.";
   const result = parseCanvasAnalysis(
     await openRouterGenerate({
       prompt,
@@ -296,7 +328,7 @@ ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improv
       json: true,
       imageDataUrl: input.imageDataUrl,
       signal: input.signal,
-      maxTokens: 750,
+      maxTokens: 1500,
     }),
   );
   const answer = result.answer ?? result.explanation;
@@ -514,14 +546,16 @@ Then apply the matching policy:
 - math: answer contains equations, substitutions, ordered working, and the final result only; put all teaching prose in voiceExplanation.
 - problem-solving: answer gives a concise numbered solution; voiceExplanation teaches why each step is used.
 - general: answer directly explains the selected material.
-The answer is display/canvas content. voiceExplanation is audio-only, conversational teacher-to-student speech and must make sense when heard without seeing the answer.
-Explain only the selected input in English. Do not quote it or answer unrelated questions. Preserve technical terminology. Return one valid JSON object only with exactly this shape: {"intent":"theory","answer":"...","voiceExplanation":"Let us work through this..."}.`;
+Split the available detail roughly evenly between answer and voiceExplanation. The answer is display/canvas content. voiceExplanation is audio-only, conversational teacher-to-student speech and must make sense when heard without seeing the answer.
+Decide whether a visualization materially improves understanding. For a graphable quantitative relationship, optionally return recognizedEquation and plot with 17–41 ordered points. For a process, cycle, hierarchy, or branching explanation, optionally return a flowchart with concise nodes and directed edges. Omit both unless they add real value, and never return both.
+For math, use readable Unicode symbols (such as ×, ÷, √, π, ≤, ≥, and superscript powers) instead of raw LaTeX commands. The written math answer itself is never read aloud; voiceExplanation must instead teach the reasoning conversationally without reciting the displayed equations.
+Explain only the selected input in English. Do not quote it or answer unrelated questions. Preserve technical terminology. Return one valid JSON object only. Required fields are intent, answer, and voiceExplanation. Optional fields are recognizedEquation, plot, and flowchart. Plot shape: {"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}. Flowchart shape: {"title":"...","nodes":[{"id":"n1","label":"Start"}],"edges":[{"from":"n1","to":"n2","label":"next"}]}.`;
   return parseGeneratedExplanation(await openRouterGenerate({
     prompt,
     system,
     json: true,
     signal: input.signal,
-    maxTokens: 700,
+    maxTokens: 2200,
   }));
 }
 

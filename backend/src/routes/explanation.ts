@@ -398,6 +398,7 @@ explanation.post("/", async (c) => {
             explanation: generated.answer,
             voiceExplanation: generated.voiceExplanation,
             intent: generated.intent,
+            recognizedText: generated.recognizedEquation,
             inputKind: "text",
             requestId,
           });
@@ -405,10 +406,9 @@ explanation.post("/", async (c) => {
           send({
             type: "done",
             result: {
+              ...generated,
               explanation: generated.answer,
               answer: generated.answer,
-              voiceExplanation: generated.voiceExplanation,
-              intent: generated.intent,
               ...history,
             },
           });
@@ -444,15 +444,15 @@ explanation.post("/", async (c) => {
       explanation: generated.answer,
       voiceExplanation: generated.voiceExplanation,
       intent: generated.intent,
+      recognizedText: generated.recognizedEquation,
       inputKind: "text",
       requestId,
     });
     finishOpenRouterRequest(requestId);
     return c.json({
+      ...generated,
       explanation: generated.answer,
       answer: generated.answer,
-      voiceExplanation: generated.voiceExplanation,
-      intent: generated.intent,
       ...history,
     });
   } catch (error) {

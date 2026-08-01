@@ -36,6 +36,24 @@ services:
       - "${SCHOLARLM_FRONTEND_PORT:-3000}:80"
     restart: unless-stopped
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles:
+      - tunnel
+    depends_on:
+      frontend:
+        condition: service_started
+    command:
+      - http
+      - http://frontend:80
+      - --log
+      - stdout
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    ports:
+      - "${NGROK_INSPECTOR_PORT:-4040}:4040"
+    restart: unless-stopped
+
 volumes:
   scholarlm_data:
   kokoro_cache:

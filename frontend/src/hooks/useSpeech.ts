@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { combineWavChunks, getAudioDuration } from "../lib/audio";
-import { streamSpeech } from "../services/speech";
+import { generateSpeech, streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
 const playbackRateKey = "scholarlm-speech-rate";
 const silentWav =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+const transitionText = "Moving to the next question.";
 
 function wordIndexAtProgress(text: string, progress: number): number {
   const words = text.match(/\S+/g) ?? [];
@@ -98,6 +99,10 @@ export function useSpeech() {
   const wordCueEnds = useRef<number[]>([]);
   const fallbackActive = useRef(false);
   const progressFrame = useRef(0);
+  const playbackDone = useRef<(() => void) | null>(null);
+  const narrationQueue = useRef<Promise<void>>(Promise.resolve());
+  const hasPlayedNarration = useRef(false);
+  const transitionAudio = useRef<Blob | null>(null);
   const [isLoading, setLoading] = useState(false);
   const [isPlaying, setPlaying] = useState(false);
   const [isPaused, setPaused] = useState(false);
@@ -138,7 +143,7 @@ export function useSpeech() {
       progressFrame.current = requestAnimationFrame(trackProgress);
   }, []);
 
-  const playAudio = useCallback(() => {
+  const playAudio = useCallback(async () => {
     if (!audioUrl.current) return;
     const player = audio.current ?? new Audio();
     audio.current = player;
@@ -158,64 +163,67 @@ export function useSpeech() {
       stopProgress();
       if (player.currentTime > 0 && !player.ended) setPaused(true);
     };
-    player.onended = () => {
-      setPlaying(false);
-      setPaused(false);
-      setActiveWordIndex(-1);
-      stopProgress();
-    };
-    player.onerror = () =>
-      setError(new Error("The browser could not decode the generated audio"));
-    void player.play().catch((cause: unknown) => {
-      setPaused(true);
-      if (!(cause instanceof DOMException && cause.name === "AbortError"))
-        setError(
-          cause instanceof Error ? cause : new Error("Audio playback failed"),
-        );
+    await new Promise<void>((resolve) => {
+      playbackDone.current = resolve;
+      player.onended = () => {
+        setPlaying(false);
+        setPaused(false);
+        setActiveWordIndex(-1);
+        stopProgress();
+        playbackDone.current = null;
+        resolve();
+      };
+      player.onerror = () => {
+        setError(new Error("The browser could not decode the generated audio"));
+        playbackDone.current = null;
+        resolve();
+      };
+      void player.play().catch((cause: unknown) => {
+        setPaused(true);
+        if (!(cause instanceof DOMException && cause.name === "AbortError"))
+          setError(cause instanceof Error ? cause : new Error("Audio playback failed"));
+        playbackDone.current = null;
+        resolve();
+      });
     });
   }, [playbackRate, stopProgress, trackProgress]);
 
-  const playFallback = useCallback((text: string) => {
+  const playFallback = useCallback((text: string): Promise<void> => {
     if (!globalThis.speechSynthesis || !globalThis.SpeechSynthesisUtterance)
       throw new Error("No local browser speech engine is available");
-    globalThis.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = playbackRate;
-    utterance.onstart = () => {
-      setPlaying(true);
-      setPaused(false);
-      setActiveWordIndex(0);
-    };
-    utterance.onboundary = (event) => {
-      if (event.name !== "word") return;
-      const prefix = text.slice(0, event.charIndex);
-      setActiveWordIndex(prefix.match(/\S+/g)?.length ?? 0);
-    };
-    utterance.onpause = () => {
-      setPlaying(false);
-      setPaused(true);
-    };
-    utterance.onresume = () => {
-      setPlaying(true);
-      setPaused(false);
-    };
-    utterance.onend = () => {
-      setPlaying(false);
-      setPaused(false);
-      setActiveWordIndex(-1);
-    };
-    utterance.onerror = (event) => {
-      setPlaying(false);
-      setPaused(false);
-      setActiveWordIndex(-1);
-      if (event.error !== "canceled" && event.error !== "interrupted")
-        setError(
-          new Error(
-            "Voice playback is unavailable on this device. The written explanation is unaffected.",
-          ),
-        );
-    };
-    globalThis.speechSynthesis.speak(utterance);
+    return new Promise((resolve) => {
+      globalThis.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      playbackDone.current = resolve;
+      utterance.rate = playbackRate;
+      utterance.onstart = () => {
+        setPlaying(true);
+        setPaused(false);
+      };
+      utterance.onpause = () => {
+        setPlaying(false);
+        setPaused(true);
+      };
+      utterance.onresume = () => {
+        setPlaying(true);
+        setPaused(false);
+      };
+      utterance.onend = () => {
+        setPlaying(false);
+        setPaused(false);
+        playbackDone.current = null;
+        resolve();
+      };
+      utterance.onerror = (event) => {
+        setPlaying(false);
+        setPaused(false);
+        if (event.error !== "canceled" && event.error !== "interrupted")
+          setError(new Error("Voice playback is unavailable on this device. The written explanation is unaffected."));
+        playbackDone.current = null;
+        resolve();
+      };
+      globalThis.speechSynthesis.speak(utterance);
+    });
   }, [playbackRate]);
 
   const stop = useCallback(() => {
@@ -230,6 +238,8 @@ export function useSpeech() {
     setLoading(false);
     setActiveWordIndex(-1);
     wordCueEnds.current = [];
+    playbackDone.current?.();
+    playbackDone.current = null;
   }, [stopProgress]);
 
   const clearAudio = useCallback(() => {
@@ -256,6 +266,16 @@ export function useSpeech() {
       passive: true,
     });
     return () => window.removeEventListener("pointerdown", unlockAudio);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void generateSpeech(transitionText, controller.signal)
+      .then((blob) => {
+        transitionAudio.current = blob;
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
   }, []);
 
   useEffect(
@@ -315,14 +335,14 @@ export function useSpeech() {
       wordCueEnds.current = buildWordCueEnds(timedChunks);
       audioUrl.current = URL.createObjectURL(generatedAudio);
       setReady(true);
-      if (playWhenReady) playAudio();
+      if (playWhenReady) await playAudio();
     } catch {
       if (next.signal.aborted) return;
       try {
         fallbackActive.current = true;
         setUsingFallback(true);
         setReady(true);
-        if (playWhenReady) playFallback(text);
+        if (playWhenReady) await playFallback(text);
       } catch {
         fallbackActive.current = false;
         setUsingFallback(false);
@@ -347,6 +367,26 @@ export function useSpeech() {
       sourceText?: string,
       explanationId?: string,
     ) => loadSpeech(text, sourceText, explanationId, autoRead),
+    enqueue: (
+      text: string,
+      sourceText?: string,
+      explanationId?: string,
+      cached = false,
+    ) => {
+      const operation = narrationQueue.current.then(async () => {
+        if (hasPlayedNarration.current && !cached && transitionAudio.current) {
+          stop();
+          clearAudio();
+          audioUrl.current = URL.createObjectURL(transitionAudio.current);
+          setReady(true);
+          await playAudio();
+        }
+        await loadSpeech(text, sourceText, explanationId, autoRead);
+        hasPlayedNarration.current = true;
+      });
+      narrationQueue.current = operation.catch(() => undefined);
+      return operation;
+    },
     prepare: (
       text: string,
       sourceText?: string,

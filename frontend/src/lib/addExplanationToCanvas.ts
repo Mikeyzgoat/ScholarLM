@@ -149,15 +149,6 @@ function upsertExplanationBlock(
   },
 ): void {
   const viewport = editor.getViewportPageBounds();
-  const heading = input.pageNumber
-    ? `From selection · Page ${input.pageNumber}`
-    : input.answerNumber
-      ? `From canvas selection · Answer ${input.answerNumber}`
-      : "From canvas selection";
-  const compactInput =
-    input.selectedText.length > 220
-      ? `${input.selectedText.slice(0, 217)}…`
-      : input.selectedText;
   const output = registerGeneratedOutput({
     text: input.explanation,
     sourceText: input.selectedText,
@@ -167,9 +158,7 @@ function upsertExplanationBlock(
   const sourceKey = generatedOutputKey(
     `${input.pageNumber ?? "canvas"}:${input.selectedText.trim().replace(/\s+/g, " ")}`,
   );
-  const richText = toRichText(
-    `${heading}\n${compactInput}\n\nExplanation\n${input.explanation}`,
-  );
+  const richText = toRichText(input.explanation);
   const existing = editor.getCurrentPageShapes().find((shape) => {
     const meta = shape.meta as Record<string, unknown>;
     return meta.scholarLmSourceKey === sourceKey;

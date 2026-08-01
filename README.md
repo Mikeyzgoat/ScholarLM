@@ -69,6 +69,13 @@ Windows PowerShell:
 Open [http://localhost:3000](http://localhost:3000), or the custom port entered
 during initialization. SQLite, uploaded PDFs, and the Kokoro model cache are
 kept in Docker volumes, so recreating the containers does not erase study data.
+Enter `0` when the installer asks for a frontend port to let Docker choose an
+available host port automatically. The installer prints the assigned URL. You
+can retrieve it later with:
+
+```sh
+docker compose --env-file .env.docker port frontend 80
+```
 
 Useful package commands:
 
@@ -78,6 +85,30 @@ docker compose --env-file .env.docker stop
 docker compose --env-file .env.docker up -d
 docker compose --env-file .env.docker down
 ```
+
+The frontend is served by Nginx at `http://localhost:3000` (or the configured
+`SCHOLARLM_FRONTEND_PORT`). To expose the same Nginx entry point publicly with
+ngrok's free tier, add your ngrok account token to `.env.docker`:
+
+```env
+NGROK_AUTHTOKEN=your_ngrok_authtoken
+```
+
+Then start the optional tunnel profile:
+
+```sh
+docker compose --profile tunnel --env-file .env.docker up -d ngrok
+```
+
+Open `http://localhost:4040` to copy the assigned HTTPS forwarding URL, or run:
+
+```sh
+curl -s http://localhost:4040/api/tunnels
+```
+
+The tunnel targets `http://frontend:80` inside the Compose network, so browser
+routes and `/api/*` requests both continue through the existing Nginx config.
+The free assigned URL can change whenever the ngrok container is recreated.
 
 Run the initializer again to change the API key, port, or rebuild after an
 update. Do not use `docker compose down -v` unless you intentionally want to

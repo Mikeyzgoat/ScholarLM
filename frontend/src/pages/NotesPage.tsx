@@ -11,6 +11,7 @@ import { NotesCanvas } from "../components/notes/NotesCanvas";
 import { NotesHeader } from "../components/notes/NotesHeader";
 import { ExplainPanel } from "../components/explanation/ExplainPanel";
 import { drawMathPlot } from "../lib/drawMathPlot";
+import { drawFlowchart } from "../lib/drawFlowchart";
 import {
   addExplanationStickyToCanvas,
   addExplanationToCanvas,
@@ -175,6 +176,28 @@ export default function NotesPage() {
   if (q.isLoading) return <main className="p-6">Loading note…</main>;
   if (q.isError || !q.data || !note)
     return <main className="p-6 text-red-700">Unable to load note.</main>;
+  const leaveNote = async () => {
+    if (autosave.isDirty) {
+      const approved = window.confirm(
+        "Save your canvas changes before leaving? Saving will update the search index.",
+      );
+      if (!approved) return;
+      try {
+        await autosave.flush();
+      } catch {
+        window.alert("The canvas could not be saved. You will remain here.");
+        return;
+      }
+    }
+    nav(`/workspace/${note.documentId}`);
+  };
+  const saveNote = async () => {
+    try {
+      await autosave.flush();
+    } catch {
+      window.alert("The canvas could not be saved. Please try again.");
+    }
+  };
   return (
     <main className="fixed inset-0 bg-white">
       <NotesHeader
@@ -182,7 +205,8 @@ export default function NotesPage() {
         saveState={titleSaveState ?? autosave.saveState}
         lastSavedAt={autosave.lastSavedAt}
         onTitleChange={setTitle}
-        onBack={() => nav(`/workspace/${note.documentId}`)}
+        onBack={() => void leaveNote()}
+        onSave={() => void saveNote()}
         pageNavigation={{
           ...canvasPage,
           onPrevious: () => moveCanvasPage(-1),
@@ -254,6 +278,9 @@ export default function NotesPage() {
           onPlotGenerated={(plot, equation, sourceShapeIds) => {
             if (editor)
               drawMathPlot(editor, plot, equation, sourceShapeIds);
+          }}
+          onFlowchartGenerated={(flowchart, sourceShapeIds) => {
+            if (editor) drawFlowchart(editor, flowchart, sourceShapeIds);
           }}
           onExplanationGenerated={(input) => {
             if (editor) addExplanationToCanvas(editor, input);

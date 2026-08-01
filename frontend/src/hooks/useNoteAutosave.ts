@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { getSnapshot, type Editor } from "tldraw";
-import { NOTE_AUTOSAVE_DELAY } from "../lib/constants";
 import type { NotePage, SaveState } from "../lib/types";
 import { removeLocalNoteDraft, saveLocalNoteDraft } from "../lib/noteStorage";
 import { getNote, updateNote } from "../services/notes";
@@ -17,8 +16,7 @@ export function useNoteAutosave({
     [lastSavedAt, setLastSavedAt] = useState<string | null>(
       note?.updatedAt ?? null,
     );
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null),
-    revision = useRef(note?.revision ?? 1),
+  const revision = useRef(note?.revision ?? 1),
     applying = useRef(true),
     dirty = useRef(false),
     inFlight = useRef<Promise<void> | null>(null),
@@ -33,15 +31,9 @@ export function useNoteAutosave({
     if (!note || !editor || applying.current) return;
     if (inFlight.current) {
       await inFlight.current;
-      if (dirty.current && active.current && !timer.current)
-        timer.current = setTimeout(() => void flush(), NOTE_AUTOSAVE_DELAY);
       return;
     }
-    if (!dirty.current && !timer.current) return;
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
+    if (!dirty.current) return;
     dirty.current = false;
     const snapshot = getSnapshot(editor.store);
     const updatedAt = new Date().toISOString();
@@ -78,9 +70,10 @@ export function useNoteAutosave({
         setLastSavedAt(updated.updatedAt);
         setSaveState(dirty.current ? "unsaved" : "saved");
         onServerNoteUpdated?.(updated);
-      } catch {
+      } catch (error) {
         dirty.current = true;
         setSaveState("error");
+        throw error;
       }
     })();
     inFlight.current = operation;
@@ -109,8 +102,6 @@ export function useNoteAutosave({
         updatedAt: new Date().toISOString(),
       });
       setSaveState("unsaved");
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => void flush(), NOTE_AUTOSAVE_DELAY);
     };
     const unsubscribeDocument = editor.store.listen(scheduleSave, {
       scope: "document",
@@ -128,7 +119,6 @@ export function useNoteAutosave({
     return () => {
       unsubscribeDocument();
       unsubscribePage();
-      if (timer.current) void flush();
     };
   }, [editor, note?.id]);
   return {
@@ -137,6 +127,7 @@ export function useNoteAutosave({
     recoverableDraftFound: note
       ? Boolean(localStorage.getItem(`scholarlm-note-draft:${note.id}`))
       : false,
+    isDirty: saveState === "unsaved" || saveState === "error",
     flush,
   };
 }

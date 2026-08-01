@@ -29,6 +29,7 @@ export function WorkspaceCanvas({
   onPdfTextSelected,
   groupId,
   groupName,
+  onSaveControllerChange,
 }: {
   documentId: string;
   onTextSelected?: (text: string) => void;
@@ -41,6 +42,10 @@ export function WorkspaceCanvas({
   onPdfTextSelected?: (text: string) => void;
   groupId?: string;
   groupName?: string;
+  onSaveControllerChange?: (controller: {
+    isDirty: boolean;
+    save: () => Promise<void>;
+  }) => void;
 }) {
   const client = useQueryClient();
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -103,6 +108,13 @@ export function WorkspaceCanvas({
       void client.invalidateQueries({ queryKey: ["graph"] });
     },
   });
+
+  useEffect(() => {
+    onSaveControllerChange?.({
+      isDirty: autosave.isDirty,
+      save: autosave.flush,
+    });
+  }, [autosave.isDirty, autosave.flush, onSaveControllerChange]);
 
   useEffect(() => {
     if (!editor) return;
