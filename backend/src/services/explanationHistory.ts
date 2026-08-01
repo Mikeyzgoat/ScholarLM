@@ -37,6 +37,7 @@ export function findLatestExplanation(input: {
   pageNumber?: number;
 }): {
   explanation: string;
+  voiceExplanation?: string;
   recognizedEquation?: string;
   historyId: string;
   revisionCount: number;
@@ -44,7 +45,7 @@ export function findLatestExplanation(input: {
   const hash = selectionHash(input);
   const row = db
     .query(
-      `SELECT id historyId,explanation,recognized_text recognizedEquation
+      `SELECT id historyId,explanation,voice_explanation voiceExplanation,recognized_text recognizedEquation
        FROM explanation_history
        WHERE selection_hash=?
        ORDER BY created_at DESC
@@ -53,6 +54,7 @@ export function findLatestExplanation(input: {
     .get(hash) as {
     historyId: string;
     explanation: string;
+    voiceExplanation: string | null;\r\n    voiceExplanation: string | null;
     recognizedEquation: string | null;
   } | null;
   if (!row) return null;
@@ -65,6 +67,7 @@ export function findLatestExplanation(input: {
   ).count;
   return {
     explanation: row.explanation,
+    voiceExplanation: row.voiceExplanation ?? undefined,
     recognizedEquation: row.recognizedEquation ?? undefined,
     historyId: row.historyId,
     revisionCount,
@@ -83,6 +86,7 @@ export function storeExplanationRevision(input: {
   pageNumber?: number;
   mode: ExplanationMode;
   explanation: string;
+  voiceExplanation?: string;
   recognizedText?: string;
   inputKind?: ExplanationInputKind;
   requestId: string;
@@ -91,8 +95,8 @@ export function storeExplanationRevision(input: {
   const historyId = input.requestId;
   db.query(
     `INSERT INTO explanation_history
-     (id,selection_hash,selected_text,document_id,note_id,document_title,page_number,prompt_mode,explanation,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+     (id,selection_hash,selected_text,document_id,note_id,document_title,page_number,prompt_mode,explanation,voice_explanation,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
   ).run(
     historyId,
     hash,
@@ -103,6 +107,7 @@ export function storeExplanationRevision(input: {
     input.pageNumber ?? null,
     input.mode,
     input.explanation.trim(),
+    input.voiceExplanation?.trim() || null,
     new Date().toISOString(),
   );
   db.query(
@@ -144,3 +149,6 @@ export function storeExplanationRevision(input: {
   ).count;
   return { historyId, revisionCount };
 }
+
+
+

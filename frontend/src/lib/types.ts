@@ -90,6 +90,8 @@ export interface GraphResponse {
   groups: GraphGroup[];
 }
 export interface ExplanationResponse {
+  answer?: string;
+  voiceExplanation?: string;
   explanation: string;
   answers?: string[];
   recognizedEquation?: string;
@@ -133,3 +135,5 @@ export interface NotePage {
   updatedAt: string;
 }
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
+
+

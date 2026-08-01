@@ -52,14 +52,14 @@ export async function streamSpeech(
   let buffer = "";
   const consume = (line: string) => {
     if (!line.trim()) return;
-    const chunk = JSON.parse(line) as { audio?: unknown; text?: unknown };
+    const chunk = JSON.parse(line) as { audio?: unknown; text?: unknown; mimeType?: unknown };
     if (typeof chunk.audio !== "string" || typeof chunk.text !== "string")
       throw new Error("Invalid Kokoro audio stream");
     const binary = atob(chunk.audio);
     const bytes = Uint8Array.from(binary, (character) =>
       character.charCodeAt(0),
     );
-    onChunk(new Blob([bytes], { type: "audio/wav" }), chunk.text);
+    onChunk(\n      new Blob([bytes], {\n        type: chunk.mimeType === "audio/mpeg" ? "audio/mpeg" : "audio/wav",\n      }),\n      chunk.text,\n    );
   };
   while (true) {
     const { done, value } = await reader.read();
@@ -71,3 +71,4 @@ export async function streamSpeech(
   }
   consume(buffer);
 }
+

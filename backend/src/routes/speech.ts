@@ -1,5 +1,9 @@
 import { Hono } from "hono";
-import { streamSpeech, synthesizeSpeech } from "../services/speech";
+import {
+  streamSpeech,
+  synthesizeSpeech,
+  type SpeechAudio,
+} from "../services/speech";
 import {
   combineWavBytes,
   getCachedSpeech,
@@ -8,7 +12,21 @@ import {
   storeCachedSpeech,
 } from "../services/speechCache";
 import { backfillMissingExplanationAudio } from "../services/speechBackfill";
+
 const speech = new Hono();
+
+function cachedAudio(value: Uint8Array): SpeechAudio {
+  const isWav =
+    value.byteLength >= 12 &&
+    String.fromCharCode(...value.slice(0, 4)) === "RIFF" &&
+    String.fromCharCode(...value.slice(8, 12)) === "WAVE";
+  return {
+    audio: value,
+    mimeType: isWav ? "audio/wav" : "audio/mpeg",
+    provider: isWav ? "kokoro" : "fish-audio",
+  };
+}
+
 speech.post("/backfill", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
   const requested =
@@ -29,6 +47,7 @@ speech.post("/backfill", async (c) => {
     ),
   });
 });
+
 speech.post("/", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
   const text =
@@ -45,7 +64,7 @@ speech.post("/", async (c) => {
     return c.json(
       {
         error: {
-          message: "Text must be 1–12000 characters",
+          message: "Text must be 1-12000 characters",
           code: "INVALID_INPUT",
         },
       },
@@ -57,12 +76,7 @@ speech.post("/", async (c) => {
     typeof sourceText !== "string"
   )
     return c.json(
-      {
-        error: {
-          message: "Source text must be a string",
-          code: "INVALID_INPUT",
-        },
-      },
+      { error: { message: "Source text must be a string", code: "INVALID_INPUT" } },
       400,
     );
   if (
@@ -71,27 +85,27 @@ speech.post("/", async (c) => {
       !/^[a-f0-9]{64}$/.test(explanationId))
   )
     return c.json(
-      {
-        error: {
-          message: "Invalid explanation identifier",
-          code: "INVALID_INPUT",
-        },
-      },
+      { error: { message: "Invalid explanation identifier", code: "INVALID_INPUT" } },
       400,
     );
+
   const normalizedText = normalizeSpeechText(text);
   const cached = getCachedSpeech(normalizedText);
   if (cached && typeof explanationId === "string")
     linkExplanationSpeech(explanationId, normalizedText);
   if (cached && typeof sourceText === "string" && sourceText.trim())
     storeCachedSpeech(normalizedText, cached, sourceText);
+
   if (c.req.query("stream") === "1") {
     const encoder = new TextEncoder();
-    if (cached)
+    if (cached) {
+      const generated = cachedAudio(cached);
       return new Response(
         `${JSON.stringify({
           text: normalizedText,
-          audio: Buffer.from(cached).toString("base64"),
+          audio: Buffer.from(generated.audio).toString("base64"),
+          mimeType: generated.mimeType,
+          provider: generated.provider,
         })}\n`,
         {
           headers: {
@@ -102,30 +116,45 @@ speech.post("/", async (c) => {
           },
         },
       );
+    }
     const iterator = streamSpeech(normalizedText);
-    const generatedChunks: Uint8Array[] = [];
+    const generatedChunks: Array<{
+      audio: Uint8Array;
+      mimeType: SpeechAudio["mimeType"];
+    }> = [];
     const body = new ReadableStream({
       async pull(controller) {
         try {
           const next = await iterator.next();
           if (next.done) {
-            if (generatedChunks.length)
+            if (generatedChunks.length) {
+              const first = generatedChunks[0];
+              const combined =
+                generatedChunks.length === 1
+                  ? first.audio
+                  : first.mimeType === "audio/wav" &&
+                      generatedChunks.every((chunk) => chunk.mimeType === "audio/wav")
+                    ? combineWavBytes(generatedChunks.map((chunk) => chunk.audio))
+                    : first.audio;
               storeCachedSpeech(
                 normalizedText,
-                combineWavBytes(generatedChunks),
+                combined,
                 typeof sourceText === "string" ? sourceText : undefined,
               );
+            }
             if (generatedChunks.length && typeof explanationId === "string")
               linkExplanationSpeech(explanationId, normalizedText);
             controller.close();
             return;
           }
-          generatedChunks.push(next.value.audio);
+          generatedChunks.push(next.value);
           controller.enqueue(
             encoder.encode(
               `${JSON.stringify({
                 text: next.value.text,
                 audio: Buffer.from(next.value.audio).toString("base64"),
+                mimeType: next.value.mimeType,
+                provider: next.value.provider,
               })}\n`,
             ),
           );
@@ -146,27 +175,30 @@ speech.post("/", async (c) => {
       },
     });
   }
-  const bytes = cached ?? (await synthesizeSpeech(normalizedText));
+
+  const generated = cached ? cachedAudio(cached) : await synthesizeSpeech(normalizedText);
   if (!cached)
     storeCachedSpeech(
       normalizedText,
-      bytes,
+      generated.audio,
       typeof sourceText === "string" ? sourceText : undefined,
     );
   if (typeof explanationId === "string")
     linkExplanationSpeech(explanationId, normalizedText);
-  const wav = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
+  const bytes = generated.audio.buffer.slice(
+    generated.audio.byteOffset,
+    generated.audio.byteOffset + generated.audio.byteLength,
   ) as ArrayBuffer;
-  return new Response(wav, {
+  return new Response(bytes, {
     headers: {
-      "Content-Type": "audio/wav",
+      "Content-Type": generated.mimeType,
       "Cache-Control": cached
         ? "private, max-age=31536000, immutable"
         : "no-store",
+      "X-ScholarLM-TTS-Provider": generated.provider,
       "X-ScholarLM-TTS-Cache": cached ? "HIT" : "MISS",
     },
   });
 });
+
 export default speech;

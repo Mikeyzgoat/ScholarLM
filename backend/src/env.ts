@@ -9,6 +9,7 @@ export const env: {
   OPENROUTER_MODEL: string;
   OPENROUTER_VISION_MODEL: string;
   OPENROUTER_EMBEDDING_MODEL: string;
+  OPENROUTER_SPEECH_MODEL: string;
   OPENROUTER_ROUTING_MODELS: string[];
   OPENROUTER_MAX_INPUT_PRICE: number;
   OPENROUTER_MAX_OUTPUT_PRICE: number;
@@ -20,13 +21,16 @@ export const env: {
     Bun.env.OPENROUTER_BASE_URL?.trim().replace(/\/$/, "") ||
     "https://openrouter.ai/api/v1",
   OPENROUTER_MODEL:
-    Bun.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
+    Bun.env.OPENROUTER_MODEL?.trim() || "google/gemma-4-26b-a4b-it:free",
   OPENROUTER_VISION_MODEL:
     Bun.env.OPENROUTER_VISION_MODEL?.trim() ||
-    "google/gemma-4-31b-it:free",
+    "google/gemma-4-26b-a4b-it:free",
   OPENROUTER_EMBEDDING_MODEL:
     Bun.env.OPENROUTER_EMBEDDING_MODEL?.trim() ||
-    "nvidia/nemotron-3-embed-1b:free",
+    "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+  OPENROUTER_SPEECH_MODEL:
+    Bun.env.OPENROUTER_SPEECH_MODEL?.trim() ||
+    "fish-audio/s2.1-pro-free:free",
   OPENROUTER_ROUTING_MODELS: (
     Bun.env.OPENROUTER_ROUTING_MODELS ||
     "qwen/qwen3.5-flash-02-23,google/gemma-4-26b-a4b-it:free,google/gemma-4-26b-a4b-it,bytedance-seed/seed-1.6-flash,mistralai/mistral-small-3.2-24b-instruct"

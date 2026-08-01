@@ -190,6 +190,8 @@ export function ExplainPanel({
         mode === "explain" ? undefined : state.explanation || undefined,
     });
     if (value) {
+      const displayAnswer = value.answer ?? value.explanation;
+      const voiceExplanation = value.voiceExplanation ?? displayAnswer;
       setRecognizedEquation(value.recognizedEquation ?? "");
       setGraphError("");
       if (value.plot)
@@ -200,7 +202,7 @@ export function ExplainPanel({
         );
       setCanvasInput({
         selectedText: activeText,
-        explanation: value.explanation,
+        explanation: displayAnswer,
         mode,
         answers: value.answers,
         anchors: selectionAnchors,
@@ -208,7 +210,7 @@ export function ExplainPanel({
         pageNumber: pageNumber ?? undefined,
       });
       if (pastedImage) setInputMode("selection");
-      await speech.speak(value.explanation, activeText, value.historyId);
+      await speech.speak(voiceExplanation, activeText, value.historyId);
     }
   }
   async function insertVerifiedGraph() {
@@ -618,3 +620,7 @@ export function ExplainPanel({
     </motion.section>
   );
 }
+
+
+
+

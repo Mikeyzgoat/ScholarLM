@@ -277,7 +277,7 @@ explanation.post("/", async (c) => {
         documentTitle: context.documentTitle,
         pageNumber: context.pageNumber,
         mode,
-        explanation: result.explanation,
+        explanation: result.answer ?? result.explanation,
         recognizedText: result.recognizedEquation,
         inputKind: hasImage
           ? b.imageInputKind === "selection"
@@ -287,7 +287,13 @@ explanation.post("/", async (c) => {
         requestId,
       });
       finishOpenRouterRequest(requestId);
-      return c.json({ ...result, ...history });
+      return c.json({
+        ...result,
+        answer: result.answer ?? result.explanation,
+        explanation: result.answer ?? result.explanation,
+        voiceExplanation: result.voiceExplanation ?? result.explanation,
+        ...history,
+      });
     }
     if (c.req.query("stream") === "1") {
       c.header("Content-Type", "application/x-ndjson; charset=utf-8");
@@ -394,3 +400,4 @@ explanation.post("/", async (c) => {
   }
 });
 export default explanation;
+

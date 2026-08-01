@@ -169,7 +169,7 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
   const value = JSON.parse(cleaned) as Partial<CanvasAnalysis>;
-  if (typeof value.explanation !== "string" || !value.explanation.trim())
+  if ((typeof value.explanation !== "string" || !value.explanation.trim()) && (typeof value.answer !== "string" || !value.answer.trim()))
     throw new Error("AI returned an invalid handwritten-math explanation");
   const points = value.plot?.points
     ?.filter(
@@ -179,7 +179,12 @@ function parseCanvasAnalysis(raw: string): CanvasAnalysis {
     )
     .slice(0, 80);
   return {
-    explanation: value.explanation.trim(),
+    explanation: (typeof value.answer === "string" && value.answer.trim() ? value.answer : value.explanation).trim(),
+    answer: typeof value.answer === "string" ? value.answer.trim() : undefined,
+    voiceExplanation:
+      typeof value.voiceExplanation === "string"
+        ? value.voiceExplanation.trim()
+        : undefined,
     recognizedEquation:
       typeof value.recognizedEquation === "string"
         ? value.recognizedEquation.trim()
@@ -216,7 +221,7 @@ export async function explainCanvasSelection(input: {
 Recognize the equation accurately, solve it step by step, and explain the reasoning as a teacher.
 Provide 17–41 ordered sample points across a useful domain when a graph materially helps the explanation${input.graphRequested ? " or because the user explicitly requested a graph" : ""}. Otherwise omit plot. If a requested graph is mathematically inapplicable, explain why instead of inventing one.
 Return only JSON:
-{"recognizedEquation":"...","explanation":"...","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
+{"recognizedEquation":"...","answer":"math only","voiceExplanation":"teacher explanation","explanation":"math only","plot":{"title":"...","xLabel":"x","yLabel":"y","points":[{"x":-2,"y":4}]}}
 ${input.documentTitle ? `Document context: ${input.documentTitle}` : ""}
 ${input.pageNumber ? `Page: ${input.pageNumber}` : ""}
 ${input.selectedTexts?.length ? `Treat these as separate numbered selections and answer each separately:\n${input.selectedTexts.map((text, index) => `Selection ${index + 1}: ${text}`).join("\n")}\nRequired explanation format: "Answer 1: ...\\n<ANSWER_SPLIT>\\nAnswer 2: ..." with exactly one answer per selection.` : input.selectedText ? `Associated text: ${input.selectedText}` : ""}
@@ -224,7 +229,7 @@ ${input.previousExplanation ? `Previous explanation: ${input.previousExplanation
 ${input.mode === "simplify" ? "Rewrite the explanation more simply with shorter steps and intuitive language." : ""}
 ${input.mode === "regenerate" ? "Use a new solution or teaching angle and improve on the previous explanation." : ""}`;
   const system =
-    "You are a mathematics teacher with visual handwriting recognition. Never invent unreadable symbols: state uncertainty in the explanation. Return valid JSON only.";
+    "You are a mathematics teacher with visual handwriting recognition. Classify the input as a mathematical problem. Never invent unreadable symbols: state uncertainty in the voice explanation. Return valid JSON only. Keep answer tokens mathematical and voiceExplanation tokens conversational.";
   return parseCanvasAnalysis(
     await openRouterGenerate({
       prompt,
@@ -541,3 +546,6 @@ export async function extractConceptGraph(input: {
     }),
   );
 }
+
+
+
