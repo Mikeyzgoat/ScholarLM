@@ -126,4 +126,21 @@ describe("normalizeExplanationIntent", () => {
       env.OPENROUTER_API_KEY = originalKey;
     }
   });
+
+  test("accepts structured text blocks from OpenRouter streams", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = env.OPENROUTER_API_KEY;
+    env.OPENROUTER_API_KEY = "test-key";
+    globalThis.fetch = (async (_url, _init) =>
+      new Response(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: [{ type: "text", text: JSON.stringify({ intent: "theory", answer: "TCP reliably delivers an ordered byte stream.", voiceExplanation: "Think of TCP as a careful delivery service that tracks order and retransmits missing pieces." }) }] } }] })}\n\ndata: [DONE]\n\n`,
+      )) as typeof fetch;
+    try {
+      const result = await explainSelectedText({ selectedText: "what is tcp" });
+      expect(result.answer).toContain("ordered byte stream");
+    } finally {
+      globalThis.fetch = originalFetch;
+      env.OPENROUTER_API_KEY = originalKey;
+    }
+  });
 });

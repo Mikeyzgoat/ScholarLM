@@ -88,6 +88,7 @@ async function openRouterGenerate(input: {
         error instanceof Error ? error.message.toLowerCase() : "";
       const transient =
         message.includes("provider returned error") ||
+        message.includes("returned no content") ||
         (message.includes("rate limit") && !message.includes("per-day")) ||
         message.includes("connection was closed") ||
         message.includes("unable to connect") ||
@@ -127,6 +128,20 @@ async function readOpenRouterStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
+  const textContent = (value: unknown): string => {
+    if (typeof value === "string") return value;
+    if (!Array.isArray(value)) return "";
+    return value
+      .map((block) => {
+        if (!block || typeof block !== "object") return "";
+        const candidate = block as { type?: unknown; text?: unknown };
+        return (candidate.type === undefined || candidate.type === "text") &&
+          typeof candidate.text === "string"
+          ? candidate.text
+          : "";
+      })
+      .join("");
+  };
   const consume = (line: string) => {
     const trimmed = line.trim();
     if (!trimmed.startsWith("data:")) return;
@@ -135,10 +150,11 @@ async function readOpenRouterStream(
     const part = JSON.parse(data) as OpenRouterChunk;
     if (typeof part.error?.message === "string")
       throw new Error(part.error.message);
-    const token =
+    const token = textContent(
       part.choices?.[0]?.delta?.content ??
-      part.choices?.[0]?.message?.content;
-    if (typeof token === "string") {
+      part.choices?.[0]?.message?.content,
+    );
+    if (token) {
       content += token;
       onToken?.(token);
     }
