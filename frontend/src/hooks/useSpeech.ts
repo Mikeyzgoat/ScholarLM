@@ -101,6 +101,7 @@ export function useSpeech() {
   const progressFrame = useRef(0);
   const playbackDone = useRef<(() => void) | null>(null);
   const narrationQueue = useRef<Promise<void>>(Promise.resolve());
+  const narrationGeneration = useRef(0);
   const hasPlayedNarration = useRef(false);
   const transitionAudio = useRef<Blob | null>(null);
   const [isLoading, setLoading] = useState(false);
@@ -247,6 +248,17 @@ export function useSpeech() {
     audioUrl.current = "";
   }, []);
 
+  const reset = useCallback(() => {
+    narrationGeneration.current += 1;
+    stop();
+    clearAudio();
+    latestText.current = "";
+    fallbackActive.current = false;
+    setReady(false);
+    setUsingFallback(false);
+    setError(null);
+  }, [clearAudio, stop]);
+
   useEffect(() => {
     const unlockAudio = () => {
       if (!audio.current) audio.current = new Audio(silentWav);
@@ -371,6 +383,15 @@ export function useSpeech() {
     await playAudio();
   };
 
+  const prepareStoredAudio = async (blob: Blob) => {
+    stop();
+    clearAudio();
+    audioUrl.current = URL.createObjectURL(blob);
+    setReady(true);
+    setUsingFallback(false);
+    setError(null);
+  };
+
   return {
     speak: (
       text: string,
@@ -383,7 +404,9 @@ export function useSpeech() {
       explanationId?: string,
       cached = false,
     ) => {
+      const generation = narrationGeneration.current;
       const operation = narrationQueue.current.then(async () => {
+        if (generation !== narrationGeneration.current) return;
         if (hasPlayedNarration.current && !cached && transitionAudio.current) {
           stop();
           clearAudio();
@@ -391,6 +414,7 @@ export function useSpeech() {
           setReady(true);
           await playAudio();
         }
+        if (generation !== narrationGeneration.current) return;
         await loadSpeech(text, sourceText, explanationId, autoRead);
         hasPlayedNarration.current = true;
       });
@@ -398,7 +422,12 @@ export function useSpeech() {
       return operation;
     },
     enqueueStored: (blob: Blob) => {
-      const operation = narrationQueue.current.then(() => playStoredAudio(blob));
+      const generation = narrationGeneration.current;
+      const operation = narrationQueue.current.then(() =>
+        generation === narrationGeneration.current
+          ? playStoredAudio(blob)
+          : undefined,
+      );
       narrationQueue.current = operation.catch(() => undefined);
       return operation;
     },
@@ -407,6 +436,7 @@ export function useSpeech() {
       sourceText?: string,
       explanationId?: string,
     ) => loadSpeech(text, sourceText, explanationId, false),
+    prepareStored: prepareStoredAudio,
     play: (
       text: string,
       sourceText?: string,
@@ -435,6 +465,7 @@ export function useSpeech() {
       }
     },
     stop,
+    reset,
     isLoading,
     isPlaying,
     isPaused,

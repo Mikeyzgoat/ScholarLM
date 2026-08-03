@@ -120,9 +120,30 @@ export function ExplainPanel({
   >([]);
   const [activeQueueId, setActiveQueueId] = useState("");
   const [activeExplanationId, setActiveExplanationId] = useState("");
+  const audioSelection = useRef(0);
   const activeImage = selectionImage ?? pastedImage;
   const activeText =
     selectedText.trim() || (pastedImage ? "Screenshot selection" : "");
+  const selectStoredExplanationAudio = (explanationId: string, owner: string) => {
+    const selection = ++audioSelection.current;
+    speech.reset();
+    setAudioOwner("");
+    setQueueAudioError("");
+    void getStoredExplanationSpeech(explanationId)
+      .then((audio) => {
+        if (selection !== audioSelection.current) return;
+        setAudioOwner(owner);
+        return speech.prepareStored(audio);
+      })
+      .catch((error) => {
+        if (selection !== audioSelection.current) return;
+        setQueueAudioError(
+          error instanceof Error
+            ? error.message
+            : "Stored audio could not be loaded",
+        );
+      });
+  };
   const syncCachedQueue = (
     cached: Awaited<ReturnType<typeof findExistingExplanation>>,
     displayAnswer: string,
@@ -344,6 +365,9 @@ export function ExplainPanel({
     const controller = new AbortController();
     voiceController.current?.abort();
     voiceController.current = null;
+    audioSelection.current += 1;
+    speech.reset();
+    setAudioOwner("");
     if (!activeText && !activeImage) {
       voiceText.current = "";
       state.clear();
@@ -385,6 +409,8 @@ export function ExplainPanel({
           syncCachedQueue(cached, displayAnswer);
           state.load(displayAnswer);
           setRecognizedEquation(cached.recognizedEquation ?? "");
+          if (cached.historyId)
+            selectStoredExplanationAudio(cached.historyId, activeText);
         }).catch((error) => {
           if (!controller.signal.aborted)
             console.warn("Could not restore saved speech", error);
@@ -454,6 +480,8 @@ export function ExplainPanel({
             explanationId: cached.historyId,
             pageNumber: pageNumber ?? undefined,
           });
+          if (cached.historyId)
+            selectStoredExplanationAudio(cached.historyId, activeText);
         })
         .catch((error) => {
           if (!controller.signal.aborted)
@@ -583,6 +611,11 @@ export function ExplainPanel({
                 if (request.result) {
                   setCanvasInput(request.result);
                   state.load(request.result.explanation);
+                  if (request.result.explanationId)
+                    selectStoredExplanationAudio(
+                      request.result.explanationId,
+                      request.sourceText,
+                    );
                 }
               }}
               onKeyDown={(event) => {
@@ -593,6 +626,11 @@ export function ExplainPanel({
                   if (request.result) {
                     setCanvasInput(request.result);
                     state.load(request.result.explanation);
+                    if (request.result.explanationId)
+                      selectStoredExplanationAudio(
+                        request.result.explanationId,
+                        request.sourceText,
+                      );
                   }
                 }
               }}
@@ -651,7 +689,7 @@ export function ExplainPanel({
                     onClick={() => onExplanationGenerated?.(request.result!)}
                     className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
                   >
-                    Add text
+                    Add as text
                   </button>
                   <button
                     type="button"
