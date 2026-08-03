@@ -9,18 +9,25 @@ export async function embedDocumentChunks(documentId: string): Promise<void> {
     .query("SELECT * FROM chunks WHERE document_id=? ORDER BY chunk_index")
     .all(documentId) as ChunkRecord[];
   const pending = chunks.filter((chunk) => !chunk.embedding);
-  for (let index = 0; index < pending.length; index += 64) {
-    const batch = pending.slice(index, index + 64);
-    const embeddings = await generateDocumentEmbeddings(
-      batch.map((chunk) => chunk.embedding_content ?? chunk.content),
-    );
-    const update = db.query("UPDATE chunks SET embedding=? WHERE id=?");
-    db.transaction(() => {
-      batch.forEach((chunk, offset) =>
-        update.run(serializeEmbedding(embeddings[offset]), chunk.id),
+  const batches: ChunkRecord[][] = [];
+  for (let index = 0; index < pending.length; index += 64)
+    batches.push(pending.slice(index, index + 64));
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < batches.length) {
+      const batch = batches[cursor++];
+      const embeddings = await generateDocumentEmbeddings(
+        batch.map((chunk) => chunk.embedding_content ?? chunk.content),
       );
-    })();
-  }
+      const update = db.query("UPDATE chunks SET embedding=? WHERE id=?");
+      db.transaction(() => {
+        batch.forEach((chunk, offset) =>
+          update.run(serializeEmbedding(embeddings[offset]), chunk.id),
+        );
+      })();
+    }
+  };
+  await Promise.all([worker(), worker()]);
   invalidateDocumentVectorIndex(documentId);
   if (pending.length) markGraphGroupIndexesStale(documentId);
 }

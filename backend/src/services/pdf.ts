@@ -9,20 +9,25 @@ export interface ExtractedPdf {
   pageCount: number;
   pages: ExtractedPdfPage[];
 }
-export async function extractPdf(filePath: string): Promise<ExtractedPdf> {
+export async function extractPdf(
+  filePath: string,
+  options: { includeVisuals?: boolean } = {},
+): Promise<ExtractedPdf> {
   const parser = new PDFParse({
     data: new Uint8Array(await Bun.file(filePath).arrayBuffer()),
   });
   try {
     const result = await parser.getText({ pageJoiner: "" });
     const tableResult = await parser.getTable().catch(() => null);
-    const imageResult = await parser
-      .getImage({
-        imageThreshold: 180,
-        imageBuffer: false,
-        imageDataUrl: false,
-      })
-      .catch(() => null);
+    const imageResult = options.includeVisuals
+      ? await parser
+          .getImage({
+            imageThreshold: 180,
+            imageBuffer: false,
+            imageDataUrl: false,
+          })
+          .catch(() => null)
+      : null;
     const tablesByPage = new Map(
       (tableResult?.pages ?? []).map((page) => [page.num, page.tables]),
     );
@@ -31,17 +36,15 @@ export async function extractPdf(filePath: string): Promise<ExtractedPdf> {
         .filter((page) => page.images.length > 0)
         .map((page) => page.pageNumber),
     );
-    const visualCandidates = result.pages
-      .filter(
-        (page) =>
-          imagePages.has(page.num) ||
-          page.text.trim().length < 180 ||
-          /\b(?:chart|diagram|figure|flowchart|graph|illustration|schematic)\b/iu.test(
-            page.text,
-          ),
-      )
-      .slice(0, 32)
-      .map((page) => page.num);
+    const visualCandidates = options.includeVisuals
+      ? result.pages
+          .filter(
+            (page) =>
+              imagePages.has(page.num) || page.text.trim().length < 40,
+          )
+          .slice(0, 32)
+          .map((page) => page.num)
+      : [];
     const screenshots = visualCandidates.length
       ? await parser
           .getScreenshot({
