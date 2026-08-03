@@ -412,11 +412,16 @@ export function ExplainPanel({
             requestText,
             value.historyId,
           );
-          if (activeQueueIdRef.current === requestId) {
-            setAudioOwner(requestText);
-            if (speech.autoRead) await speech.playStored(generatedAudio);
-            else await speech.prepareStored(generatedAudio);
-          }
+          if (speech.autoRead)
+            await speech.enqueueStored(generatedAudio, () => {
+              setActiveQueueId(requestId);
+              setActiveExplanationId(value.historyId ?? "");
+              setCanvasInput(completedInput);
+              state.load(displayAnswer);
+              setAudioOwner(requestText);
+            });
+          else if (activeQueueIdRef.current === requestId)
+            await speech.prepareStored(generatedAudio);
         } catch (error) {
           console.warn("Could not prepare the spoken explanation", error);
         }

@@ -6,6 +6,7 @@ const key = "scholarlm-auto-read";
 const playbackRateKey = "scholarlm-speech-rate";
 const silentWav =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+const transitionAudioPath = "/audio/moving-to-next-question.wav";
 
 function wordIndexAtProgress(text: string, progress: number): number {
   const words = text.match(/\S+/g) ?? [];
@@ -100,6 +101,10 @@ export function useSpeech() {
   const progressFrame = useRef(0);
   const playbackDone = useRef<(() => void) | null>(null);
   const audioGenerationQueue = useRef<Promise<void>>(Promise.resolve());
+  const automaticPlaybackQueue = useRef<Promise<void>>(Promise.resolve());
+  const automaticPlaybackGeneration = useRef(0);
+  const hasPlayedAutomaticAudio = useRef(false);
+  const transitionAudio = useRef<Blob | null>(null);
   const [isLoading, setLoading] = useState(false);
   const [isPlaying, setPlaying] = useState(false);
   const [isPaused, setPaused] = useState(false);
@@ -245,6 +250,7 @@ export function useSpeech() {
   }, []);
 
   const reset = useCallback(() => {
+    automaticPlaybackGeneration.current += 1;
     stop();
     clearAudio();
     latestText.current = "";
@@ -273,6 +279,17 @@ export function useSpeech() {
       passive: true,
     });
     return () => window.removeEventListener("pointerdown", unlockAudio);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(transitionAudioPath, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Transition audio asset was not found");
+        transitionAudio.current = await response.blob();
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
   }, []);
 
   useEffect(
@@ -396,6 +413,21 @@ export function useSpeech() {
         () => undefined,
         () => undefined,
       );
+      return operation;
+    },
+    enqueueStored: (blob: Blob, onStart?: () => void) => {
+      const generation = automaticPlaybackGeneration.current;
+      const operation = automaticPlaybackQueue.current.then(async () => {
+        if (generation !== automaticPlaybackGeneration.current) return;
+        if (hasPlayedAutomaticAudio.current && transitionAudio.current) {
+          await playStoredAudio(transitionAudio.current);
+          if (generation !== automaticPlaybackGeneration.current) return;
+        }
+        onStart?.();
+        await playStoredAudio(blob);
+        hasPlayedAutomaticAudio.current = true;
+      });
+      automaticPlaybackQueue.current = operation.catch(() => undefined);
       return operation;
     },
     playStored: playStoredAudio,

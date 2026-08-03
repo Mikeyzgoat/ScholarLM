@@ -1,5 +1,5 @@
 import tailwind from "bun-plugin-tailwind";
-import { rmSync } from "node:fs";
+import { cpSync, rmSync } from "node:fs";
 
 const outputDirectory = new URL("./dist", import.meta.url);
 rmSync(outputDirectory, { recursive: true, force: true });
@@ -21,5 +21,9 @@ if (!result.success) {
   for (const log of result.logs) console.error(log);
   process.exit(1);
 }
+
+cpSync(new URL("./public", import.meta.url), outputDirectory, {
+  recursive: true,
+});
 
 console.log(`Built ${result.outputs.length} frontend assets.`);
