@@ -8,6 +8,7 @@ import { ExplanationContent } from "./ExplanationContent";
 import { AudioControls } from "./AudioControls";
 import type { CanvasSelectionAnchor, FlowchartDiagram, MathPlot } from "../../lib/types";
 import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
+import { ApiError } from "../../lib/api";
 import {
   findExistingExplanation,
   generateVoiceExplanation,
@@ -131,6 +132,7 @@ export function ExplainPanel({
     explanationId: string,
     owner: string,
     playWhenReady = false,
+    fallbackText?: string,
   ) => {
     const selection = ++audioSelection.current;
     speech.reset();
@@ -144,8 +146,29 @@ export function ExplainPanel({
           ? speech.playStored(audio)
           : speech.prepareStored(audio);
       })
-      .catch((error) => {
+      .catch(async (error) => {
         if (selection !== audioSelection.current) return;
+        if (
+          error instanceof ApiError &&
+          error.code === "EXPLANATION_NOT_FOUND" &&
+          fallbackText?.trim()
+        ) {
+          try {
+            const audio = await speech.generateQueued(fallbackText, owner);
+            if (selection !== audioSelection.current) return;
+            setAudioOwner(owner);
+            if (playWhenReady) await speech.playStored(audio);
+            else await speech.prepareStored(audio);
+          } catch (fallbackError) {
+            if (selection !== audioSelection.current) return;
+            setQueueAudioError(
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : "Explanation audio could not be generated",
+            );
+          }
+          return;
+        }
         setQueueAudioError(
           error instanceof Error
             ? error.message
@@ -410,7 +433,12 @@ export function ExplainPanel({
           state.load(displayAnswer);
           setRecognizedEquation(cached.recognizedEquation ?? "");
           if (cached.historyId)
-            selectStoredExplanationAudio(cached.historyId, activeText);
+            selectStoredExplanationAudio(
+              cached.historyId,
+              activeText,
+              false,
+              displayAnswer,
+            );
         }).catch((error) => {
           if (!controller.signal.aborted)
             console.warn("Could not restore saved speech", error);
@@ -481,7 +509,12 @@ export function ExplainPanel({
             pageNumber: pageNumber ?? undefined,
           });
           if (cached.historyId)
-            selectStoredExplanationAudio(cached.historyId, activeText);
+            selectStoredExplanationAudio(
+              cached.historyId,
+              activeText,
+              false,
+              displayAnswer,
+            );
         })
         .catch((error) => {
           if (!controller.signal.aborted)
@@ -616,6 +649,7 @@ export function ExplainPanel({
                       request.result.explanationId,
                       request.sourceText,
                       true,
+                      request.result.explanation,
                     );
                 }
               }}
@@ -632,6 +666,7 @@ export function ExplainPanel({
                         request.result.explanationId,
                         request.sourceText,
                         true,
+                        request.result.explanation,
                       );
                   }
                 }
@@ -668,6 +703,7 @@ export function ExplainPanel({
                           request.result!.explanationId!,
                           request.sourceText,
                           true,
+                          request.result!.explanation,
                         );
                       }}
                       className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"

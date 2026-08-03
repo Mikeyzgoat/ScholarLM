@@ -33,13 +33,16 @@ export async function getStoredExplanationSpeech(
     `${API_BASE_URL}/tts/explanation/${encodeURIComponent(explanationId)}`,
     { signal },
   );
-  if (!response.ok)
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as {
+      error?: { message?: string; code?: string };
+    } | null;
     throw new ApiError(
-      response.status === 404
-        ? "Stored audio is not ready for this explanation"
-        : "Stored explanation audio could not be loaded",
+      data?.error?.message ?? "Stored explanation audio could not be loaded",
       response.status,
+      data?.error?.code,
     );
+  }
   return response.blob();
 }
 
