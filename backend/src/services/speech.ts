@@ -65,6 +65,13 @@ async function synthesizeWithKokoro(text: string): Promise<SpeechAudio> {
   };
 }
 
+export async function synthesizeKokoroSpeech(
+  text: string,
+): Promise<SpeechAudio> {
+  if (!text.trim()) throw new Error("Speech text is required");
+  return synthesizeWithKokoro(text);
+}
+
 export async function warmSpeechModel(): Promise<void> {
   await getKokoroModel();
 }

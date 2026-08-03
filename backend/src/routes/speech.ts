@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   streamSpeech,
   synthesizeSpeech,
+  synthesizeKokoroSpeech,
   type SpeechAudio,
 } from "../services/speech";
 import {
@@ -58,7 +59,7 @@ speech.get("/explanation/:explanationId", async (c) => {
     try {
       stored = getCachedSpeech(speechText);
       if (!stored) {
-        const generated = await synthesizeSpeech(speechText);
+        const generated = await synthesizeKokoroSpeech(speechText);
         stored = generated.audio;
         storeCachedSpeech(speechText, stored, explanation.selected_text);
         cacheStatus = "MISS";

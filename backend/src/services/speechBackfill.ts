@@ -1,5 +1,5 @@
 import { db } from "../db/database";
-import { synthesizeSpeech } from "./speech";
+import { synthesizeKokoroSpeech } from "./speech";
 import {
   getCachedSpeech,
   linkExplanationSpeech,
@@ -50,7 +50,7 @@ export async function backfillMissingExplanationAudio(
         linkExplanationSpeech(row.id, speechText);
         result.linkedFromCache += 1;
       } else {
-        const generated = await synthesizeSpeech(speechText);
+        const generated = await synthesizeKokoroSpeech(speechText);
         storeCachedSpeech(speechText, generated.audio, row.selected_text);
         linkExplanationSpeech(row.id, speechText);
         result.generated += 1;
