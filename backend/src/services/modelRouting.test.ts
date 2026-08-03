@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildModelFallbacks } from "./modelRouting";
+import { isRetryableGenerationError } from "./openRouter";
 
 describe("buildModelFallbacks", () => {
   test("never sends more than OpenRouter's three-model limit", () => {
@@ -27,5 +28,21 @@ describe("buildModelFallbacks", () => {
     expect(buildModelFallbacks("openrouter/auto", [])).toEqual([
       "openrouter/free",
     ]);
+  });
+});
+
+describe("isRetryableGenerationError", () => {
+  test("retries a provider moderation false positive on another model", () => {
+    expect(
+      isRetryableGenerationError(
+        "Upstream error from Alibaba: Output data may contain inappropriate content",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not retry a daily usage limit", () => {
+    expect(isRetryableGenerationError("Per-day rate limit exceeded")).toBe(
+      false,
+    );
   });
 });

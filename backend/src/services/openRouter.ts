@@ -45,12 +45,12 @@ async function openRouterGenerate(input: {
     selectedModel,
     env.OPENROUTER_ROUTING_MODELS,
   );
-  const request = () =>
+  const request = (attempt: number) =>
     fetch(`${env.OPENROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: authorizationHeaders(),
       body: JSON.stringify({
-        models,
+        models: models.slice(Math.min(attempt, models.length - 1)),
         messages: [
           ...(input.system ? [{ role: "system", content: input.system }] : []),
           { role: "user", content },
@@ -76,7 +76,7 @@ async function openRouterGenerate(input: {
     let emittedToken = false;
     try {
       return await readOpenRouterStream(
-        await request(),
+        await request(attempt),
         (token) => {
           emittedToken = true;
           input.onToken?.(token);
@@ -86,14 +86,7 @@ async function openRouterGenerate(input: {
       lastError = error;
       const message =
         error instanceof Error ? error.message.toLowerCase() : "";
-      const transient =
-        message.includes("provider returned error") ||
-        message.includes("returned no content") ||
-        (message.includes("rate limit") && !message.includes("per-day")) ||
-        message.includes("connection was closed") ||
-        message.includes("unable to connect") ||
-        message.includes("returned 429") ||
-        /\b5\d\d\b/.test(message);
+      const transient = isRetryableGenerationError(message);
       if (
         !transient ||
         emittedToken ||
@@ -107,6 +100,21 @@ async function openRouterGenerate(input: {
     }
   }
   throw lastError;
+}
+
+export function isRetryableGenerationError(message: string): boolean {
+  const value = message.toLowerCase();
+  return (
+    value.includes("provider returned error") ||
+    value.includes("returned no content") ||
+    (value.includes("rate limit") && !value.includes("per-day")) ||
+    value.includes("connection was closed") ||
+    value.includes("unable to connect") ||
+    value.includes("returned 429") ||
+    /inappropriate content|content policy|moderation|safety filter|\b5\d\d\b/.test(
+      value,
+    )
+  );
 }
 
 async function readOpenRouterStream(
