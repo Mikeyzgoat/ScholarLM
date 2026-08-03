@@ -2,19 +2,19 @@ import { Hono } from "hono";
 import {
   streamSpeech,
   synthesizeSpeech,
-  synthesizeKokoroSpeech,
   type SpeechAudio,
 } from "../services/speech";
 import {
   combineWavBytes,
   getCachedSpeech,
-  getExplanationSpeech,
+  getExplanationSpeechVariant,
   linkExplanationSpeech,
   normalizeSpeechText,
   storeCachedSpeech,
 } from "../services/speechCache";
 import { backfillMissingExplanationAudio } from "../services/speechBackfill";
 import { db } from "../db/database";
+import { prepareExplanationSpeechVariants } from "../services/explanationSpeech";
 
 const speech = new Hono();
 
@@ -37,58 +37,54 @@ speech.get("/explanation/:explanationId", async (c) => {
       { error: { message: "Invalid explanation identifier", code: "INVALID_INPUT" } },
       400,
     );
-  let stored = getExplanationSpeech(explanationId);
-  let cacheStatus = "HIT";
-  if (!stored) {
-    const explanation = db
-      .query(
-        "SELECT selected_text,explanation,voice_explanation FROM explanation_history WHERE id=?",
-      )
-      .get(explanationId) as {
-        selected_text: string;
-        explanation: string;
-        voice_explanation: string | null;
-      } | null;
-    if (!explanation)
-      return c.json(
-        { error: { message: "Explanation was not found", code: "EXPLANATION_NOT_FOUND" } },
-        404,
-      );
-    const speechText =
-      explanation.voice_explanation?.trim() || explanation.explanation.trim();
-    try {
-      stored = getCachedSpeech(speechText);
-      if (!stored) {
-        const generated = await synthesizeKokoroSpeech(speechText);
-        stored = generated.audio;
-        storeCachedSpeech(speechText, stored, explanation.selected_text);
-        cacheStatus = "MISS";
-      }
-      linkExplanationSpeech(explanationId, speechText);
-    } catch (error) {
-      console.error(
-        `[tts] Could not prepare explanation audio ${explanationId}`,
-        error,
-      );
-      return c.json(
-        {
-          error: {
-            message: "Explanation audio could not be prepared",
-            code: "AUDIO_GENERATION_FAILED",
-          },
+  const existing = getExplanationSpeechVariant(explanationId);
+  const explanation = db
+    .query(
+      "SELECT selected_text,explanation,voice_explanation FROM explanation_history WHERE id=? AND status='complete'",
+    )
+    .get(explanationId) as {
+    selected_text: string;
+    explanation: string;
+    voice_explanation: string | null;
+  } | null;
+  if (!explanation)
+    return c.json(
+      { error: { message: "Explanation was not found", code: "EXPLANATION_NOT_FOUND" } },
+      404,
+    );
+  try {
+    const generated =
+      existing ??
+      (await prepareExplanationSpeechVariants({
+        explanationId,
+        text:
+          explanation.voice_explanation?.trim() ||
+          explanation.explanation.trim(),
+        sourceText: explanation.selected_text,
+      }));
+    return new Response(generated.audio.slice().buffer as ArrayBuffer, {
+      headers: {
+        "Content-Type": generated.mimeType,
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "X-ScholarLM-TTS-Provider": generated.provider,
+        "X-ScholarLM-TTS-Cache": existing ? "HIT" : "MISS",
+      },
+    });
+  } catch (error) {
+    console.error(
+      `[tts] Could not prepare explanation audio ${explanationId}`,
+      error,
+    );
+    return c.json(
+      {
+        error: {
+          message: "Explanation audio could not be prepared",
+          code: "AUDIO_GENERATION_FAILED",
         },
-        503,
-      );
-    }
+      },
+      503,
+    );
   }
-  const generated = cachedAudio(stored);
-  return new Response(stored.slice().buffer as ArrayBuffer, {
-    headers: {
-      "Content-Type": generated.mimeType,
-      "Cache-Control": "private, max-age=31536000, immutable",
-      "X-ScholarLM-TTS-Cache": cacheStatus,
-    },
-  });
 });
 
 speech.post("/backfill", async (c) => {
@@ -154,6 +150,32 @@ speech.post("/", async (c) => {
     );
 
   const normalizedText = normalizeSpeechText(text);
+  if (typeof explanationId === "string") {
+    const generated = await prepareExplanationSpeechVariants({
+      explanationId,
+      text: normalizedText,
+      sourceText:
+        typeof sourceText === "string" && sourceText.trim()
+          ? sourceText
+          : normalizedText,
+    });
+    if (c.req.query("stream") === "1")
+      return new Response(
+        `${JSON.stringify({
+          text: normalizedText,
+          audio: Buffer.from(generated.audio).toString("base64"),
+          mimeType: generated.mimeType,
+          provider: generated.provider,
+        })}\n`,
+        { headers: { "Content-Type": "application/x-ndjson" } },
+      );
+    return new Response(generated.audio.slice().buffer as ArrayBuffer, {
+      headers: {
+        "Content-Type": generated.mimeType,
+        "X-ScholarLM-TTS-Provider": generated.provider,
+      },
+    });
+  }
   const cached = getCachedSpeech(normalizedText);
   if (cached && typeof explanationId === "string")
     linkExplanationSpeech(explanationId, normalizedText);

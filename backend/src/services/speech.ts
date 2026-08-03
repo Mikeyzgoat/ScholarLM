@@ -54,6 +54,13 @@ async function synthesizeWithFishAudio(text: string): Promise<SpeechAudio> {
   };
 }
 
+export async function synthesizeOpenRouterSpeech(
+  text: string,
+): Promise<SpeechAudio> {
+  if (!text.trim()) throw new Error("Speech text is required");
+  return synthesizeWithFishAudio(text);
+}
+
 async function synthesizeWithKokoro(text: string): Promise<SpeechAudio> {
   const audio = await (await getKokoroModel()).generate(text, {
     voice: "af_heart",

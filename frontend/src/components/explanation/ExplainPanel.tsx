@@ -11,6 +11,7 @@ import { findLatestGeneratedOutput } from "../../lib/generatedOutputs";
 import { ApiError } from "../../lib/api";
 import {
   findExistingExplanation,
+  deleteFailedExplanation,
   generateVoiceExplanation,
   listExplanationHistory,
 } from "../../services/explanation";
@@ -43,6 +44,15 @@ function imageFromClipboard(items: DataTransferItemList): Blob | null {
 
 const errorText = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
+
+type ExplanationRequest = Parameters<
+  ReturnType<typeof useExplanation>["explain"]
+>[0];
+type RetrySnapshot = {
+  input: ExplanationRequest;
+  anchors?: CanvasSelectionAnchor[];
+  pastedImage: boolean;
+};
 
 export function ExplainPanel({
   selectedText,
@@ -120,6 +130,8 @@ export function ExplainPanel({
       status: "pending" | "complete" | "failed";
       result?: Parameters<NonNullable<typeof onExplanationGenerated>>[0];
       error?: string;
+      explanationId?: string;
+      retry?: RetrySnapshot;
     }>
   >([]);
   const [activeQueueId, setActiveQueueId] = useState("");
@@ -149,17 +161,24 @@ export function ExplainPanel({
           .map((item) => ({
             id: `history:${item.historyId}`,
             sourceText: item.selectedText,
-            status: "complete" as const,
-            result: {
-              selectedText: item.selectedText,
-              explanation: item.explanation,
-              mode: item.mode,
-              explanationId: item.historyId,
-              pageNumber: item.pageNumber ?? undefined,
-            },
+            status: item.status,
+            error: item.error,
+            explanationId: item.historyId,
+            result:
+              item.status === "complete"
+                ? {
+                    selectedText: item.selectedText,
+                    explanation: item.explanation,
+                    mode: item.mode,
+                    explanationId: item.historyId,
+                    pageNumber: item.pageNumber ?? undefined,
+                  }
+                : undefined,
           }));
         const persistedIds = new Set(
-          persisted.map((request) => request.result.explanationId),
+          persisted.flatMap((request) =>
+            request.result?.explanationId ? [request.result.explanationId] : [],
+          ),
         );
         setRequestHistory((history) => [
           ...persisted,
@@ -320,19 +339,15 @@ export function ExplainPanel({
   async function explain(
     mode: "explain" | "regenerate" | "simplify" = "explain",
     requestGraph = false,
+    retry?: RetrySnapshot,
   ) {
     const requestId = crypto.randomUUID();
-    const requestText = activeText;
-    const requestImage = activeImage;
-    const requestAnchors = selectionAnchors;
-    const requestPageNumber = pageNumber ?? undefined;
-    const requestPastedImage = pastedImage;
-    setRequestHistory((history) => [
-      ...history,
-      { id: requestId, sourceText: requestText, status: "pending" },
-    ]);
-    let failureMessage = "Explanation failed";
-    const value = await state.explain({
+    const requestText = retry?.input.selectedText ?? activeText;
+    const requestImage = retry?.input.imageDataUrl ?? activeImage;
+    const requestAnchors = retry?.anchors ?? selectionAnchors;
+    const requestPageNumber = retry?.input.pageNumber ?? pageNumber ?? undefined;
+    const requestPastedImage = retry?.pastedImage ?? Boolean(pastedImage);
+    const input: ExplanationRequest = retry?.input ?? {
       selectedText: requestText,
       selectedTexts:
         !requestPastedImage && selectedTexts && selectedTexts.length > 1
@@ -357,8 +372,26 @@ export function ExplainPanel({
       mode,
       previousExplanation:
         mode === "explain" ? undefined : state.explanation || undefined,
-    }).catch((error: unknown) => {
+    };
+    const retrySnapshot = {
+      input,
+      anchors: requestAnchors,
+      pastedImage: requestPastedImage,
+    };
+    setRequestHistory((history) => [
+      ...history,
+      {
+        id: requestId,
+        sourceText: requestText,
+        status: "pending",
+        retry: retrySnapshot,
+      },
+    ]);
+    let failureMessage = "Explanation failed";
+    let failedExplanationId: string | undefined;
+    const value = await state.explain(input).catch((error: unknown) => {
       failureMessage = errorText(error, "Explanation failed");
+      if (error instanceof ApiError) failedExplanationId = error.historyId;
       return null;
     });
     if (value) {
@@ -394,15 +427,19 @@ export function ExplainPanel({
       void (async () => {
         try {
           const generatedAudio = (async () => {
-            const voiceExplanation =
-              value.voiceExplanation ??
-              (
-                await generateVoiceExplanation({
-                  answer: displayAnswer,
-                  recognizedEquation: value.recognizedEquation,
-                  historyId: value.historyId,
-                })
-              ).voiceExplanation;
+            let voiceExplanation = value.voiceExplanation;
+            if (!voiceExplanation)
+              try {
+                voiceExplanation = (
+                  await generateVoiceExplanation({
+                    answer: displayAnswer,
+                    recognizedEquation: value.recognizedEquation,
+                    historyId: value.historyId,
+                  })
+                ).voiceExplanation;
+              } catch {
+                voiceExplanation = displayAnswer;
+              }
             voiceText.current = voiceExplanation;
             return speech.generateQueued(
               voiceExplanation,
@@ -431,7 +468,12 @@ export function ExplainPanel({
       setRequestHistory((history) =>
         history.map((request) =>
           request.id === requestId
-            ? { ...request, status: "failed", error: failureMessage }
+            ? {
+                ...request,
+                status: "failed",
+                error: failureMessage,
+                explanationId: failedExplanationId,
+              }
             : request,
         ),
       );
@@ -601,6 +643,21 @@ export function ExplainPanel({
         true,
         request.result.explanation,
       );
+  };
+  const removeFailedRequest = async (
+    request: (typeof requestHistory)[number],
+  ) => {
+    if (!request.explanationId) return false;
+    try {
+      await deleteFailedExplanation(request.explanationId);
+      setRequestHistory((history) =>
+        history.filter((item) => item.id !== request.id),
+      );
+      return true;
+    } catch (error) {
+      setQueueAudioError(errorText(error, "Failed explanation could not be removed"));
+      return false;
+    }
   };
   const resetPastedInput = (mode: "selection" | "screenshot") => {
     speech.stop();
@@ -775,6 +832,37 @@ export function ExplainPanel({
                     className="scholar-primary-action rounded px-2 py-1 text-[10px]"
                   >
                     Add sticky
+                  </button>
+                </div>
+              )}
+              {request.status === "failed" && request.explanationId && (
+                <div className="mt-2 flex gap-2">
+                  {request.retry && (
+                    <button
+                      type="button"
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        if (!(await removeFailedRequest(request))) return;
+                        void explain(
+                          request.retry!.input.mode,
+                          request.retry!.input.graphRequested,
+                          request.retry,
+                        );
+                      }}
+                      className="scholar-primary-action rounded px-2 py-1 text-[10px]"
+                    >
+                      Retry
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async (event) => {
+                      event.stopPropagation();
+                      await removeFailedRequest(request);
+                    }}
+                    className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
+                  >
+                    Discard
                   </button>
                 </div>
               )}

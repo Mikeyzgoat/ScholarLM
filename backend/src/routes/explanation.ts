@@ -8,6 +8,8 @@ import {
 } from "../services/openRouter";
 import {
   findLatestExplanation,
+  deleteFailedExplanation,
+  failExplanationRevision,
   listExplanationHistory,
   storeExplanationRevision,
   type ExplanationMode,
@@ -40,6 +42,14 @@ explanation.get("/history", (c) => {
     explanations: listExplanationHistory({ noteId, canvasId, documentId }),
   });
 });
+explanation.delete("/history/:id", (c) =>
+  deleteFailedExplanation(c.req.param("id"))
+    ? c.body(null, 204)
+    : c.json(
+        { error: { message: "Failed explanation not found", code: "NOT_FOUND" } },
+        404,
+      ),
+);
 explanation.post("/voice", async (c) => {
   const body = (await c.req.json<unknown>().catch(() => null)) as {
     answer?: unknown;
@@ -336,6 +346,27 @@ explanation.post("/", async (c) => {
       });
   }
   const requestId = beginOpenRouterRequest("explanation");
+  const inputKind = hasImage
+    ? b.imageInputKind === "selection"
+      ? "selection"
+      : "handwriting"
+    : "text";
+  storeExplanationRevision({
+    selectedText: historySelection,
+    documentId,
+    noteId,
+    canvasId,
+    shapeId,
+    shapeIds,
+    imageFingerprint,
+    documentTitle: context.documentTitle,
+    pageNumber: context.pageNumber,
+    mode,
+    explanation: "",
+    inputKind,
+    requestId,
+    status: "pending",
+  });
   const complete = <
     T extends {
       answer?: string;
@@ -393,11 +424,7 @@ explanation.post("/", async (c) => {
       return c.json(
         complete(
           result,
-          hasImage
-            ? b.imageInputKind === "selection"
-              ? "selection"
-              : "handwriting"
-            : "text",
+          inputKind,
           "math",
         ),
       );
@@ -428,10 +455,12 @@ explanation.post("/", async (c) => {
           await writes;
         } catch (error) {
           failOpenRouterRequest(requestId, error);
+          failExplanationRevision(requestId, error);
           send({
             type: "error",
             message:
               error instanceof Error ? error.message : "AI inference failed",
+            historyId: requestId,
           });
           await writes;
         }
@@ -447,6 +476,7 @@ explanation.post("/", async (c) => {
     return c.json(complete(generated, "text"));
   } catch (error) {
     failOpenRouterRequest(requestId, error);
+    failExplanationRevision(requestId, error);
     const message =
       error instanceof Error ? error.message : "Local inference failed";
     const timedOut =
@@ -469,6 +499,7 @@ explanation.post("/", async (c) => {
             : providerUnavailable
               ? "AI_PROVIDER_TEMPORARILY_UNAVAILABLE"
               : "AI_INFERENCE_UNAVAILABLE",
+          historyId: requestId,
         },
       },
       503,

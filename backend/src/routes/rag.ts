@@ -26,10 +26,10 @@ function addAnswerToHistory(input: {
       ),
     )
     .digest("hex");
-  const exists = db
-    .query("SELECT 1 FROM explanation_history WHERE id=?")
+  const complete = db
+    .query("SELECT 1 FROM explanation_history WHERE id=? AND status='complete'")
     .get(historyId);
-  if (!exists)
+  if (!complete)
     storeExplanationRevision({
       selectedText: input.question,
       documentId: input.document.id,

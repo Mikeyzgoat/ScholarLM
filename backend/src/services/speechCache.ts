@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { db } from "../db/database";
+import type { SpeechAudio } from "./speech";
 
 interface SpeechCacheRow {
   text_hash: string;
@@ -42,17 +43,58 @@ function speechHash(text: string): string {
   return createHash("sha256").update(normalizeSpeechText(text)).digest("hex");
 }
 
-export function getExplanationSpeech(explanationId: string): Uint8Array | null {
+export function getExplanationSpeechVariant(
+  explanationId: string,
+): SpeechAudio | null {
   const row = db
     .query(
-      "SELECT s.audio FROM explanation_audio ea JOIN speech_cache s ON s.text_hash=ea.text_hash WHERE ea.explanation_id=?",
+      `SELECT audio,mime_type mimeType,provider
+       FROM explanation_audio_variants
+       WHERE explanation_id=?
+       ORDER BY CASE provider WHEN 'fish-audio' THEN 0 ELSE 1 END
+       LIMIT 1`,
     )
-    .get(explanationId) as { audio: Uint8Array } | null;
+    .get(explanationId) as SpeechAudio | null;
   if (!row) return null;
   db.query(
-    "UPDATE explanation_audio SET last_accessed_at=? WHERE explanation_id=?",
-  ).run(new Date().toISOString(), explanationId);
-  return row.audio;
+    "UPDATE explanation_audio_variants SET last_accessed_at=? WHERE explanation_id=? AND provider=?",
+  ).run(new Date().toISOString(), explanationId, row.provider);
+  return row;
+}
+
+export function getExplanationSpeechProviders(explanationId: string): Set<string> {
+  return new Set(
+    (
+      db
+        .query("SELECT provider FROM explanation_audio_variants WHERE explanation_id=?")
+        .all(explanationId) as Array<{ provider: string }>
+    ).map((row) => row.provider),
+  );
+}
+
+export function storeExplanationSpeechVariant(
+  explanationId: string,
+  generated: SpeechAudio,
+): void {
+  if (!generated.audio.byteLength) return;
+  const now = new Date().toISOString();
+  db.query(
+    `INSERT INTO explanation_audio_variants
+      (explanation_id,provider,audio,mime_type,created_at,last_accessed_at)
+     SELECT ?,?,?,?,?,?
+     WHERE EXISTS (SELECT 1 FROM explanation_history WHERE id=? AND status='complete')
+     ON CONFLICT(explanation_id,provider) DO UPDATE SET
+       audio=excluded.audio,mime_type=excluded.mime_type,
+       last_accessed_at=excluded.last_accessed_at`,
+  ).run(
+    explanationId,
+    generated.provider,
+    generated.audio,
+    generated.mimeType,
+    now,
+    now,
+    explanationId,
+  );
 }
 
 export function linkExplanationSpeech(

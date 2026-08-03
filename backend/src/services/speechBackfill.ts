@@ -1,10 +1,5 @@
 import { db } from "../db/database";
-import { synthesizeKokoroSpeech } from "./speech";
-import {
-  getCachedSpeech,
-  linkExplanationSpeech,
-  storeCachedSpeech,
-} from "./speechCache";
+import { prepareExplanationSpeechVariants } from "./explanationSpeech";
 
 interface MissingExplanationAudio {
   id: string;
@@ -29,8 +24,10 @@ export async function backfillMissingExplanationAudio(
     .query(
       `SELECT eh.id,eh.selected_text,eh.explanation,eh.voice_explanation
        FROM explanation_history eh
-       LEFT JOIN explanation_audio ea ON ea.explanation_id=eh.id
-       WHERE ea.explanation_id IS NULL
+       WHERE eh.status='complete' AND (
+         NOT EXISTS (SELECT 1 FROM explanation_audio_variants v WHERE v.explanation_id=eh.id AND v.provider='fish-audio')
+         OR NOT EXISTS (SELECT 1 FROM explanation_audio_variants v WHERE v.explanation_id=eh.id AND v.provider='kokoro')
+       )
        ORDER BY eh.created_at DESC
        LIMIT ?`,
     )
@@ -45,16 +42,12 @@ export async function backfillMissingExplanationAudio(
   for (const row of rows) {
     try {
       const speechText = row.voice_explanation?.trim() || row.explanation;
-      const cached = getCachedSpeech(speechText);
-      if (cached) {
-        linkExplanationSpeech(row.id, speechText);
-        result.linkedFromCache += 1;
-      } else {
-        const generated = await synthesizeKokoroSpeech(speechText);
-        storeCachedSpeech(speechText, generated.audio, row.selected_text);
-        linkExplanationSpeech(row.id, speechText);
-        result.generated += 1;
-      }
+      await prepareExplanationSpeechVariants({
+        explanationId: row.id,
+        text: speechText,
+        sourceText: row.selected_text,
+      });
+      result.generated += 1;
       result.processed += 1;
     } catch (error) {
       result.failed += 1;
@@ -66,8 +59,10 @@ export async function backfillMissingExplanationAudio(
       .query(
         `SELECT COUNT(*) count
          FROM explanation_history eh
-         LEFT JOIN explanation_audio ea ON ea.explanation_id=eh.id
-         WHERE ea.explanation_id IS NULL`,
+         WHERE eh.status='complete' AND (
+           NOT EXISTS (SELECT 1 FROM explanation_audio_variants v WHERE v.explanation_id=eh.id AND v.provider='fish-audio')
+           OR NOT EXISTS (SELECT 1 FROM explanation_audio_variants v WHERE v.explanation_id=eh.id AND v.provider='kokoro')
+         )`,
       )
       .get() as { count: number }
   ).count;

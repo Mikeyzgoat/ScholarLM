@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS sticky_note_index (id TEXT PRIMARY KEY,note_id TEXT N
 CREATE INDEX IF NOT EXISTS idx_sticky_note_index_document ON sticky_note_index(document_id);
 CREATE TABLE IF NOT EXISTS speech_cache (text_hash TEXT PRIMARY KEY,source_text TEXT,text TEXT NOT NULL,audio BLOB NOT NULL,byte_size INTEGER NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS generated_output_audio (source_hash TEXT NOT NULL,text_hash TEXT NOT NULL,source_text TEXT NOT NULL,output_text TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,PRIMARY KEY(source_hash,text_hash),FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS explanation_history (id TEXT PRIMARY KEY,selection_hash TEXT NOT NULL,selected_text TEXT NOT NULL,document_id TEXT,note_id TEXT,document_title TEXT,page_number INTEGER,prompt_mode TEXT NOT NULL,explanation TEXT NOT NULL,voice_explanation TEXT,intent TEXT,created_at TEXT NOT NULL,recognized_text TEXT,input_kind TEXT NOT NULL DEFAULT 'text',canvas_id TEXT,shape_id TEXT);
+CREATE TABLE IF NOT EXISTS explanation_history (id TEXT PRIMARY KEY,selection_hash TEXT NOT NULL,selected_text TEXT NOT NULL,document_id TEXT,note_id TEXT,document_title TEXT,page_number INTEGER,prompt_mode TEXT NOT NULL,explanation TEXT NOT NULL,voice_explanation TEXT,intent TEXT,created_at TEXT NOT NULL,recognized_text TEXT,input_kind TEXT NOT NULL DEFAULT 'text',canvas_id TEXT,shape_id TEXT,status TEXT NOT NULL DEFAULT 'complete',error_message TEXT);
 CREATE TABLE IF NOT EXISTS explanation_sources (explanation_id TEXT NOT NULL,shape_id TEXT NOT NULL,note_id TEXT,canvas_id TEXT,PRIMARY KEY(explanation_id,shape_id),FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS idx_explanation_sources_note ON explanation_sources(note_id);
 CREATE INDEX IF NOT EXISTS idx_explanation_sources_canvas ON explanation_sources(canvas_id);
@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_explanation_history_selection_created ON explanat
 CREATE TABLE IF NOT EXISTS openrouter_requests (id TEXT PRIMARY KEY,operation TEXT NOT NULL,model TEXT NOT NULL,status TEXT NOT NULL,http_status INTEGER,error_code TEXT,error_message TEXT,created_at TEXT NOT NULL,completed_at TEXT);
 CREATE INDEX IF NOT EXISTS idx_openrouter_requests_created ON openrouter_requests(created_at DESC);
 CREATE TABLE IF NOT EXISTS explanation_audio (explanation_id TEXT PRIMARY KEY,text_hash TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE,FOREIGN KEY (text_hash) REFERENCES speech_cache(text_hash) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS explanation_audio_variants (explanation_id TEXT NOT NULL,provider TEXT NOT NULL,audio BLOB NOT NULL,mime_type TEXT NOT NULL,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL,PRIMARY KEY(explanation_id,provider),FOREIGN KEY (explanation_id) REFERENCES explanation_history(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS rag_answer_cache (cache_key TEXT PRIMARY KEY,scope_kind TEXT NOT NULL,scope_id TEXT NOT NULL,question TEXT NOT NULL,page_number INTEGER,answer TEXT NOT NULL,sources TEXT NOT NULL,grounded INTEGER NOT NULL,content_version TEXT NOT NULL,hit_count INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_accessed_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_rag_answer_cache_scope ON rag_answer_cache(scope_kind,scope_id);
 CREATE TABLE IF NOT EXISTS runtime_metadata (key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -54,6 +55,13 @@ CREATE INDEX IF NOT EXISTS idx_manual_graph_members_scope ON manual_graph_group_
     db.exec("ALTER TABLE explanation_history ADD COLUMN voice_explanation TEXT;");
   if (!historyColumns.some((column) => column.name === "intent"))
     db.exec("ALTER TABLE explanation_history ADD COLUMN intent TEXT;");
+  if (!historyColumns.some((column) => column.name === "status"))
+    db.exec("ALTER TABLE explanation_history ADD COLUMN status TEXT NOT NULL DEFAULT 'complete';");
+  if (!historyColumns.some((column) => column.name === "error_message"))
+    db.exec("ALTER TABLE explanation_history ADD COLUMN error_message TEXT;");
+  db.exec(
+    "UPDATE explanation_history SET status='failed',error_message='Generation was interrupted; retry the explanation.' WHERE status='pending';",
+  );
   if (!speechColumns.some((column) => column.name === "source_text"))
     db.exec("ALTER TABLE speech_cache ADD COLUMN source_text TEXT;");
   const stickyColumns = db

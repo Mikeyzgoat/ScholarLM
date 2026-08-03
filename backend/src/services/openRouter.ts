@@ -30,6 +30,7 @@ async function openRouterGenerate(input: {
   maxTokens?: number;
   onToken?: (token: string) => void;
   model?: string;
+  modelOffset?: number;
   temperature?: number;
 }): Promise<string> {
   const selectedModel = input.imageDataUrl
@@ -50,7 +51,9 @@ async function openRouterGenerate(input: {
       method: "POST",
       headers: authorizationHeaders(),
       body: JSON.stringify({
-        models: models.slice(Math.min(attempt, models.length - 1)),
+        models: models.slice(
+          Math.min((input.modelOffset ?? 0) + attempt, models.length - 1),
+        ),
         messages: [
           ...(input.system ? [{ role: "system", content: input.system }] : []),
           { role: "user", content },
@@ -670,8 +673,36 @@ interface ConceptGraph {
   edges: Array<{ source: string; target: string; relationship: string }>;
 }
 
-function parseConceptGraph(raw: string): ConceptGraph {
-  const parsed: unknown = JSON.parse(raw);
+function closeTruncatedJson(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/iu, "")
+    .replace(/\s*```$/u, "")
+    .replace(/\\(?!["\\/bfnrtu])/gu, "");
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const character of cleaned) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+    } else if (character === '"') inString = true;
+    else if (character === "{") stack.push("}");
+    else if (character === "[") stack.push("]");
+    else if (character === stack.at(-1)) stack.pop();
+  }
+  const prefix = cleaned.replace(/,\s*$/u, "");
+  return `${prefix}${inString ? '"' : ""}${stack.reverse().join("")}`;
+}
+
+export function parseConceptGraph(raw: string): ConceptGraph {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = JSON.parse(closeTruncatedJson(raw));
+  }
   if (!parsed || typeof parsed !== "object")
     throw new Error("Invalid graph response");
   const value = parsed as { concepts?: unknown; edges?: unknown };
@@ -708,12 +739,20 @@ export async function extractConceptGraph(input: {
   chunks: Array<{ content: string; pageNumber: number }>;
 }): Promise<ConceptGraph> {
   const prompt = `Extract a knowledge graph from "${input.documentTitle}". Return concepts (maximum 30: label, description, pageNumber) and meaningful edges (source, target, relationship). Every edge label must exactly match a concept label. Use the most relevant page.\n\n${input.chunks.map((chunk) => `[Page ${chunk.pageNumber}] ${chunk.content}`).join("\n\n")}`;
-  return parseConceptGraph(
-    await openRouterGenerate({
-      prompt,
-      system: "Return only a valid JSON object with concepts and edges.",
-      json: true,
-      maxTokens: 900,
-    }),
-  );
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    try {
+      return parseConceptGraph(
+        await openRouterGenerate({
+          prompt,
+          system: "Return only a valid JSON object with concepts and edges.",
+          json: true,
+          maxTokens: 1200,
+          modelOffset: attempt,
+        }),
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  throw lastError;
 }

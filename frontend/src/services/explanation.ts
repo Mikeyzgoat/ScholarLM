@@ -32,12 +32,13 @@ export async function explainText(input: {
     });
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as {
-        error?: { message?: string; code?: string };
+        error?: { message?: string; code?: string; historyId?: string };
       } | null;
       throw new ApiError(
         payload?.error?.message ?? "Explanation failed",
         response.status,
         payload?.error?.code,
+        payload?.error?.historyId,
       );
     }
     if (!response.body) throw new Error("Explanation stream was empty");
@@ -51,16 +52,20 @@ export async function explainText(input: {
         type?: string;
         token?: unknown;
         message?: unknown;
+        historyId?: unknown;
         result?: ExplanationResponse;
       };
       if (event.type === "token" && typeof event.token === "string")
         onToken?.(event.token);
       if (event.type === "done" && event.result) result = event.result;
       if (event.type === "error")
-        throw new Error(
+        throw new ApiError(
           typeof event.message === "string"
             ? event.message
             : "Explanation failed",
+          503,
+          "AI_INFERENCE_UNAVAILABLE",
+          typeof event.historyId === "string" ? event.historyId : undefined,
         );
     };
     while (true) {
@@ -112,6 +117,14 @@ export interface ExplanationHistoryItem {
   mode: "explain" | "regenerate" | "simplify";
   pageNumber?: number | null;
   createdAt: string;
+  status: "pending" | "complete" | "failed";
+  error?: string;
+}
+
+export async function deleteFailedExplanation(historyId: string): Promise<void> {
+  await apiFetch(`/explain/history/${encodeURIComponent(historyId)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function listExplanationHistory(input: {

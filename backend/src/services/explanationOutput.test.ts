@@ -6,6 +6,7 @@ import {
   generateCanvasVoiceExplanation,
   hasUsefulVoiceExplanation,
   normalizeExplanationIntent,
+  parseConceptGraph,
 } from "./openRouter";
 
 function streamedJson(value: unknown): Response {
@@ -14,6 +15,24 @@ function streamedJson(value: unknown): Response {
     { headers: { "Content-Type": "text/event-stream" } },
   );
 }
+
+describe("parseConceptGraph", () => {
+  test("repairs a truncated closing brace", () => {
+    expect(
+      parseConceptGraph(
+        '{"concepts":[{"label":"Triangle","description":"Three sides","pageNumber":1}],"edges":[]',
+      ).concepts[0]?.label,
+    ).toBe("Triangle");
+  });
+
+  test("accepts a fenced JSON response", () => {
+    expect(
+      parseConceptGraph(
+        '```json\n{"concepts":[],"edges":[]}\n```',
+      ),
+    ).toEqual({ concepts: [], edges: [] });
+  });
+});
 
 describe("hasUsefulVoiceExplanation", () => {
   test("rejects a missing spoken explanation", () => {
