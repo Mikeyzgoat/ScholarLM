@@ -336,6 +336,41 @@ explanation.post("/", async (c) => {
       });
   }
   const requestId = beginOpenRouterRequest("explanation");
+  const complete = <
+    T extends {
+      answer?: string;
+      explanation?: string;
+      voiceExplanation?: string;
+      intent?: "theory" | "math" | "problem-solving" | "general";
+      recognizedEquation?: string;
+    },
+  >(
+    generated: T,
+    inputKind: "text" | "handwriting" | "selection",
+    fallbackIntent = generated.intent,
+  ) => {
+    const answer = generated.answer ?? generated.explanation ?? "";
+    const history = storeExplanationRevision({
+      selectedText: historySelection,
+      documentId,
+      noteId,
+      canvasId,
+      shapeId,
+      shapeIds,
+      imageFingerprint,
+      documentTitle: context.documentTitle,
+      pageNumber: context.pageNumber,
+      mode,
+      explanation: answer,
+      voiceExplanation: generated.voiceExplanation,
+      intent: generated.intent ?? fallbackIntent,
+      recognizedText: generated.recognizedEquation,
+      inputKind,
+      requestId,
+    });
+    finishOpenRouterRequest(requestId);
+    return { ...generated, answer, explanation: answer, ...history };
+  };
   try {
     if (hasImage || b.graphRequested === true) {
       const result = await explainCanvasSelection({
@@ -355,36 +390,17 @@ explanation.post("/", async (c) => {
         if (!verifiedGraph.plot)
           result.explanation = `${result.explanation}\n\nGraph not inserted: ${verifiedGraph.error ?? "unsupported equation"}`;
       }
-      const history = storeExplanationRevision({
-        selectedText: historySelection,
-        documentId,
-        noteId,
-        canvasId,
-        shapeId,
-        shapeIds,
-        imageFingerprint,
-        documentTitle: context.documentTitle,
-        pageNumber: context.pageNumber,
-        mode,
-        explanation: result.answer ?? result.explanation,
-        voiceExplanation: result.voiceExplanation,
-        intent: result.intent ?? "math",
-        recognizedText: result.recognizedEquation,
-        inputKind: hasImage
-          ? b.imageInputKind === "selection"
-            ? "selection"
-            : "handwriting"
-          : "text",
-        requestId,
-      });
-      finishOpenRouterRequest(requestId);
-      return c.json({
-        ...result,
-        answer: result.answer ?? result.explanation,
-        explanation: result.answer ?? result.explanation,
-        voiceExplanation: result.voiceExplanation,
-        ...history,
-      });
+      return c.json(
+        complete(
+          result,
+          hasImage
+            ? b.imageInputKind === "selection"
+              ? "selection"
+              : "handwriting"
+            : "text",
+          "math",
+        ),
+      );
     }
     if (c.req.query("stream") === "1") {
       c.header("Content-Type", "application/x-ndjson; charset=utf-8");
@@ -405,32 +421,9 @@ explanation.post("/", async (c) => {
             mode,
             previousExplanation,
           });
-          const history = storeExplanationRevision({
-            selectedText: historySelection,
-            documentId,
-            noteId,
-            canvasId,
-            shapeId,
-            shapeIds,
-            documentTitle: context.documentTitle,
-            pageNumber: context.pageNumber,
-            mode,
-            explanation: generated.answer,
-            voiceExplanation: generated.voiceExplanation,
-            intent: generated.intent,
-            recognizedText: generated.recognizedEquation,
-            inputKind: "text",
-            requestId,
-          });
-          finishOpenRouterRequest(requestId);
           send({
             type: "done",
-            result: {
-              ...generated,
-              explanation: generated.answer,
-              answer: generated.answer,
-              ...history,
-            },
+            result: complete(generated, "text"),
           });
           await writes;
         } catch (error) {
@@ -451,30 +444,7 @@ explanation.post("/", async (c) => {
       mode,
       previousExplanation,
     });
-    const history = storeExplanationRevision({
-      selectedText: historySelection,
-      documentId,
-      noteId,
-      canvasId,
-      shapeId,
-      shapeIds,
-      documentTitle: context.documentTitle,
-      pageNumber: context.pageNumber,
-      mode,
-      explanation: generated.answer,
-      voiceExplanation: generated.voiceExplanation,
-      intent: generated.intent,
-      recognizedText: generated.recognizedEquation,
-      inputKind: "text",
-      requestId,
-    });
-    finishOpenRouterRequest(requestId);
-    return c.json({
-      ...generated,
-      explanation: generated.answer,
-      answer: generated.answer,
-      ...history,
-    });
+    return c.json(complete(generated, "text"));
   } catch (error) {
     failOpenRouterRequest(requestId, error);
     const message =

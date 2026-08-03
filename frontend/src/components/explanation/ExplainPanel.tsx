@@ -41,6 +41,9 @@ function imageFromClipboard(items: DataTransferItemList): Blob | null {
   return null;
 }
 
+const errorText = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 export function ExplainPanel({
   selectedText,
   selectedTexts,
@@ -208,18 +211,15 @@ export function ExplainPanel({
           } catch (fallbackError) {
             if (selection !== audioSelection.current) return;
             setQueueAudioError(
-              fallbackError instanceof Error
-                ? fallbackError.message
-                : "Explanation audio could not be generated",
+              errorText(
+                fallbackError,
+                "Explanation audio could not be generated",
+              ),
             );
           }
           return;
         }
-        setQueueAudioError(
-          error instanceof Error
-            ? error.message
-            : "Stored audio could not be loaded",
-        );
+        setQueueAudioError(errorText(error, "Stored audio could not be loaded"));
       });
   };
   const syncCachedQueue = (
@@ -273,9 +273,7 @@ export function ExplainPanel({
     try {
       setPastedImage(await toDataUrl(blob));
     } catch (error) {
-      setPasteError(
-        error instanceof Error ? error.message : "Could not paste screenshot",
-      );
+      setPasteError(errorText(error, "Could not paste screenshot"));
     }
   }, []);
   const readClipboard = useCallback(async () => {
@@ -292,9 +290,7 @@ export function ExplainPanel({
       }
       throw new Error("The clipboard does not contain an image");
     } catch (error) {
-      setPasteError(
-        error instanceof Error ? error.message : "Could not access clipboard",
-      );
+      setPasteError(errorText(error, "Could not access clipboard"));
     }
   }, [acceptClipboardImage]);
   useEffect(() => {
@@ -362,8 +358,7 @@ export function ExplainPanel({
       previousExplanation:
         mode === "explain" ? undefined : state.explanation || undefined,
     }).catch((error: unknown) => {
-      failureMessage =
-        error instanceof Error ? error.message : "Explanation failed";
+      failureMessage = errorText(error, "Explanation failed");
       return null;
     });
     if (value) {
@@ -593,6 +588,28 @@ export function ExplainPanel({
     state.explanation,
     state.isExplaining,
   ]);
+  const activateRequest = (request: (typeof requestHistory)[number]) => {
+    setActiveQueueId(request.id);
+    setActiveExplanationId(request.result?.explanationId ?? "");
+    if (!request.result) return;
+    setCanvasInput(request.result);
+    state.load(request.result.explanation);
+    if (request.result.explanationId)
+      selectStoredExplanationAudio(
+        request.result.explanationId,
+        request.sourceText,
+        true,
+        request.result.explanation,
+      );
+  };
+  const resetPastedInput = (mode: "selection" | "screenshot") => {
+    speech.stop();
+    state.clear();
+    setCanvasInput(undefined);
+    setPastedImage(undefined);
+    setInputMode(mode);
+    if (mode === "screenshot") screenshotInput.current?.click();
+  };
   return (
     <motion.section
       layout
@@ -694,37 +711,11 @@ export function ExplainPanel({
               key={request.id}
               role="button"
               tabIndex={0}
-              onClick={() => {
-                setActiveQueueId(request.id);
-                setActiveExplanationId(request.result?.explanationId ?? "");
-                if (request.result) {
-                  setCanvasInput(request.result);
-                  state.load(request.result.explanation);
-                  if (request.result.explanationId)
-                    selectStoredExplanationAudio(
-                      request.result.explanationId,
-                      request.sourceText,
-                      true,
-                      request.result.explanation,
-                    );
-                }
-              }}
+              onClick={() => activateRequest(request)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  setActiveQueueId(request.id);
-                  setActiveExplanationId(request.result?.explanationId ?? "");
-                  if (request.result) {
-                    setCanvasInput(request.result);
-                    state.load(request.result.explanation);
-                    if (request.result.explanationId)
-                      selectStoredExplanationAudio(
-                        request.result.explanationId,
-                        request.sourceText,
-                        true,
-                        request.result.explanation,
-                      );
-                  }
+                  activateRequest(request);
                 }
               }}
               className={`rounded-lg border px-3 py-2 transition ${
@@ -899,27 +890,14 @@ export function ExplainPanel({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  speech.stop();
-                  state.clear();
-                  setCanvasInput(undefined);
-                  setPastedImage(undefined);
-                  setInputMode("selection");
-                }}
+                onClick={() => resetPastedInput("selection")}
                 className="scholar-secondary-action rounded-lg border px-3 py-2 text-xs"
               >
                 Explain another selection
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  speech.stop();
-                  state.clear();
-                  setCanvasInput(undefined);
-                  setPastedImage(undefined);
-                  setInputMode("screenshot");
-                  screenshotInput.current?.click();
-                }}
+                onClick={() => resetPastedInput("screenshot")}
                 className="scholar-secondary-action rounded-lg border px-3 py-2 text-xs"
               >
                 Upload another screenshot
