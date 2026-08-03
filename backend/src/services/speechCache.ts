@@ -60,11 +60,14 @@ export function linkExplanationSpeech(
   text: string,
 ): void {
   const now = new Date().toISOString();
+  const textHash = speechHash(text);
   db.query(
     `INSERT INTO explanation_audio(explanation_id,text_hash,created_at,last_accessed_at)
-     VALUES(?,?,?,?)
+     SELECT ?,?,?,?
+     WHERE EXISTS (SELECT 1 FROM explanation_history WHERE id=?)
+       AND EXISTS (SELECT 1 FROM speech_cache WHERE text_hash=?)
      ON CONFLICT(explanation_id) DO UPDATE SET text_hash=excluded.text_hash,last_accessed_at=excluded.last_accessed_at`,
-  ).run(explanationId, speechHash(text), now, now);
+  ).run(explanationId, textHash, now, now, explanationId, textHash);
 }
 
 function sourceHash(text: string): string {
