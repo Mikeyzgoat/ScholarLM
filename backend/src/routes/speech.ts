@@ -13,6 +13,7 @@ import {
   storeCachedSpeech,
 } from "../services/speechCache";
 import { backfillMissingExplanationAudio } from "../services/speechBackfill";
+import { db } from "../db/database";
 
 const speech = new Hono();
 
@@ -28,25 +29,63 @@ function cachedAudio(value: Uint8Array): SpeechAudio {
   };
 }
 
-speech.get("/explanation/:explanationId", (c) => {
+speech.get("/explanation/:explanationId", async (c) => {
   const explanationId = c.req.param("explanationId");
   if (!/^[a-f0-9]{64}$/.test(explanationId))
     return c.json(
       { error: { message: "Invalid explanation identifier", code: "INVALID_INPUT" } },
       400,
     );
-  const stored = getExplanationSpeech(explanationId);
-  if (!stored)
-    return c.json(
-      { error: { message: "Stored explanation audio was not found", code: "AUDIO_NOT_FOUND" } },
-      404,
-    );
+  let stored = getExplanationSpeech(explanationId);
+  let cacheStatus = "HIT";
+  if (!stored) {
+    const explanation = db
+      .query(
+        "SELECT selected_text,explanation,voice_explanation FROM explanation_history WHERE id=?",
+      )
+      .get(explanationId) as {
+        selected_text: string;
+        explanation: string;
+        voice_explanation: string | null;
+      } | null;
+    if (!explanation)
+      return c.json(
+        { error: { message: "Explanation was not found", code: "EXPLANATION_NOT_FOUND" } },
+        404,
+      );
+    const speechText =
+      explanation.voice_explanation?.trim() || explanation.explanation.trim();
+    try {
+      stored = getCachedSpeech(speechText);
+      if (!stored) {
+        const generated = await synthesizeSpeech(speechText);
+        stored = generated.audio;
+        storeCachedSpeech(speechText, stored, explanation.selected_text);
+        cacheStatus = "MISS";
+      }
+      linkExplanationSpeech(explanationId, speechText);
+    } catch (error) {
+      console.error(
+        `[tts] Could not prepare explanation audio ${explanationId}`,
+        error,
+      );
+      return c.json(
+        {
+          error: {
+            message: "Explanation audio could not be prepared",
+            code: "AUDIO_GENERATION_FAILED",
+          },
+        },
+        503,
+      );
+    }
+  }
   const generated = cachedAudio(stored);
   return new Response(stored.slice().buffer as ArrayBuffer, {
     headers: {
       "Content-Type": generated.mimeType,
       "Cache-Control": "private, max-age=31536000, immutable",
-      "X-ScholarLM-TTS-Cache": "HIT",
+      "X-ScholarLM-TTS-Cache": cacheStatus,
     },
   });
 });
