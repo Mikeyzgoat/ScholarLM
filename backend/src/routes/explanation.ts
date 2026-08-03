@@ -24,18 +24,20 @@ const explanation = new Hono();
 explanation.get("/history", (c) => {
   const noteId = c.req.query("noteId")?.trim();
   const canvasId = c.req.query("canvasId")?.trim();
-  if ((!noteId && !canvasId) || (noteId && canvasId))
+  const documentId = c.req.query("documentId")?.trim();
+  const scopes = [noteId, canvasId, documentId].filter(Boolean);
+  if (scopes.length !== 1)
     return c.json(
       {
         error: {
-          message: "Provide exactly one note or canvas identifier",
+          message: "Provide exactly one note, canvas, or document identifier",
           code: "INVALID_INPUT",
         },
       },
       400,
     );
   return c.json({
-    explanations: listExplanationHistory({ noteId, canvasId }),
+    explanations: listExplanationHistory({ noteId, canvasId, documentId }),
   });
 });
 explanation.post("/voice", async (c) => {

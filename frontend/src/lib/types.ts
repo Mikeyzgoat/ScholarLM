@@ -47,6 +47,7 @@ export interface RagAnswer {
   sources: RagSource[];
   grounded: boolean;
   cached?: boolean;
+  historyId?: string;
 }
 export interface GraphNode {
   id: string;

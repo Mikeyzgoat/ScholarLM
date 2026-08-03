@@ -7,8 +7,42 @@ import {
   answerDocumentQuestion,
 } from "../services/rag";
 import { activateDocumentVectorIndex } from "../services/vectorIndex";
+import { storeExplanationRevision } from "../services/explanationHistory";
+import { createHash } from "node:crypto";
+import type { RagAnswer } from "../types";
 
 const rag = new Hono();
+
+function addAnswerToHistory(input: {
+  result: RagAnswer;
+  document: DocumentRecord;
+  question: string;
+  pageNumber?: number;
+}): RagAnswer {
+  const historyId = createHash("sha256")
+    .update(
+      [input.document.id, input.question.trim(), input.result.answer.trim()].join(
+        "\u001f",
+      ),
+    )
+    .digest("hex");
+  const exists = db
+    .query("SELECT 1 FROM explanation_history WHERE id=?")
+    .get(historyId);
+  if (!exists)
+    storeExplanationRevision({
+      selectedText: input.question,
+      documentId: input.document.id,
+      documentTitle: input.document.name,
+      pageNumber: input.pageNumber ?? input.result.sources[0]?.pageNumber,
+      mode: "explain",
+      explanation: input.result.answer,
+      intent: "general",
+      inputKind: "text",
+      requestId: historyId,
+    });
+  return { ...input.result, historyId };
+}
 
 rag.post("/activate", async (c) => {
   const body = await c.req.json<unknown>().catch(() => null);
@@ -148,12 +182,17 @@ rag.post("/", async (c) => {
           });
         };
         try {
-          const result = await answerDocumentQuestion({
+          const result = addAnswerToHistory({
+            result: await answerDocumentQuestion({
             documentId: input.documentId as string,
             question: (input.question as string).trim(),
             currentPage: input.pageNumber as number | undefined,
             signal: c.req.raw.signal,
             onToken: (token) => send({ type: "token", token }),
+            }),
+            document,
+            question: (input.question as string).trim(),
+            pageNumber: input.pageNumber as number | undefined,
           });
           send({ type: "done", result });
         } catch (error) {
@@ -169,11 +208,16 @@ rag.post("/", async (c) => {
       });
     }
     return c.json(
-      await answerDocumentQuestion({
+      addAnswerToHistory({
+        result: await answerDocumentQuestion({
         documentId: input.documentId,
         question: input.question.trim(),
         currentPage: input.pageNumber as number | undefined,
         signal: c.req.raw.signal,
+        }),
+        document,
+        question: input.question.trim(),
+        pageNumber: input.pageNumber as number | undefined,
       }),
     );
   } catch (error) {

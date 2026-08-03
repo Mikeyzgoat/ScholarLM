@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { BookOpenCheck, Check, Plus, Send } from "lucide-react";
+import { BookOpenCheck, Check, Pause, Play, Plus, Send } from "lucide-react";
 import type { RagAnswer, RagSource } from "../../lib/types";
 import { askDocument } from "../../services/rag";
+import { useSpeech } from "../../hooks/useSpeech";
 
 interface QuestionTurn extends RagAnswer {
   question: string;
@@ -81,6 +82,58 @@ export function DocumentQA({
     turnIndex: number;
     sources: RagSource[];
   } | null>(null);
+  const speech = useSpeech();
+  const audioByTurn = useRef(new Map<string, Blob>());
+  const audioRequests = useRef(new Map<string, Promise<Blob>>());
+  const audioSelection = useRef(0);
+  const [activeAudioTurn, setActiveAudioTurn] = useState("");
+
+  function audioKey(turn: QuestionTurn): string {
+    return `${turn.question}\n${turn.answer}`;
+  }
+
+  function prepareTurnAudio(turn: QuestionTurn): Promise<Blob> {
+    const key = audioKey(turn);
+    const stored = audioByTurn.current.get(key);
+    if (stored) return Promise.resolve(stored);
+    const pending = audioRequests.current.get(key);
+    if (pending) return pending;
+    const request = speech
+      .generateQueued(turn.answer, turn.question, turn.historyId)
+      .then((audio) => {
+        audioByTurn.current.set(key, audio);
+        audioRequests.current.delete(key);
+        return audio;
+      })
+      .catch((error) => {
+        audioRequests.current.delete(key);
+        throw error;
+      });
+    audioRequests.current.set(key, request);
+    return request;
+  }
+
+  async function playTurnAudio(turn: QuestionTurn) {
+    const key = audioKey(turn);
+    if (activeAudioTurn === key && speech.isPlaying) {
+      speech.pause();
+      return;
+    }
+    if (activeAudioTurn === key && speech.isReady) {
+      speech.resume();
+      return;
+    }
+    const selection = ++audioSelection.current;
+    speech.reset();
+    setActiveAudioTurn(key);
+    try {
+      const audio = await prepareTurnAudio(turn);
+      if (selection !== audioSelection.current) return;
+      await speech.playStored(audio);
+    } catch (error) {
+      console.warn("Could not prepare retrieved-answer audio", error);
+    }
+  }
   useEffect(() => {
     sessionStorage.setItem(
       storageKey(documentId),
@@ -102,12 +155,20 @@ export function DocumentQA({
       }),
     onMutate: () => setDraftAnswer(""),
     onSuccess: (answer, askedQuestion) => {
+      const completedTurn = { ...answer, question: askedQuestion };
       setTurns((current) => [
         ...current,
-        { ...answer, question: askedQuestion },
+        completedTurn,
       ]);
       setDraftAnswer("");
       setQuestion("");
+      const generatedAudio = prepareTurnAudio(completedTurn);
+      if (speech.autoRead)
+        void speech.enqueueGenerated(generatedAudio, () => {
+          audioSelection.current += 1;
+          setActiveAudioTurn(audioKey(completedTurn));
+        });
+      else void generatedAudio.catch(() => undefined);
     },
     onError: () => setDraftAnswer(""),
   });
@@ -190,6 +251,27 @@ export function DocumentQA({
                   )}
                 </button>
               )}
+              <button
+                type="button"
+                title={
+                  activeAudioTurn === audioKey(turn) && speech.isPlaying
+                    ? "Pause this answer"
+                    : "Play this answer"
+                }
+                aria-label={
+                  activeAudioTurn === audioKey(turn) && speech.isPlaying
+                    ? "Pause answer audio"
+                    : "Play answer audio"
+                }
+                onClick={() => void playTurnAudio(turn)}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-orange-400/20 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20"
+              >
+                {activeAudioTurn === audioKey(turn) && speech.isPlaying ? (
+                  <Pause size={14} />
+                ) : (
+                  <Play size={14} />
+                )}
+              </button>
             </div>
             <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-300">
               {turn.answer}

@@ -117,12 +117,15 @@ export interface ExplanationHistoryItem {
 export async function listExplanationHistory(input: {
   noteId?: string;
   canvasId?: string;
+  documentId?: string;
   signal?: AbortSignal;
 }): Promise<ExplanationHistoryItem[]> {
   const scope = input.noteId
     ? `noteId=${encodeURIComponent(input.noteId)}`
     : input.canvasId
       ? `canvasId=${encodeURIComponent(input.canvasId)}`
+      : input.documentId
+        ? `documentId=${encodeURIComponent(input.documentId)}`
       : "";
   if (!scope) return [];
   return (

@@ -16,12 +16,15 @@ export interface ExplanationHistoryItem {
 export function listExplanationHistory(input: {
   noteId?: string;
   canvasId?: string;
+  documentId?: string;
   limit?: number;
 }): ExplanationHistoryItem[] {
   const scope = input.noteId
     ? { column: "note_id", value: input.noteId }
     : input.canvasId
       ? { column: "canvas_id", value: input.canvasId }
+      : input.documentId
+        ? { column: "document_id", value: input.documentId }
       : null;
   if (!scope) return [];
   const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 100)));

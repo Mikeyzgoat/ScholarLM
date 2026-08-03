@@ -130,11 +130,12 @@ export function ExplainPanel({
     activeQueueIdRef.current = activeQueueId;
   }, [activeQueueId]);
   useEffect(() => {
-    if (!noteId && !canvasId) return;
+    if (!noteId && !canvasId && !documentId) return;
     const controller = new AbortController();
     void listExplanationHistory({
       noteId,
       canvasId: noteId ? undefined : canvasId,
+      documentId: noteId || canvasId ? undefined : documentId,
       signal: controller.signal,
     })
       .then((items) => {
@@ -172,7 +173,7 @@ export function ExplainPanel({
           console.warn("Could not restore explanation history", error);
       });
     return () => controller.abort();
-  }, [canvasId, noteId]);
+  }, [canvasId, documentId, noteId]);
   const selectStoredExplanationAudio = (
     explanationId: string,
     owner: string,
