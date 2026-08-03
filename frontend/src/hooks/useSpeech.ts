@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { combineWavChunks, getAudioDuration } from "../lib/audio";
-import { streamSpeech } from "../services/speech";
+import { generateSpeech, streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
 const playbackRateKey = "scholarlm-speech-rate";
@@ -99,6 +99,7 @@ export function useSpeech() {
   const fallbackActive = useRef(false);
   const progressFrame = useRef(0);
   const playbackDone = useRef<(() => void) | null>(null);
+  const audioGenerationQueue = useRef<Promise<void>>(Promise.resolve());
   const [isLoading, setLoading] = useState(false);
   const [isPlaying, setPlaying] = useState(false);
   const [isPaused, setPaused] = useState(false);
@@ -382,6 +383,21 @@ export function useSpeech() {
       sourceText?: string,
       explanationId?: string,
     ) => loadSpeech(text, sourceText, explanationId, autoRead),
+    generateQueued: (
+      text: string,
+      sourceText?: string,
+      explanationId?: string,
+      signal?: AbortSignal,
+    ) => {
+      const operation = audioGenerationQueue.current.then(() =>
+        generateSpeech(text, signal, sourceText, explanationId),
+      );
+      audioGenerationQueue.current = operation.then(
+        () => undefined,
+        () => undefined,
+      );
+      return operation;
+    },
     playStored: playStoredAudio,
     prepare: (
       text: string,

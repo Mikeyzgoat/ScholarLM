@@ -105,7 +105,6 @@ export function ExplainPanel({
   const [queueAudioError, setQueueAudioError] = useState("");
   const screenshotInput = useRef<HTMLInputElement>(null);
   const voiceText = useRef("");
-  const voiceController = useRef<AbortController | null>(null);
   const [canvasInput, setCanvasInput] = useState<Parameters<
     NonNullable<typeof onExplanationGenerated>
   >[0]>();
@@ -120,10 +119,14 @@ export function ExplainPanel({
   >([]);
   const [activeQueueId, setActiveQueueId] = useState("");
   const [activeExplanationId, setActiveExplanationId] = useState("");
+  const activeQueueIdRef = useRef("");
   const audioSelection = useRef(0);
   const activeImage = selectionImage ?? pastedImage;
   const activeText =
     selectedText.trim() || (pastedImage ? "Screenshot selection" : "");
+  useEffect(() => {
+    activeQueueIdRef.current = activeQueueId;
+  }, [activeQueueId]);
   const selectStoredExplanationAudio = (
     explanationId: string,
     owner: string,
@@ -263,8 +266,6 @@ export function ExplainPanel({
       ...history,
       { id: requestId, sourceText: requestText, status: "pending" },
     ]);
-    voiceController.current?.abort();
-    voiceController.current = null;
     let failureMessage = "Explanation failed";
     const value = await state.explain({
       selectedText: requestText,
@@ -326,8 +327,6 @@ export function ExplainPanel({
         ),
       );
       if (requestPastedImage) setInputMode("selection");
-      const backgroundVoice = new AbortController();
-      voiceController.current = backgroundVoice;
       void (async () => {
         try {
           const voiceExplanation =
@@ -337,23 +336,21 @@ export function ExplainPanel({
                 answer: displayAnswer,
                 recognizedEquation: value.recognizedEquation,
                 historyId: value.historyId,
-                signal: backgroundVoice.signal,
               })
             ).voiceExplanation;
-          if (backgroundVoice.signal.aborted) return;
           voiceText.current = voiceExplanation;
-          setAudioOwner(requestText);
-          await speech.speak(
+          const generatedAudio = await speech.generateQueued(
             voiceExplanation,
             requestText,
             value.historyId,
           );
+          if (activeQueueIdRef.current === requestId) {
+            setAudioOwner(requestText);
+            if (speech.autoRead) await speech.playStored(generatedAudio);
+            else await speech.prepareStored(generatedAudio);
+          }
         } catch (error) {
-          if (!backgroundVoice.signal.aborted)
-            console.warn("Could not prepare the spoken explanation", error);
-        } finally {
-          if (voiceController.current === backgroundVoice)
-            voiceController.current = null;
+          console.warn("Could not prepare the spoken explanation", error);
         }
       })();
     } else {
@@ -368,8 +365,6 @@ export function ExplainPanel({
   }
   useEffect(() => {
     const controller = new AbortController();
-    voiceController.current?.abort();
-    voiceController.current = null;
     audioSelection.current += 1;
     speech.reset();
     setAudioOwner("");
