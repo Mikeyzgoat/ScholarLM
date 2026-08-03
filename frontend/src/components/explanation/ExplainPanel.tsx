@@ -124,7 +124,11 @@ export function ExplainPanel({
   const activeImage = selectionImage ?? pastedImage;
   const activeText =
     selectedText.trim() || (pastedImage ? "Screenshot selection" : "");
-  const selectStoredExplanationAudio = (explanationId: string, owner: string) => {
+  const selectStoredExplanationAudio = (
+    explanationId: string,
+    owner: string,
+    playWhenReady = false,
+  ) => {
     const selection = ++audioSelection.current;
     speech.reset();
     setAudioOwner("");
@@ -133,7 +137,9 @@ export function ExplainPanel({
       .then((audio) => {
         if (selection !== audioSelection.current) return;
         setAudioOwner(owner);
-        return speech.prepareStored(audio);
+        return playWhenReady
+          ? speech.playStored(audio)
+          : speech.prepareStored(audio);
       })
       .catch((error) => {
         if (selection !== audioSelection.current) return;
@@ -337,11 +343,10 @@ export function ExplainPanel({
           if (backgroundVoice.signal.aborted) return;
           voiceText.current = voiceExplanation;
           setAudioOwner(requestText);
-          await speech.enqueue(
+          await speech.speak(
             voiceExplanation,
             requestText,
             value.historyId,
-            value.cached === true,
           );
         } catch (error) {
           if (!backgroundVoice.signal.aborted)
@@ -615,6 +620,7 @@ export function ExplainPanel({
                     selectStoredExplanationAudio(
                       request.result.explanationId,
                       request.sourceText,
+                      true,
                     );
                 }
               }}
@@ -630,6 +636,7 @@ export function ExplainPanel({
                       selectStoredExplanationAudio(
                         request.result.explanationId,
                         request.sourceText,
+                        true,
                       );
                   }
                 }
@@ -662,21 +669,11 @@ export function ExplainPanel({
                       type="button"
                       onClickCapture={(event) => event.stopPropagation()}
                       onClick={() => {
-                        setQueueAudioError("");
-                        void getStoredExplanationSpeech(
+                        selectStoredExplanationAudio(
                           request.result!.explanationId!,
-                        )
-                          .then((audio) => {
-                            setAudioOwner(request.sourceText);
-                            return speech.enqueueStored(audio);
-                          })
-                          .catch((error) =>
-                            setQueueAudioError(
-                              error instanceof Error
-                                ? error.message
-                                : "Stored audio could not be played",
-                            ),
-                          );
+                          request.sourceText,
+                          true,
+                        );
                       }}
                       className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
                     >

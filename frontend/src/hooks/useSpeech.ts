@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { combineWavChunks, getAudioDuration } from "../lib/audio";
-import { generateSpeech, streamSpeech } from "../services/speech";
+import { streamSpeech } from "../services/speech";
 
 const key = "scholarlm-auto-read";
 const playbackRateKey = "scholarlm-speech-rate";
 const silentWav =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
-const transitionText = "Moving to the next question.";
 
 function wordIndexAtProgress(text: string, progress: number): number {
   const words = text.match(/\S+/g) ?? [];
@@ -100,10 +99,6 @@ export function useSpeech() {
   const fallbackActive = useRef(false);
   const progressFrame = useRef(0);
   const playbackDone = useRef<(() => void) | null>(null);
-  const narrationQueue = useRef<Promise<void>>(Promise.resolve());
-  const narrationGeneration = useRef(0);
-  const hasPlayedNarration = useRef(false);
-  const transitionAudio = useRef<Blob | null>(null);
   const [isLoading, setLoading] = useState(false);
   const [isPlaying, setPlaying] = useState(false);
   const [isPaused, setPaused] = useState(false);
@@ -249,7 +244,6 @@ export function useSpeech() {
   }, []);
 
   const reset = useCallback(() => {
-    narrationGeneration.current += 1;
     stop();
     clearAudio();
     latestText.current = "";
@@ -278,16 +272,6 @@ export function useSpeech() {
       passive: true,
     });
     return () => window.removeEventListener("pointerdown", unlockAudio);
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void generateSpeech(transitionText, controller.signal)
-      .then((blob) => {
-        transitionAudio.current = blob;
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
   }, []);
 
   useEffect(
@@ -398,39 +382,7 @@ export function useSpeech() {
       sourceText?: string,
       explanationId?: string,
     ) => loadSpeech(text, sourceText, explanationId, autoRead),
-    enqueue: (
-      text: string,
-      sourceText?: string,
-      explanationId?: string,
-      cached = false,
-    ) => {
-      const generation = narrationGeneration.current;
-      const operation = narrationQueue.current.then(async () => {
-        if (generation !== narrationGeneration.current) return;
-        if (hasPlayedNarration.current && !cached && transitionAudio.current) {
-          stop();
-          clearAudio();
-          audioUrl.current = URL.createObjectURL(transitionAudio.current);
-          setReady(true);
-          await playAudio();
-        }
-        if (generation !== narrationGeneration.current) return;
-        await loadSpeech(text, sourceText, explanationId, autoRead);
-        hasPlayedNarration.current = true;
-      });
-      narrationQueue.current = operation.catch(() => undefined);
-      return operation;
-    },
-    enqueueStored: (blob: Blob) => {
-      const generation = narrationGeneration.current;
-      const operation = narrationQueue.current.then(() =>
-        generation === narrationGeneration.current
-          ? playStoredAudio(blob)
-          : undefined,
-      );
-      narrationQueue.current = operation.catch(() => undefined);
-      return operation;
-    },
+    playStored: playStoredAudio,
     prepare: (
       text: string,
       sourceText?: string,
