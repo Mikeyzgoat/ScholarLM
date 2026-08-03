@@ -147,6 +147,9 @@ export function useSpeech() {
 
   const playAudio = useCallback(async () => {
     if (!audioUrl.current) return;
+    fallbackActive.current = false;
+    globalThis.speechSynthesis?.cancel();
+    setUsingFallback(false);
     const player = audio.current ?? new Audio();
     audio.current = player;
     if (player.src !== audioUrl.current) {
@@ -194,34 +197,44 @@ export function useSpeech() {
     if (!globalThis.speechSynthesis || !globalThis.SpeechSynthesisUtterance)
       throw new Error("No local browser speech engine is available");
     return new Promise((resolve) => {
+      audio.current?.pause();
+      fallbackActive.current = true;
+      setUsingFallback(true);
       globalThis.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       playbackDone.current = resolve;
       utterance.rate = playbackRate;
       utterance.onstart = () => {
+        if (playbackDone.current !== resolve || !fallbackActive.current) return;
         setPlaying(true);
         setPaused(false);
       };
       utterance.onpause = () => {
+        if (playbackDone.current !== resolve || !fallbackActive.current) return;
         setPlaying(false);
         setPaused(true);
       };
       utterance.onresume = () => {
+        if (playbackDone.current !== resolve || !fallbackActive.current) return;
         setPlaying(true);
         setPaused(false);
       };
       utterance.onend = () => {
-        setPlaying(false);
-        setPaused(false);
-        playbackDone.current = null;
+        if (playbackDone.current === resolve && fallbackActive.current) {
+          setPlaying(false);
+          setPaused(false);
+          playbackDone.current = null;
+        }
         resolve();
       };
       utterance.onerror = (event) => {
-        setPlaying(false);
-        setPaused(false);
-        if (event.error !== "canceled" && event.error !== "interrupted")
-          setError(new Error("Voice playback is unavailable on this device. The written explanation is unaffected."));
-        playbackDone.current = null;
+        if (playbackDone.current === resolve && fallbackActive.current) {
+          setPlaying(false);
+          setPaused(false);
+          if (event.error !== "canceled" && event.error !== "interrupted")
+            setError(new Error("Voice playback is unavailable on this device. The written explanation is unaffected."));
+          playbackDone.current = null;
+        }
         resolve();
       };
       globalThis.speechSynthesis.speak(utterance);
@@ -306,6 +319,7 @@ export function useSpeech() {
     explanationId?: string,
     playWhenReady = autoRead,
   ) => {
+    fallbackActive.current = false;
     stop();
     clearAudio();
     latestText.current = text;
@@ -376,6 +390,7 @@ export function useSpeech() {
   };
 
   const playStoredAudio = async (blob: Blob) => {
+    fallbackActive.current = false;
     stop();
     clearAudio();
     audioUrl.current = URL.createObjectURL(blob);
@@ -386,6 +401,7 @@ export function useSpeech() {
   };
 
   const prepareStoredAudio = async (blob: Blob) => {
+    fallbackActive.current = false;
     stop();
     clearAudio();
     audioUrl.current = URL.createObjectURL(blob);
