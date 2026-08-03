@@ -77,6 +77,7 @@ export function DocumentQA({
   const [savedTurns, setSavedTurns] = useState<Set<number>>(
     restored.savedTurns,
   );
+  const savedTurnsRef = useRef(new Set(restored.savedTurns));
   const [stickyChoice, setStickyChoice] = useState<{
     turn: QuestionTurn;
     turnIndex: number;
@@ -86,7 +87,16 @@ export function DocumentQA({
   const audioByTurn = useRef(new Map<string, Blob>());
   const audioRequests = useRef(new Map<string, Promise<Blob>>());
   const audioSelection = useRef(0);
+  const audioStartFrame = useRef<number | null>(null);
   const [activeAudioTurn, setActiveAudioTurn] = useState("");
+
+  useEffect(
+    () => () => {
+      if (audioStartFrame.current !== null)
+        cancelAnimationFrame(audioStartFrame.current);
+    },
+    [],
+  );
 
   function audioKey(turn: QuestionTurn): string {
     return `${turn.question}\n${turn.answer}`;
@@ -162,13 +172,20 @@ export function DocumentQA({
       ]);
       setDraftAnswer("");
       setQuestion("");
-      const generatedAudio = prepareTurnAudio(completedTurn);
-      if (speech.autoRead)
-        void speech.enqueueGenerated(generatedAudio, () => {
-          audioSelection.current += 1;
-          setActiveAudioTurn(audioKey(completedTurn));
+      // Let React commit the answer and its sources before starting TTS. Audio
+      // decoding can otherwise occupy the main thread during this render.
+      audioStartFrame.current = requestAnimationFrame(() => {
+        audioStartFrame.current = requestAnimationFrame(() => {
+          audioStartFrame.current = null;
+          const generatedAudio = prepareTurnAudio(completedTurn);
+          if (speech.autoRead)
+            void speech.enqueueGenerated(generatedAudio, () => {
+              audioSelection.current += 1;
+              setActiveAudioTurn(audioKey(completedTurn));
+            });
+          else void generatedAudio.catch(() => undefined);
         });
-      else void generatedAudio.catch(() => undefined);
+      });
     },
     onError: () => setDraftAnswer(""),
   });
@@ -183,13 +200,21 @@ export function DocumentQA({
     turnIndex: number,
     pageNumber: number,
   ) {
-    if (!onAddSticky) return;
-    onAddSticky({
-      question: turn.question,
-      answer: turn.answer,
-      pageNumber,
-      sources: turn.sources,
-    });
+    if (!onAddSticky || savedTurnsRef.current.has(turnIndex)) return;
+    // Update the ref before invoking the canvas callback so rapid/re-entrant
+    // clicks cannot create duplicate stickies before React disables the button.
+    savedTurnsRef.current.add(turnIndex);
+    try {
+      onAddSticky({
+        question: turn.question,
+        answer: turn.answer,
+        pageNumber,
+        sources: turn.sources,
+      });
+    } catch (error) {
+      savedTurnsRef.current.delete(turnIndex);
+      throw error;
+    }
     setSavedTurns((current) => new Set(current).add(turnIndex));
     setStickyChoice(null);
   }
@@ -220,6 +245,7 @@ export function DocumentQA({
                   title="Add this answer as a sticky on the PDF canvas"
                   aria-label="Add answer as sticky note"
                   onClick={() => {
+                    if (savedTurnsRef.current.has(index)) return;
                     const uniqueSources = [
                       ...new Map(
                         turn.sources.map((source) => [
