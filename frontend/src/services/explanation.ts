@@ -105,6 +105,34 @@ export async function findExistingExplanation(input: {
   ).explanation;
 }
 
+export interface ExplanationHistoryItem {
+  historyId: string;
+  selectedText: string;
+  explanation: string;
+  mode: "explain" | "regenerate" | "simplify";
+  pageNumber?: number | null;
+  createdAt: string;
+}
+
+export async function listExplanationHistory(input: {
+  noteId?: string;
+  canvasId?: string;
+  signal?: AbortSignal;
+}): Promise<ExplanationHistoryItem[]> {
+  const scope = input.noteId
+    ? `noteId=${encodeURIComponent(input.noteId)}`
+    : input.canvasId
+      ? `canvasId=${encodeURIComponent(input.canvasId)}`
+      : "";
+  if (!scope) return [];
+  return (
+    await apiFetch<{ explanations: ExplanationHistoryItem[] }>(
+      `/explain/history?${scope}`,
+      { signal: input.signal },
+    )
+  ).explanations;
+}
+
 export async function generateVoiceExplanation(input: {
   answer: string;
   recognizedEquation?: string;

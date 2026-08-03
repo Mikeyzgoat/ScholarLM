@@ -4,6 +4,39 @@ import { db } from "../db/database";
 export type ExplanationMode = "explain" | "regenerate" | "simplify";
 export type ExplanationInputKind = "text" | "handwriting" | "selection";
 
+export interface ExplanationHistoryItem {
+  historyId: string;
+  selectedText: string;
+  explanation: string;
+  mode: ExplanationMode;
+  pageNumber?: number;
+  createdAt: string;
+}
+
+export function listExplanationHistory(input: {
+  noteId?: string;
+  canvasId?: string;
+  limit?: number;
+}): ExplanationHistoryItem[] {
+  const scope = input.noteId
+    ? { column: "note_id", value: input.noteId }
+    : input.canvasId
+      ? { column: "canvas_id", value: input.canvasId }
+      : null;
+  if (!scope) return [];
+  const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 100)));
+  return db
+    .query(
+      `SELECT id historyId,selected_text selectedText,explanation,
+              prompt_mode mode,page_number pageNumber,created_at createdAt
+       FROM explanation_history
+       WHERE ${scope.column}=?
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    )
+    .all(scope.value, limit) as ExplanationHistoryItem[];
+}
+
 function selectionHash(input: {
   selectedText: string;
   documentId?: string;
@@ -154,4 +187,3 @@ export function storeExplanationRevision(input: {
   ).count;
   return { historyId, revisionCount };
 }
-

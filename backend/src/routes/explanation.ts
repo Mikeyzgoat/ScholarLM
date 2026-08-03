@@ -8,6 +8,7 @@ import {
 } from "../services/openRouter";
 import {
   findLatestExplanation,
+  listExplanationHistory,
   storeExplanationRevision,
   type ExplanationMode,
 } from "../services/explanationHistory";
@@ -20,6 +21,23 @@ import {
 } from "../services/providerTelemetry";
 import { db } from "../db/database";
 const explanation = new Hono();
+explanation.get("/history", (c) => {
+  const noteId = c.req.query("noteId")?.trim();
+  const canvasId = c.req.query("canvasId")?.trim();
+  if ((!noteId && !canvasId) || (noteId && canvasId))
+    return c.json(
+      {
+        error: {
+          message: "Provide exactly one note or canvas identifier",
+          code: "INVALID_INPUT",
+        },
+      },
+      400,
+    );
+  return c.json({
+    explanations: listExplanationHistory({ noteId, canvasId }),
+  });
+});
 explanation.post("/voice", async (c) => {
   const body = (await c.req.json<unknown>().catch(() => null)) as {
     answer?: unknown;

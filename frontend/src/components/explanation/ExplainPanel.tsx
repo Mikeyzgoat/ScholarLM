@@ -12,6 +12,7 @@ import { ApiError } from "../../lib/api";
 import {
   findExistingExplanation,
   generateVoiceExplanation,
+  listExplanationHistory,
 } from "../../services/explanation";
 import {
   ChartSpline,
@@ -128,6 +129,50 @@ export function ExplainPanel({
   useEffect(() => {
     activeQueueIdRef.current = activeQueueId;
   }, [activeQueueId]);
+  useEffect(() => {
+    if (!noteId && !canvasId) return;
+    const controller = new AbortController();
+    void listExplanationHistory({
+      noteId,
+      canvasId: noteId ? undefined : canvasId,
+      signal: controller.signal,
+    })
+      .then((items) => {
+        if (controller.signal.aborted) return;
+        const persisted = items
+          .slice()
+          .reverse()
+          .map((item) => ({
+            id: `history:${item.historyId}`,
+            sourceText: item.selectedText,
+            status: "complete" as const,
+            result: {
+              selectedText: item.selectedText,
+              explanation: item.explanation,
+              mode: item.mode,
+              explanationId: item.historyId,
+              pageNumber: item.pageNumber ?? undefined,
+            },
+          }));
+        const persistedIds = new Set(
+          persisted.map((request) => request.result.explanationId),
+        );
+        setRequestHistory((history) => [
+          ...persisted,
+          ...history.filter(
+            (request) =>
+              request.status !== "complete" ||
+              !request.result?.explanationId ||
+              !persistedIds.has(request.result.explanationId),
+          ),
+        ]);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          console.warn("Could not restore explanation history", error);
+      });
+    return () => controller.abort();
+  }, [canvasId, noteId]);
   const selectStoredExplanationAudio = (
     explanationId: string,
     owner: string,
@@ -630,7 +675,7 @@ export function ExplainPanel({
       {requestHistory.length > 0 && (
         <section className="space-y-2 rounded-lg border border-orange-400/15 p-2">
           <div className="flex items-center justify-between px-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-400">Queued explanations</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-400">Explanation queue &amp; history</p>
             <span className="text-[10px] text-stone-500">{state.pendingCount} pending</span>
           </div>
           {requestHistory.slice().reverse().map((request) => (
