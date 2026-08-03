@@ -20,16 +20,19 @@ open for working things out.
 - Queue multiple explanations without overlapping their generated audio
 - Paste or upload a screenshot when text selection is unavailable
 - Answer questions using the open PDF and link back to the source page
+- Group related PDFs into one combined workspace and ask across the group
 - Search PDF passages and saved sticky notes together
 - Plot supported handwritten or typed equations
 - Connect PDFs, canvases, stickies, and handwriting in a knowledge graph
-- Read explanations aloud with Fish Audio, Kokoro, or browser speech
+- Read explanations and retrieved answers aloud with Fish Audio, Kokoro, or
+  browser speech
 - Create an empty canvas first and attach a PDF later
 
 Canvas state is saved in SQLite and backed up in browser storage. Questions,
 searches, and inspector tabs also survive normal navigation within a document.
 Repeated selections reuse stored explanations and audio when their document,
-page, canvas, shape, and content fingerprints still match.
+page, canvas, shape, and content fingerprints still match. Retrieved answers
+and their narration are cached too. Uploads are deduplicated by file content.
 
 ## How it is put together
 
@@ -37,14 +40,16 @@ page, canvas, shape, and content fingerprints still match.
 flowchart LR
     Browser[React + tldraw] --> API[Bun + Hono]
     API --> DB[(SQLite)]
-    API --> AI[OpenRouter]
-    API --> Files[PDF files]
+    API --> AI[OpenRouter: chat, vision, embeddings, speech]
+    API --> TTS[Kokoro local speech fallback]
+    API --> Files[Uploaded PDFs]
 ```
 
-The frontend handles the PDF, canvas, and graph interface. The backend stores
-documents and canvas snapshots, extracts page-aware text, runs retrieval, and
-calls OpenRouter for generation, embeddings, and Fish Audio speech. Kokoro runs
-locally as the server fallback, with browser speech as the final fallback.
+The frontend handles PDF viewing, canvas editing, document groups, and the
+knowledge graph. The backend stores documents and canvas snapshots, extracts
+page-aware text, runs retrieval, and calls OpenRouter for generation,
+embeddings, vision, and Fish Audio speech. Kokoro runs locally as the server
+fallback, with browser speech as the final fallback.
 
 ## Running it locally
 
@@ -174,23 +179,34 @@ Open [http://localhost:3000](http://localhost:3000). The API runs on
 
 ## Main workflow
 
-1. Upload a PDF from the Documents page.
+1. Upload a PDF (up to 50 MB) from the Documents page.
 2. Open it while indexing continues in the background.
 3. Use **Draw** to annotate or **Select Text** to use the PDF text layer.
 4. Explain a selection, ask a question, or search for a concept.
 5. Save useful output as canvas text or a sticky note.
 6. Open the knowledge graph to follow connections back to their source.
 
+The first indexing pass extracts searchable PDF text and batches its
+embeddings. Visual enrichment then runs separately, so a document can become
+usable before all page-image analysis is complete. Failed ingestion jobs can
+be retried from the document library.
+
+Groups created in the global knowledge graph can combine two or more PDFs into
+a single paginated workspace. Group questions retrieve across every member
+document and keep source links pointed at the original PDF and page.
+
 An independent canvas can be created from Notes without uploading a document.
 Its drawings are saved in both the browser and SQLite.
 
 Explanation requests remain attached to the selection captured when they were
 submitted, even if the user continues editing or changes the active selection.
-The queue serializes generation and playback. Completed entries replay their
-stored database audio, while failed entries retain the provider error for
-diagnosis. Model-produced intent labels are normalized to `theory`, `math`,
-`problem-solving`, or `general`; an unexpected label falls back to `general`
-instead of discarding an otherwise valid explanation.
+Pending, completed, and failed states are persisted. The queue serializes
+generation and playback, prepares both the full narration and a transition
+variant, and replays stored database audio. Failed entries retain the provider
+error for diagnosis. Missing narration is regenerated with the configured
+speech provider or Kokoro fallback. Model-produced intent labels are normalized
+to `theory`, `math`, `problem-solving`, or `general`; an unexpected label falls
+back to `general` instead of discarding an otherwise valid explanation.
 
 ## Equation graphs
 
@@ -216,7 +232,7 @@ when the source equation changes.
 ScholarLM/
 ├── backend/                 Bun, Hono, SQLite, retrieval and AI services
 ├── frontend/                React, tldraw, PDF.js and Sigma.js
-├── docker-compose.yml       Two-container local package
+├── docker-compose.yml       App containers and optional ngrok tunnel
 ├── scripts/                 Docker initialization helpers
 ├── future_upgrades.md       Engineering notes and remaining work
 ├── .env.example             Runtime configuration
@@ -231,6 +247,18 @@ backend/data/uploads/
 ```
 
 These files, along with `.env`, are ignored by Git.
+
+## Configuration
+
+The defaults in `.env.example` work for local development after adding
+`OPENROUTER_API_KEY`. You can separately choose chat, vision, embedding, and
+speech models with `OPENROUTER_MODEL`, `OPENROUTER_VISION_MODEL`,
+`OPENROUTER_EMBEDDING_MODEL`, and `OPENROUTER_SPEECH_MODEL`.
+
+`OPENROUTER_ROUTING_MODELS` is an ordered comma-separated fallback list.
+`OPENROUTER_MAX_INPUT_PRICE` and `OPENROUTER_MAX_OUTPUT_PRICE` cap which routed
+models may be used. `BACKEND_PORT` and `FRONTEND_ORIGIN` control the manual Bun
+servers; Docker additionally uses `SCHOLARLM_FRONTEND_PORT`.
 
 ## Checks
 
