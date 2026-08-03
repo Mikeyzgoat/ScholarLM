@@ -397,31 +397,36 @@ export function ExplainPanel({
       if (requestPastedImage) setInputMode("selection");
       void (async () => {
         try {
-          const voiceExplanation =
-            value.voiceExplanation ??
-            (
-              await generateVoiceExplanation({
-                answer: displayAnswer,
-                recognizedEquation: value.recognizedEquation,
-                historyId: value.historyId,
-              })
-            ).voiceExplanation;
-          voiceText.current = voiceExplanation;
-          const generatedAudio = await speech.generateQueued(
-            voiceExplanation,
-            requestText,
-            value.historyId,
-          );
+          const generatedAudio = (async () => {
+            const voiceExplanation =
+              value.voiceExplanation ??
+              (
+                await generateVoiceExplanation({
+                  answer: displayAnswer,
+                  recognizedEquation: value.recognizedEquation,
+                  historyId: value.historyId,
+                })
+              ).voiceExplanation;
+            voiceText.current = voiceExplanation;
+            return speech.generateQueued(
+              voiceExplanation,
+              requestText,
+              value.historyId,
+            );
+          })();
           if (speech.autoRead)
-            await speech.enqueueStored(generatedAudio, () => {
+            await speech.enqueueGenerated(generatedAudio, () => {
               setActiveQueueId(requestId);
               setActiveExplanationId(value.historyId ?? "");
               setCanvasInput(completedInput);
               state.load(displayAnswer);
               setAudioOwner(requestText);
             });
-          else if (activeQueueIdRef.current === requestId)
-            await speech.prepareStored(generatedAudio);
+          else {
+            const audio = await generatedAudio;
+            if (activeQueueIdRef.current === requestId)
+              await speech.prepareStored(audio);
+          }
         } catch (error) {
           console.warn("Could not prepare the spoken explanation", error);
         }

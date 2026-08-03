@@ -431,7 +431,8 @@ export function useSpeech() {
       );
       return operation;
     },
-    enqueueStored: (blob: Blob, onStart?: () => void) => {
+    enqueueGenerated: (audio: Promise<Blob>, onStart?: () => void) => {
+      void audio.catch(() => undefined);
       const generation = automaticPlaybackGeneration.current;
       const operation = automaticPlaybackQueue.current.then(async () => {
         if (generation !== automaticPlaybackGeneration.current) return;
@@ -440,6 +441,8 @@ export function useSpeech() {
           if (generation !== automaticPlaybackGeneration.current) return;
         }
         onStart?.();
+        const blob = await audio;
+        if (generation !== automaticPlaybackGeneration.current) return;
         await playStoredAudio(blob);
         hasPlayedAutomaticAudio.current = true;
       });
