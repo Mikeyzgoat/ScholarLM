@@ -209,6 +209,12 @@ export function failExplanationRevision(id: string, error: unknown): void {
   ).run(message.slice(0, 1000), id);
 }
 
+export function cancelExplanationRevision(id: string): void {
+  db.query("DELETE FROM explanation_history WHERE id=? AND status='pending'").run(
+    id,
+  );
+}
+
 export function deleteFailedExplanation(id: string): boolean {
   return db
     .query("DELETE FROM explanation_history WHERE id=? AND status='failed'")

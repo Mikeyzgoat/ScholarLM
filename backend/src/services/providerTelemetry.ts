@@ -34,6 +34,12 @@ export function failOpenRouterRequest(id: string, error: unknown): void {
   ).run(code, message.slice(0, 1000), new Date().toISOString(), id);
 }
 
+export function cancelOpenRouterRequest(id: string): void {
+  db.query(
+    "UPDATE openrouter_requests SET status='cancelled',completed_at=? WHERE id=? AND status='pending'",
+  ).run(new Date().toISOString(), id);
+}
+
 export function getProviderStatus() {
   const recent = db
     .query(

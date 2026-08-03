@@ -9,21 +9,28 @@ export function useExplanation() {
     [error, setError] = useState<Error | null>(null);
   const controller = useRef<AbortController | null>(null),
     queue = useRef<Promise<void>>(Promise.resolve()),
+    queueGeneration = useRef(0),
     mounted = useRef(true);
   const cancel = useCallback(() => {
+    queueGeneration.current += 1;
     controller.current?.abort();
     controller.current = null;
-    setLoading(false);
+    if (mounted.current) {
+      setLoading(false);
+      setPendingCount(0);
+    }
   }, []);
   useEffect(
     () => {
       mounted.current = true;
       return () => {
         mounted.current = false;
-        cancel();
+        // Keep the active request alive so the server can persist its result
+        // for history restoration. Only discard work that has not started.
+        queueGeneration.current += 1;
       };
     },
-    [cancel],
+    [],
   );
   const runExplanation = async (input: {
     selectedText?: string;
@@ -96,7 +103,12 @@ export function useExplanation() {
       previousExplanation?: string;
     }) => {
       setPendingCount((count) => count + 1);
-      const result = queue.current.then(() => runExplanation(input));
+      const generation = queueGeneration.current;
+      const result = queue.current.then(() => {
+        if (!mounted.current || generation !== queueGeneration.current)
+          throw new DOMException("Explanation was cancelled", "AbortError");
+        return runExplanation(input);
+      });
       queue.current = result.then(
         () => undefined,
         () => undefined,

@@ -7,6 +7,7 @@ import {
   hasUsefulVoiceExplanation,
 } from "../services/openRouter";
 import {
+  cancelExplanationRevision,
   findLatestExplanation,
   deleteFailedExplanation,
   failExplanationRevision,
@@ -18,6 +19,7 @@ import { createHash } from "node:crypto";
 import { buildDeterministicMathGraph } from "../services/mathGraph";
 import {
   beginOpenRouterRequest,
+  cancelOpenRouterRequest,
   failOpenRouterRequest,
   finishOpenRouterRequest,
 } from "../services/providerTelemetry";
@@ -303,7 +305,6 @@ explanation.post("/", async (c) => {
     documentTitle:
       document?.name ?? (b.documentTitle as string | undefined),
     pageNumber: b.pageNumber as number | undefined,
-    signal: c.req.raw.signal,
   };
   const mode = (b.mode ?? "explain") as ExplanationMode;
   const previousExplanation =
@@ -454,6 +455,11 @@ explanation.post("/", async (c) => {
           });
           await writes;
         } catch (error) {
+          if (c.req.raw.signal.aborted) {
+            cancelOpenRouterRequest(requestId);
+            cancelExplanationRevision(requestId);
+            return;
+          }
           failOpenRouterRequest(requestId, error);
           failExplanationRevision(requestId, error);
           send({
@@ -475,6 +481,11 @@ explanation.post("/", async (c) => {
     });
     return c.json(complete(generated, "text"));
   } catch (error) {
+    if (c.req.raw.signal.aborted) {
+      cancelOpenRouterRequest(requestId);
+      cancelExplanationRevision(requestId);
+      return new Response(null, { status: 499 });
+    }
     failOpenRouterRequest(requestId, error);
     failExplanationRevision(requestId, error);
     const message =

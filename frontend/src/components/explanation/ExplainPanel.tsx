@@ -801,8 +801,8 @@ export function ExplainPanel({
                   {request.result.explanationId && (
                     <button
                       type="button"
-                      onClickCapture={(event) => event.stopPropagation()}
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         selectStoredExplanationAudio(
                           request.result!.explanationId!,
                           request.sourceText,
@@ -817,18 +817,20 @@ export function ExplainPanel({
                   )}
                   <button
                     type="button"
-                    onClickCapture={(event) => event.stopPropagation()}
-                    onClick={() => onExplanationGenerated?.(request.result!)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onExplanationGenerated?.(request.result!);
+                    }}
                     className="scholar-secondary-action rounded border px-2 py-1 text-[10px]"
                   >
                     Add as text
                   </button>
                   <button
                     type="button"
-                    onClickCapture={(event) => event.stopPropagation()}
-                    onClick={() =>
-                      onExplanationStickyRequested?.(request.result!)
-                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onExplanationStickyRequested?.(request.result!);
+                    }}
                     className="scholar-primary-action rounded px-2 py-1 text-[10px]"
                   >
                     Add sticky
